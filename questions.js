@@ -1,7 +1,9 @@
 // Flashcard data for index.html.
-// Each card: { id, topic, en: { q, a: [points] }, pl: { q, a: [points] } }.
+// Each card: { id, topic, en: { q, a: [points], more?: [blocks] }, pl: { q, a: [points], more?: [blocks] } }.
 // `id` is stored in localStorage for "known" progress – keep it stable when editing a card.
 // Wrap code in backticks to render it as `code`.
+// Optional `more` is the "Explain in depth" section. Each block is a paragraph (**bold** and *italic* work),
+// a list (every line starts with "- ") or a code block ("```js\n...\n```").
 
 const TOPICS = [
   { id: "Interview", en: "Interview", pl: "Rozmowa" },
@@ -172,6 +174,14 @@ const FLASHCARDS = [
         "Macrotasks: `setTimeout`, `setInterval`, I/O callbacks, UI events",
         "After each macrotask the whole microtask queue is drained",
         "Endless microtasks can starve timers and I/O"
+      ],
+      more: [
+        "JavaScript runs your code on a single thread. To handle things that finish later (timers, network, clicks) without blocking, the runtime keeps **queues** of callbacks and an **event loop** that picks the next one to run whenever the call stack is empty. The key detail: there is more than one queue, and they have different priorities.",
+        "A **macrotask** (the spec just calls it a \"task\") is a unit of work the host schedules: a `setTimeout`/`setInterval` callback, an I/O completion in Node, a UI event in the browser, running a `<script>`. A **microtask** is a smaller follow-up job that must run \"as soon as the current code finishes\": promise reactions (`.then/.catch/.finally`), the continuation after an `await`, and `queueMicrotask(fn)`.",
+        "The loop is: take ONE macrotask and run it to completion, then drain the ENTIRE microtask queue (including microtasks queued by other microtasks), then (in browsers) maybe render, then take the next macrotask. Your whole script is itself the first macrotask, so every promise callback it schedules runs before any timer, even `setTimeout(fn, 0)`.",
+        "```js\nconsole.log('A');                               // sync\nsetTimeout(() => console.log('D'), 0);          // macrotask\nPromise.resolve().then(() => console.log('C')); // microtask\nconsole.log('B');                               // sync\n// Output: A, B, C, D\n```",
+        "In Node there is an extra, even higher-priority queue: `process.nextTick` callbacks are drained before promise microtasks. Node also has `setImmediate`, which runs in the \"check\" phase of its event loop, after I/O polling.",
+        "The pitfall interviewers probe is **starvation**: because microtasks are drained completely, a promise chain that keeps scheduling more microtasks (or a recursive `process.nextTick`) never lets the loop reach timers, I/O or rendering. The page freezes or the server stops answering even though nothing is technically \"blocking\". Long CPU work should be split across macrotasks (`setImmediate`, `setTimeout`) or moved to a worker."
       ]
     },
     pl: {
@@ -182,6 +192,14 @@ const FLASHCARDS = [
         "Makrozadania: `setTimeout`, `setInterval`, callbacki I/O, zdarzenia UI",
         "Po każdym makrozadaniu opróżniana jest cała kolejka mikrozadań",
         "Nieskończone mikrozadania mogą zagłodzić timery i I/O"
+      ],
+      more: [
+        "JavaScript wykonuje kod w jednym wątku. Żeby obsłużyć rzeczy, które kończą się później (timery, sieć, kliknięcia), bez blokowania, środowisko utrzymuje **kolejki** callbacków i **pętlę zdarzeń (event loop)**, która bierze kolejny callback, gdy stos wywołań jest pusty. Kluczowe: kolejek jest więcej niż jedna i mają różne priorytety.",
+        "**Makrozadanie** (w specyfikacji po prostu \"task\") to jednostka pracy planowana przez hosta: callback `setTimeout`/`setInterval`, zakończenie operacji I/O w Node, zdarzenie UI w przeglądarce, wykonanie `<script>`. **Mikrozadanie** to mniejsza kontynuacja, która ma się wykonać \"zaraz po bieżącym kodzie\": reakcje Promise (`.then/.catch/.finally`), dalsza część funkcji po `await` oraz `queueMicrotask(fn)`.",
+        "Cykl wygląda tak: weź JEDNO makrozadanie i wykonaj je do końca, potem opróżnij CAŁĄ kolejkę mikrozadań (także te dodane przez inne mikrozadania), potem (w przeglądarce) ewentualnie renderuj, potem kolejne makrozadanie. Cały skrypt to pierwsze makrozadanie, więc każdy callback Promise, który zaplanuje, wykona się przed jakimkolwiek timerem, nawet `setTimeout(fn, 0)`.",
+        "```js\nconsole.log('A');                               // synchronicznie\nsetTimeout(() => console.log('D'), 0);          // makrozadanie\nPromise.resolve().then(() => console.log('C')); // mikrozadanie\nconsole.log('B');                               // synchronicznie\n// Wynik: A, B, C, D\n```",
+        "W Node jest dodatkowa kolejka o jeszcze wyższym priorytecie: callbacki `process.nextTick` są opróżniane przed mikrozadaniami Promise. Node ma też `setImmediate`, które wykonuje się w fazie \"check\" pętli zdarzeń, po odpytaniu I/O.",
+        "Pułapka, o którą pyta rekruter, to **zagłodzenie (starvation)**: skoro mikrozadania są opróżniane do końca, łańcuch Promise, który ciągle dokłada nowe mikrozadania (albo rekurencyjne `process.nextTick`), nigdy nie pozwoli pętli dojść do timerów, I/O ani renderowania. Strona zamarza albo serwer przestaje odpowiadać, choć formalnie nic \"nie blokuje\". Długie obliczenia warto dzielić na makrozadania (`setImmediate`, `setTimeout`) albo przenieść do workera."
       ]
     }
   },
@@ -194,6 +212,14 @@ const FLASHCARDS = [
         "Variables live as long as the function referencing them",
         "Uses: private state (counter factory), callbacks, memoization, debounce",
         "Pitfall: can keep large objects alive → memory leaks"
+      ],
+      more: [
+        "JavaScript uses **lexical scope**: which variables a function can see is decided by where the function is written in the source, not where it is called from. A **closure** is what you get when a function keeps using variables from an outer scope after that outer function has already returned. Every JS function is technically a closure; the term matters when the inner function outlives its parent.",
+        "How it works: when a function is created, it keeps a hidden reference to its surrounding **environment** (the set of variables in scope). As long as the inner function is reachable, that environment cannot be garbage-collected, so the variables \"live on\". They are shared by reference, not copied: every closure created in the same call sees the same, current value.",
+        "```js\nfunction makeCounter() {\n  let count = 0;                 // private: no outside access\n  return {\n    inc: () => ++count,\n    get: () => count,\n  };\n}\nconst c = makeCounter();\nc.inc(); c.inc();\nc.get(); // 2\n```",
+        "Practical uses:",
+        "- **Private state / encapsulation**: `count` above cannot be touched except through the returned functions (the module pattern, before `#private` fields existed).\n- **Callbacks and handlers** that need context: an event handler remembering which item it belongs to.\n- **Memoization**: a wrapper holding a cache `Map` between calls.\n- **Debounce/throttle**: the timer id lives in the closure between calls.\n- **Factories / partial application**: `const add5 = makeAdder(5)`.",
+        "Pitfalls: a closure keeps its whole reachable environment alive, so a long-lived callback (a global event listener, a timer, a cache entry) that references a large object prevents it from being freed: a classic **memory leak**. Remove listeners and clear timers when done. The other classic bug is `var` in loops: all callbacks share one `i`; `let` creates a fresh binding per iteration and fixes it."
       ]
     },
     pl: {
@@ -203,6 +229,14 @@ const FLASHCARDS = [
         "Zmienne żyją tak długo, jak odwołująca się do nich funkcja",
         "Zastosowania: prywatny stan (fabryka licznika), callbacki, memoizacja, debounce",
         "Pułapka: może trzymać duże obiekty w pamięci → wycieki"
+      ],
+      more: [
+        "JavaScript stosuje **zakres leksykalny**: to, jakie zmienne widzi funkcja, zależy od miejsca, w którym ją zapisano w kodzie, a nie od miejsca wywołania. **Domknięcie (closure)** powstaje, gdy funkcja nadal korzysta ze zmiennych zewnętrznego zakresu, mimo że funkcja zewnętrzna już się zakończyła. Formalnie każda funkcja w JS jest domknięciem; pojęcie ma znaczenie, gdy funkcja wewnętrzna żyje dłużej niż jej rodzic.",
+        "Jak to działa: w momencie utworzenia funkcja zapamiętuje ukrytą referencję do otaczającego **środowiska** (zbioru zmiennych w zakresie). Dopóki funkcja wewnętrzna jest osiągalna, to środowisko nie może zostać zebrane przez GC, więc zmienne \"żyją dalej\". Są współdzielone przez referencję, a nie kopiowane: wszystkie domknięcia utworzone w tym samym wywołaniu widzą tę samą, aktualną wartość.",
+        "```js\nfunction makeCounter() {\n  let count = 0;                 // prywatne: brak dostępu z zewnątrz\n  return {\n    inc: () => ++count,\n    get: () => count,\n  };\n}\nconst c = makeCounter();\nc.inc(); c.inc();\nc.get(); // 2\n```",
+        "Praktyczne zastosowania:",
+        "- **Prywatny stan / enkapsulacja**: `count` powyżej da się zmienić tylko przez zwrócone funkcje (wzorzec modułu, zanim pojawiły się pola `#private`).\n- **Callbacki i handlery** potrzebujące kontekstu: handler zdarzenia pamiętający, do którego elementu należy.\n- **Memoizacja**: wrapper trzymający cache w `Map` między wywołaniami.\n- **Debounce/throttle**: id timera żyje w domknięciu między wywołaniami.\n- **Fabryki / częściowa aplikacja**: `const add5 = makeAdder(5)`.",
+        "Pułapki: domknięcie utrzymuje przy życiu całe osiągalne środowisko, więc długo żyjący callback (globalny listener, timer, wpis w cache), który odwołuje się do dużego obiektu, nie pozwala go zwolnić: klasyczny **wyciek pamięci**. Usuwaj listenery i czyść timery, gdy nie są potrzebne. Drugi klasyczny błąd to `var` w pętli: wszystkie callbacki dzielą jedno `i`; `let` tworzy nowe wiązanie w każdej iteracji i to naprawia."
       ]
     }
   },
@@ -216,6 +250,14 @@ const FLASHCARDS = [
         "`const` blocks reassignment, not mutation (`const obj` can still change)",
         "Function declarations are fully hoisted; function expressions are not",
         "Default to `const`, `let` when reassigning, never `var`"
+      ],
+      more: [
+        "A variable's **scope** is the region of code where its name is visible. `var` is **function-scoped**: declared anywhere in a function (even inside an `if` or `for` block), it is visible in the whole function. `let` and `const` (ES2015) are **block-scoped**: visible only inside the nearest `{ ... }`. `var` can also be redeclared in the same scope without error, which hides typos and accidental shadowing.",
+        "**Hoisting** describes what happens before a scope's code runs: the engine first registers every declaration in it, so names exist from the top of the scope. The difference is initialisation. A `var` is created and set to `undefined` immediately, so reading it early silently gives `undefined`. A `let`/`const` is registered but left uninitialised; the stretch from the start of the block to the declaration line is the **Temporal Dead Zone (TDZ)**, and touching the name there throws `ReferenceError`. That error is a feature: it surfaces use-before-declare bugs.",
+        "```js\nconsole.log(a); // undefined  (var: hoisted + initialised)\nconsole.log(b); // ReferenceError (let: in TDZ)\nvar a = 1;\nlet b = 2;\n\nhello();        // works: function declaration fully hoisted\nfunction hello() {}\nbye();          // TypeError: bye is not a function (var bye = undefined)\nvar bye = function () {};\n```",
+        "Functions follow the same logic: a **function declaration** (`function f() {}`) is hoisted together with its body, so you can call it above its definition. A **function expression** (`const f = () => {}`) is just a variable holding a function, so it follows the rules of `var`/`let`/`const`.",
+        "`const` means the **binding** cannot be reassigned, not that the value is immutable. `const user = {}` still allows `user.name = 'x'`; only `user = other` fails. For real immutability use `Object.freeze` (shallow) or readonly types.",
+        "Practical rule: default to `const` (it tells the reader the name never points elsewhere), use `let` only when you reassign (counters, accumulators), and never `var`. A bonus of `let` in `for` loops: each iteration gets a fresh binding, so closures created in the loop capture the right value."
       ]
     },
     pl: {
@@ -226,6 +268,14 @@ const FLASHCARDS = [
         "`const` blokuje ponowne przypisanie, nie mutację (`const obj` można zmieniać)",
         "Deklaracje funkcji są hoistowane w całości; wyrażenia funkcyjne nie",
         "Domyślnie `const`, `let` przy ponownym przypisaniu, nigdy `var`"
+      ],
+      more: [
+        "**Zakres (scope)** zmiennej to fragment kodu, w którym jej nazwa jest widoczna. `var` ma **zakres funkcji**: zadeklarowana gdziekolwiek w funkcji (nawet w bloku `if` czy `for`) jest widoczna w całej funkcji. `let` i `const` (ES2015) mają **zakres blokowy**: są widoczne tylko w najbliższym `{ ... }`. `var` można też bez błędu zadeklarować ponownie w tym samym zakresie, co ukrywa literówki i przypadkowe przesłanianie.",
+        "**Hoisting** opisuje, co się dzieje, zanim ruszy kod danego zakresu: silnik najpierw rejestruje wszystkie deklaracje, więc nazwy istnieją od początku zakresu. Różnica dotyczy inicjalizacji. `var` od razu dostaje wartość `undefined`, więc odczyt przed deklaracją po cichu zwraca `undefined`. `let`/`const` są zarejestrowane, ale niezainicjowane; odcinek od początku bloku do linii deklaracji to **Temporal Dead Zone (TDZ)** i każde odwołanie tam rzuca `ReferenceError`. Ten błąd to zaleta: ujawnia użycie przed deklaracją.",
+        "```js\nconsole.log(a); // undefined  (var: hoistowane + zainicjowane)\nconsole.log(b); // ReferenceError (let: w TDZ)\nvar a = 1;\nlet b = 2;\n\nhello();        // działa: deklaracja funkcji hoistowana w całości\nfunction hello() {}\nbye();          // TypeError: bye is not a function (var bye = undefined)\nvar bye = function () {};\n```",
+        "Funkcje działają według tej samej logiki: **deklaracja funkcji** (`function f() {}`) jest hoistowana razem z ciałem, więc można ją wywołać powyżej definicji. **Wyrażenie funkcyjne** (`const f = () => {}`) to po prostu zmienna trzymająca funkcję, więc podlega zasadom `var`/`let`/`const`.",
+        "`const` oznacza, że nie można ponownie przypisać **wiązania (binding)**, a nie że wartość jest niemutowalna. `const user = {}` nadal pozwala na `user.name = 'x'`; błąd daje tylko `user = other`. Prawdziwa niezmienność to `Object.freeze` (płytko) albo typy readonly.",
+        "Zasada praktyczna: domyślnie `const` (czytelnik wie, że nazwa nie wskaże niczego innego), `let` tylko przy ponownym przypisaniu (liczniki, akumulatory), nigdy `var`. Bonus `let` w pętli `for`: każda iteracja dostaje nowe wiązanie, więc domknięcia tworzone w pętli łapią właściwą wartość."
       ]
     }
   },
@@ -239,6 +289,14 @@ const FLASHCARDS = [
         "`new Fn()` → the new instance; `call/apply/bind` → explicit value",
         "Arrow functions have no own `this` – they take it from the enclosing scope",
         "Pitfall: passing `obj.method` as a callback loses `this` → use `bind` or an arrow"
+      ],
+      more: [
+        "`this` is an implicit parameter every regular function receives. Unlike ordinary variables (resolved lexically, by where code is written), `this` in a normal `function` or method is decided **at call time**, by how the function is invoked. The same function can see different `this` values on different calls.",
+        "The rules, from highest to lowest priority:",
+        "- **`new` binding**: `new Fn()` creates a fresh object and passes it as `this`.\n- **Explicit binding**: `fn.call(obj, ...)`, `fn.apply(obj, [...])` or a function produced by `fn.bind(obj)` use `obj`. A bound function's `this` cannot be changed again (except by `new`).\n- **Implicit binding**: `obj.method()` passes the object before the dot.\n- **Default binding**: a plain call `fn()` gets `undefined` in strict mode (all ES modules and `class` bodies are strict) or the global object in sloppy scripts.",
+        "**Arrow functions** are the exception: they have no `this` of their own and use the `this` of the scope they were defined in (lexical `this`). `call`/`bind` cannot change it. That makes them ideal for callbacks inside methods, and wrong as object methods that need the object.",
+        "```js\nclass Timer {\n  seconds = 0;\n  tick() { this.seconds++; }\n}\nconst t = new Timer();\nconst f = t.tick;\nf();                              // TypeError: this is undefined\nsetInterval(t.tick, 1000);        // same bug: method detached from t\nsetInterval(() => t.tick(), 1000); // ok: called as t.tick()\nsetInterval(t.tick.bind(t), 1000); // ok: explicitly bound\n```",
+        "The classic pitfall: `obj.method` as an expression is just a reference to the function; the `obj.` part only matters at the moment of the call. Passing it to `setTimeout`, an event listener, a promise `.then` or array `.map` loses `this`. Fixes: wrap it in an arrow, `bind` it (e.g. in the constructor), or define it as a class field arrow `tick = () => {...}` (one copy per instance instead of on the prototype)."
       ]
     },
     pl: {
@@ -249,6 +307,14 @@ const FLASHCARDS = [
         "`new Fn()` → nowa instancja; `call/apply/bind` → jawnie podana wartość",
         "Funkcje strzałkowe nie mają własnego `this` – biorą je z otaczającego zakresu",
         "Pułapka: przekazanie `obj.method` jako callbacku gubi `this` → `bind` albo strzałka"
+      ],
+      more: [
+        "`this` to niejawny parametr, który dostaje każda zwykła funkcja. W przeciwieństwie do zwykłych zmiennych (rozwiązywanych leksykalnie, wg miejsca w kodzie) `this` w zwykłej `function` lub metodzie jest ustalane **w momencie wywołania**, na podstawie sposobu wywołania. Ta sama funkcja może przy różnych wywołaniach widzieć różne `this`.",
+        "Reguły, od najwyższego priorytetu:",
+        "- **Wiązanie przez `new`**: `new Fn()` tworzy nowy obiekt i przekazuje go jako `this`.\n- **Wiązanie jawne**: `fn.call(obj, ...)`, `fn.apply(obj, [...])` albo funkcja z `fn.bind(obj)` używają `obj`. `this` funkcji związanej przez `bind` nie da się już zmienić (poza `new`).\n- **Wiązanie niejawne**: `obj.method()` przekazuje obiekt sprzed kropki.\n- **Wiązanie domyślne**: zwykłe `fn()` dostaje `undefined` w trybie strict (wszystkie moduły ES i ciała `class` są strict) albo obiekt globalny w skryptach bez strict.",
+        "**Funkcje strzałkowe** to wyjątek: nie mają własnego `this` i używają `this` zakresu, w którym je zdefiniowano (leksykalne `this`). `call`/`bind` go nie zmienią. Dlatego świetnie nadają się na callbacki wewnątrz metod, a źle na metody obiektu, które potrzebują tego obiektu.",
+        "```js\nclass Timer {\n  seconds = 0;\n  tick() { this.seconds++; }\n}\nconst t = new Timer();\nconst f = t.tick;\nf();                              // TypeError: this jest undefined\nsetInterval(t.tick, 1000);        // ten sam błąd: metoda oderwana od t\nsetInterval(() => t.tick(), 1000); // ok: wywołanie jako t.tick()\nsetInterval(t.tick.bind(t), 1000); // ok: jawnie związane\n```",
+        "Klasyczna pułapka: `obj.method` jako wyrażenie to tylko referencja do funkcji; część `obj.` liczy się wyłącznie w chwili wywołania. Przekazanie jej do `setTimeout`, listenera zdarzeń, `.then` czy `.map` gubi `this`. Rozwiązania: owinąć w strzałkę, zrobić `bind` (np. w konstruktorze) albo zdefiniować jako pole klasy ze strzałką `tick = () => {...}` (osobna kopia na instancję zamiast jednej na prototypie)."
       ]
     }
   },
@@ -262,6 +328,14 @@ const FLASHCARDS = [
         "Methods on `Fn.prototype` are shared by all instances",
         "`class` is syntax sugar over prototypes; `extends` links the chains",
         "`Object.create(proto)` creates an object with a given prototype"
+      ],
+      more: [
+        "Many languages share behaviour through classes: a class is a blueprint and objects are stamped from it. JavaScript does it differently: objects inherit **directly from other objects**. Each object has an internal, hidden slot called `[[Prototype]]` that points to another object (or to `null`). That object is its **prototype**. You can read it with `Object.getPrototypeOf(obj)` (the legacy accessor `obj.__proto__` does the same).",
+        "**Property lookup** uses this link. When you read `obj.x`, the engine checks `obj`'s own properties; if `x` isn't there, it checks the prototype, then the prototype's prototype, and so on: the **prototype chain**. It stops at the first match or returns `undefined` when it reaches `null`. Writing `obj.x = 1` creates an own property on `obj` that **shadows** the inherited one; it does not modify the prototype. That's why `[].map` works: arrays inherit from `Array.prototype`, which inherits from `Object.prototype`.",
+        "Two confusingly similar names: every function has a regular property called `prototype`. When you call `new Fn()`, the new object's `[[Prototype]]` is set to `Fn.prototype`. So methods placed on `Fn.prototype` exist **once in memory** and are shared by all instances, instead of each instance carrying its own copy.",
+        "```js\nclass Animal {\n  constructor(name) { this.name = name; } // own property per instance\n  speak() { return `${this.name} makes a sound`; } // on Animal.prototype\n}\nclass Dog extends Animal {}\n\nconst d = new Dog('Rex');\nObject.getPrototypeOf(d) === Dog.prototype;                 // true\nObject.getPrototypeOf(Dog.prototype) === Animal.prototype;  // true\nObject.hasOwn(d, 'speak');                                  // false: inherited\n```",
+        "`class` is mostly **syntax sugar** over this mechanism: methods go on `X.prototype`, and `extends` links `Dog.prototype` to `Animal.prototype` (and `Dog` to `Animal` for static members). It adds some real rules (must be called with `new`, strict mode, `#private` fields), but lookup is the same chain. `Object.create(proto)` builds an object with an arbitrary prototype; `Object.create(null)` gives one with no prototype at all, handy for dictionaries.",
+        "Interview nuance: `for...in` also walks inherited enumerable properties, so use `Object.keys` or `Object.hasOwn`. Never extend built-in prototypes (`Array.prototype.foo = ...`) in shared code, and be aware of **prototype pollution**: merging untrusted JSON with a `__proto__` key can inject properties into `Object.prototype` for the whole app."
       ]
     },
     pl: {
@@ -272,6 +346,14 @@ const FLASHCARDS = [
         "Metody w `Fn.prototype` są współdzielone przez wszystkie instancje",
         "`class` to lukier składniowy na prototypy; `extends` łączy łańcuchy",
         "`Object.create(proto)` tworzy obiekt z podanym prototypem"
+      ],
+      more: [
+        "W wielu językach zachowanie współdzieli się przez klasy: klasa to szablon, a obiekty są z niego tworzone. JavaScript robi to inaczej: obiekty dziedziczą **bezpośrednio z innych obiektów**. Każdy obiekt ma wewnętrzne, ukryte pole `[[Prototype]]`, wskazujące na inny obiekt (lub `null`). Ten obiekt to jego **prototyp**. Można go odczytać przez `Object.getPrototypeOf(obj)` (przestarzały akcesor `obj.__proto__` robi to samo).",
+        "Na tym łączu opiera się **wyszukiwanie właściwości**. Przy odczycie `obj.x` silnik sprawdza własne właściwości `obj`; jeśli `x` tam nie ma, sprawdza prototyp, potem prototyp prototypu itd., czyli **łańcuch prototypów**. Kończy na pierwszym trafieniu albo zwraca `undefined`, gdy dojdzie do `null`. Zapis `obj.x = 1` tworzy własną właściwość `obj`, która **przesłania** odziedziczoną; nie modyfikuje prototypu. Dlatego `[].map` działa: tablice dziedziczą z `Array.prototype`, który dziedziczy z `Object.prototype`.",
+        "Dwie mylące nazwy: każda funkcja ma zwykłą właściwość `prototype`. Przy `new Fn()` `[[Prototype]]` nowego obiektu jest ustawiany na `Fn.prototype`. Metody umieszczone w `Fn.prototype` istnieją więc **raz w pamięci** i są współdzielone przez wszystkie instancje, zamiast każda instancja miała własną kopię.",
+        "```js\nclass Animal {\n  constructor(name) { this.name = name; } // własna właściwość instancji\n  speak() { return `${this.name} makes a sound`; } // w Animal.prototype\n}\nclass Dog extends Animal {}\n\nconst d = new Dog('Rex');\nObject.getPrototypeOf(d) === Dog.prototype;                 // true\nObject.getPrototypeOf(Dog.prototype) === Animal.prototype;  // true\nObject.hasOwn(d, 'speak');                                  // false: odziedziczona\n```",
+        "`class` to w dużej mierze **lukier składniowy** na ten mechanizm: metody trafiają do `X.prototype`, a `extends` łączy `Dog.prototype` z `Animal.prototype` (oraz `Dog` z `Animal` dla składowych statycznych). Dochodzi kilka realnych reguł (wywołanie tylko przez `new`, tryb strict, pola `#private`), ale wyszukiwanie idzie tym samym łańcuchem. `Object.create(proto)` tworzy obiekt z dowolnym prototypem; `Object.create(null)` daje obiekt bez prototypu, wygodny jako słownik.",
+        "Niuans na rozmowę: `for...in` przechodzi też po odziedziczonych, wyliczalnych właściwościach, więc lepiej `Object.keys` albo `Object.hasOwn`. Nie rozszerzaj wbudowanych prototypów (`Array.prototype.foo = ...`) we współdzielonym kodzie i pamiętaj o **prototype pollution**: scalenie niezaufanego JSON-a z kluczem `__proto__` może wstrzyknąć właściwości do `Object.prototype` w całej aplikacji."
       ]
     }
   },
@@ -284,6 +366,14 @@ const FLASHCARDS = [
         "`===` no coercion – default choice",
         "`Object.is`: like `===` but `NaN` equals `NaN`, `+0` ≠ `-0`",
         "Objects compare by reference in all three"
+      ],
+      more: [
+        "JavaScript has three ways to ask \"are these the same?\", and they differ in how they treat different types and a few special numbers. **Type coercion** means automatically converting a value to another type (e.g. the string `'1'` to the number `1`) so the comparison can proceed.",
+        "**Loose equality `==`** coerces when the types differ, following a fixed algorithm: `null` and `undefined` equal each other and nothing else; booleans become numbers; a string compared with a number becomes a number; an object compared with a primitive is converted via `valueOf`/`toString`. The results are hard to predict: `'' == 0`, `'0' == false` and `[] == false` are all `true`, while `'' == '0'` is `false`.",
+        "**Strict equality `===`** never coerces: different types are simply not equal. It's the default choice because it's predictable. Its two quirks come from IEEE-754 floating point: `NaN === NaN` is `false` (NaN is not equal to anything), and `+0 === -0` is `true`.",
+        "**`Object.is(a, b)`** implements \"SameValue\": identical to `===` except `Object.is(NaN, NaN)` is `true` and `Object.is(0, -0)` is `false`. React uses it to decide whether state or props changed. A fourth variant, **SameValueZero** (NaN equals NaN, but +0 equals -0), is what `Array.prototype.includes`, `Map` and `Set` use, which is why `[NaN].includes(NaN)` is `true` but `[NaN].indexOf(NaN)` is `-1`.",
+        "```js\n'1' == 1;            // true  (string coerced to number)\nnull == undefined;   // true  (special rule)\nnull == 0;           // false\nNaN === NaN;         // false\nObject.is(NaN, NaN); // true\n({}) === ({});       // false: two different objects\n```",
+        "For objects (including arrays and functions) all three compare **references**: are these the same object in memory? Two objects with identical content are not equal. For content comparison you need a deep-equal helper (`node:util`'s `isDeepStrictEqual`, Lodash `isEqual`, or test-runner assertions). One accepted idiom for `==`: `x == null` checks for both `null` and `undefined` at once."
       ]
     },
     pl: {
@@ -293,6 +383,14 @@ const FLASHCARDS = [
         "`===` bez konwersji – wybór domyślny",
         "`Object.is`: jak `===`, ale `NaN` równa się `NaN`, `+0` ≠ `-0`",
         "Obiekty porównywane są przez referencję we wszystkich trzech"
+      ],
+      more: [
+        "JavaScript ma trzy sposoby na pytanie \"czy to jest to samo?\", różniące się traktowaniem różnych typów i kilku specjalnych liczb. **Koercja (konwersja) typów** to automatyczna zamiana wartości na inny typ (np. stringa `'1'` na liczbę `1`), żeby porównanie mogło się odbyć.",
+        "**Luźna równość `==`** konwertuje, gdy typy się różnią, według ustalonego algorytmu: `null` i `undefined` są równe sobie nawzajem i niczemu innemu; boolean zamieniany jest na liczbę; string porównywany z liczbą staje się liczbą; obiekt porównywany z prymitywem jest konwertowany przez `valueOf`/`toString`. Wyniki trudno przewidzieć: `'' == 0`, `'0' == false` i `[] == false` dają `true`, a `'' == '0'` daje `false`.",
+        "**Ścisła równość `===`** nigdy nie konwertuje: różne typy po prostu nie są równe. To wybór domyślny, bo jest przewidywalny. Dwa dziwactwa wynikają z liczb zmiennoprzecinkowych IEEE-754: `NaN === NaN` to `false` (NaN nie jest równe niczemu), a `+0 === -0` to `true`.",
+        "**`Object.is(a, b)`** realizuje \"SameValue\": działa jak `===`, poza tym, że `Object.is(NaN, NaN)` to `true`, a `Object.is(0, -0)` to `false`. React używa go, by sprawdzić, czy stan lub propsy się zmieniły. Czwarty wariant, **SameValueZero** (NaN równe NaN, ale +0 równe -0), stosują `Array.prototype.includes`, `Map` i `Set`, dlatego `[NaN].includes(NaN)` to `true`, a `[NaN].indexOf(NaN)` to `-1`.",
+        "```js\n'1' == 1;            // true  (string zamieniony na liczbę)\nnull == undefined;   // true  (specjalna reguła)\nnull == 0;           // false\nNaN === NaN;         // false\nObject.is(NaN, NaN); // true\n({}) === ({});       // false: dwa różne obiekty\n```",
+        "Obiekty (w tym tablice i funkcje) we wszystkich trzech przypadkach porównywane są **przez referencję**: czy to ten sam obiekt w pamięci? Dwa obiekty o identycznej zawartości nie są równe. Do porównania zawartości potrzebny jest helper deep-equal (`isDeepStrictEqual` z `node:util`, `isEqual` z Lodash albo asercje z test runnera). Jeden akceptowany idiom z `==`: `x == null` sprawdza naraz `null` i `undefined`."
       ]
     }
   },
@@ -306,6 +404,14 @@ const FLASHCARDS = [
         "`structuredClone(obj)` – built-in; handles Date, Map, Set, cycles; not functions/classes",
         "`JSON.parse(JSON.stringify())` loses Date, undefined, Map, functions, fails on cycles",
         "Often better: immutable updates – copy only the changed path"
+      ],
+      more: [
+        "In JavaScript, primitives (numbers, strings, booleans…) are copied by value, but objects and arrays are handled by **reference**: `const b = a` doesn't copy anything, it makes `b` point to the same object. Mutating `b.x` changes what `a` sees too. To get an independent object you must copy it, and the question is how deep the copy goes.",
+        "A **shallow copy** creates a new top-level object and copies its properties one level deep: `{...obj}`, `Object.assign({}, obj)`, `[...arr]`, `arr.slice()`. Primitive properties are now independent, but any nested object or array is still shared, because what was copied was the reference to it. A **deep copy** recursively copies every nested level, so nothing is shared.",
+        "```js\nconst user = { name: 'Ann', tags: ['admin'], born: new Date(1990, 0, 1) };\nconst shallow = { ...user };\nshallow.tags.push('x');        // user.tags changed too!\n\nconst deep = structuredClone(user);\ndeep.tags.push('y');           // user untouched; deep.born is still a Date\nJSON.parse(JSON.stringify(user)).born; // '1990-01-01T...' - now a string\n```",
+        "**`structuredClone(value)`** is the built-in deep copy (browsers and Node 17+). It uses the structured clone algorithm (the same one used by `postMessage` and workers): it handles `Date`, `Map`, `Set`, `RegExp`, typed arrays, `Error`, and circular references. Limits: it throws a `DataCloneError` on functions and DOM nodes, and class instances come back as plain objects (the prototype and methods are lost), and getters are replaced by their current values.",
+        "The old trick **`JSON.parse(JSON.stringify(x))`** only survives JSON-shaped data: `Date` becomes a string, `undefined` and functions are dropped, `Map`/`Set` become `{}`, `NaN`/`Infinity` become `null`, `BigInt` throws, and circular references throw a `TypeError`.",
+        "Often you don't need a deep copy at all. With **immutable updates** you copy only the path you change and reuse everything else: `{ ...state, user: { ...state.user, name: 'Bob' } }`. That's cheaper and it's what React/Redux rely on: unchanged branches keep their identity, so a reference check (`===`) is enough to detect changes. Libraries like Immer let you write that as if mutating."
       ]
     },
     pl: {
@@ -316,6 +422,14 @@ const FLASHCARDS = [
         "`structuredClone(obj)` – wbudowane; obsługuje Date, Map, Set, cykle; nie funkcje/klasy",
         "`JSON.parse(JSON.stringify())` gubi Date, undefined, Map, funkcje, pada na cyklach",
         "Często lepiej: niemutowalne aktualizacje – kopiuj tylko zmienianą ścieżkę"
+      ],
+      more: [
+        "W JavaScript prymitywy (liczby, stringi, booleany…) kopiowane są przez wartość, ale obiekty i tablice obsługiwane są przez **referencję**: `const b = a` niczego nie kopiuje, tylko sprawia, że `b` wskazuje na ten sam obiekt. Zmiana `b.x` jest widoczna też przez `a`. Aby dostać niezależny obiekt, trzeba go skopiować, a pytanie brzmi: jak głęboko.",
+        "**Płytka kopia (shallow copy)** tworzy nowy obiekt najwyższego poziomu i kopiuje właściwości o jeden poziom: `{...obj}`, `Object.assign({}, obj)`, `[...arr]`, `arr.slice()`. Pola prymitywne stają się niezależne, ale zagnieżdżone obiekty i tablice są nadal współdzielone, bo skopiowana została tylko referencja do nich. **Głęboka kopia (deep copy)** rekurencyjnie kopiuje każdy poziom, więc nic nie jest współdzielone.",
+        "```js\nconst user = { name: 'Ann', tags: ['admin'], born: new Date(1990, 0, 1) };\nconst shallow = { ...user };\nshallow.tags.push('x');        // user.tags też się zmieniło!\n\nconst deep = structuredClone(user);\ndeep.tags.push('y');           // user nietknięty; deep.born to nadal Date\nJSON.parse(JSON.stringify(user)).born; // '1990-01-01T...' - teraz string\n```",
+        "**`structuredClone(value)`** to wbudowana głęboka kopia (przeglądarki i Node 17+). Korzysta z algorytmu structured clone (tego samego co `postMessage` i workery): obsługuje `Date`, `Map`, `Set`, `RegExp`, tablice typowane, `Error` i referencje cykliczne. Ograniczenia: rzuca `DataCloneError` przy funkcjach i węzłach DOM, a instancje klas wracają jako zwykłe obiekty (prototyp i metody przepadają), a gettery zamieniają się w swoje bieżące wartości.",
+        "Stary trik **`JSON.parse(JSON.stringify(x))`** przeżywa tylko dane o kształcie JSON: `Date` staje się stringiem, `undefined` i funkcje znikają, `Map`/`Set` zamieniają się w `{}`, `NaN`/`Infinity` w `null`, `BigInt` rzuca błąd, a referencje cykliczne kończą się `TypeError`.",
+        "Często głęboka kopia w ogóle nie jest potrzebna. Przy **niemutowalnych aktualizacjach** kopiujesz tylko zmienianą ścieżkę, a resztę używasz ponownie: `{ ...state, user: { ...state.user, name: 'Bob' } }`. To tańsze i na tym opierają się React/Redux: niezmienione gałęzie zachowują tożsamość, więc do wykrycia zmian wystarczy porównanie referencji (`===`). Biblioteki typu Immer pozwalają zapisać to tak, jakby się mutowało."
       ]
     }
   },
@@ -329,6 +443,14 @@ const FLASHCARDS = [
         "`race`: settles with the first settled promise (good for timeouts)",
         "`any`: first fulfilled; rejects with `AggregateError` if all fail",
         "`await` in a loop = sequential; `Promise.all` = parallel; limit concurrency with `p-limit` or batching"
+      ],
+      more: [
+        "A **promise** represents a value that will arrive later; it ends up either **fulfilled** (with a value) or **rejected** (with a reason). Once it's one of those, it's **settled** and never changes. The four static combinators take an iterable of promises and return a single promise; they differ in when that promise settles and with what.",
+        "The four behaviours:",
+        "- **`Promise.all`**: fulfills with an array of all values, in input order (not completion order). It is **fail-fast**: the first rejection rejects the whole thing immediately.\n- **`Promise.allSettled`**: waits for every promise and fulfills with `[{ status: 'fulfilled', value } | { status: 'rejected', reason }]`. It never rejects, so you inspect each result.\n- **`Promise.race`**: settles like whichever input settles first, fulfilment or rejection.\n- **`Promise.any`**: fulfills with the first fulfilment and ignores rejections; only if all reject does it reject with an **`AggregateError`** whose `.errors` lists every reason.",
+        "Important nuance: promises are not tasks you can stop. When `all` rejects early or `race` has a winner, the other operations **keep running**; their results are just ignored. To actually cancel (free sockets, stop DB queries), pass an `AbortSignal` to the underlying work, e.g. `fetch(url, { signal: AbortSignal.timeout(5000) })`.",
+        "```js\n// Sequential: ~3 x latency\nfor (const id of ids) results.push(await getUser(id));\n\n// Parallel: ~1 x latency, fails fast\nconst users = await Promise.all(ids.map(getUser));\n\n// Parallel, but at most 5 in flight (p-limit)\nconst limit = pLimit(5);\nawait Promise.all(ids.map(id => limit(() => getUser(id))));\n```",
+        "Choosing: `all` when you need every result and one failure makes the whole thing useless; `allSettled` for batch jobs where partial success is fine (send 100 emails, report failures); `race` for timeouts (race the work against a timer that rejects); `any` for redundancy (fastest of several mirrors). With unbounded `Promise.all` over 10,000 items you can exhaust a DB connection pool or hit rate limits, so cap concurrency with `p-limit` or process in batches."
       ]
     },
     pl: {
@@ -339,6 +461,14 @@ const FLASHCARDS = [
         "`race`: wynik pierwszego zakończonego (przydatne do timeoutów)",
         "`any`: pierwszy spełniony; `AggregateError`, gdy wszystkie zawiodą",
         "`await` w pętli = sekwencyjnie; `Promise.all` = równolegle; ograniczenie współbieżności przez `p-limit` lub batchowanie"
+      ],
+      more: [
+        "**Promise** reprezentuje wartość, która pojawi się później; kończy się jako **spełniony (fulfilled)**, z wartością, albo **odrzucony (rejected)**, z powodem. W jednym z tych stanów jest **rozstrzygnięty (settled)** i już się nie zmienia. Cztery statyczne kombinatory przyjmują iterowalną kolekcję promise'ów i zwracają jeden promise; różnią się tym, kiedy i czym on się rozstrzyga.",
+        "Cztery zachowania:",
+        "- **`Promise.all`**: spełnia się tablicą wszystkich wartości w kolejności wejścia (nie ukończenia). Działa **fail-fast**: pierwsze odrzucenie od razu odrzuca całość.\n- **`Promise.allSettled`**: czeka na wszystkie i zwraca `[{ status: 'fulfilled', value } | { status: 'rejected', reason }]`. Nigdy nie odrzuca, więc każdy wynik sprawdzasz sam.\n- **`Promise.race`**: rozstrzyga się tak jak pierwszy rozstrzygnięty promise, czy to sukces, czy błąd.\n- **`Promise.any`**: spełnia się pierwszym sukcesem i ignoruje błędy; dopiero gdy wszystkie zawiodą, odrzuca z **`AggregateError`**, którego `.errors` zawiera wszystkie powody.",
+        "Ważny niuans: promise to nie zadanie, które da się zatrzymać. Gdy `all` odrzuci wcześniej albo `race` ma zwycięzcę, pozostałe operacje **dalej działają**; ich wyniki są po prostu ignorowane. Żeby naprawdę anulować (zwolnić sockety, przerwać zapytania do bazy), przekaż `AbortSignal` do właściwej operacji, np. `fetch(url, { signal: AbortSignal.timeout(5000) })`.",
+        "```js\n// Sekwencyjnie: ~3 x opóźnienie\nfor (const id of ids) results.push(await getUser(id));\n\n// Równolegle: ~1 x opóźnienie, fail-fast\nconst users = await Promise.all(ids.map(getUser));\n\n// Równolegle, ale najwyżej 5 naraz (p-limit)\nconst limit = pLimit(5);\nawait Promise.all(ids.map(id => limit(() => getUser(id))));\n```",
+        "Wybór: `all`, gdy potrzebujesz każdego wyniku, a jeden błąd czyni całość bezużyteczną; `allSettled` do zadań wsadowych, gdzie częściowy sukces jest ok (wyślij 100 maili, zgłoś błędy); `race` do timeoutów (wyścig pracy z timerem, który odrzuca); `any` do redundancji (najszybszy z kilku mirrorów). Nieograniczone `Promise.all` na 10 000 elementów może wyczerpać pulę połączeń do bazy albo trafić w rate limit, więc ograniczaj współbieżność przez `p-limit` lub batchowanie."
       ]
     }
   },
@@ -350,6 +480,13 @@ const FLASHCARDS = [
         "Debounce: run once after calls stop for X ms (search input, autosave)",
         "Throttle: run at most once per X ms (scroll, resize, mousemove)",
         "Both implemented with a closure over a timer / timestamp"
+      ],
+      more: [
+        "Some events fire far more often than you want to react to: `input` on every keystroke, `scroll`/`resize`/`mousemove` dozens of times per second. Running an API call or heavy layout work each time wastes resources and makes the UI janky. **Debounce** and **throttle** are two ways of **rate-limiting** a function, and they answer different questions.",
+        "**Debounce** waits for a pause: each call resets a timer, and the function runs only once no new calls have arrived for X ms. Typing \"hello\" quickly produces one search request, 300 ms after the last key. Use it when only the final state matters: search-as-you-type, autosave, validating a field, recalculating after a window resize ends.",
+        "**Throttle** guarantees a steady maximum rate: the function runs at most once per X ms, no matter how many calls come in. During continuous scrolling it still fires regularly (e.g. every 100 ms). Use it when you need ongoing updates during the activity: infinite-scroll position checks, drag handlers, analytics of mouse movement. For visual updates, `requestAnimationFrame` is often a better throttle (once per frame).",
+        "```js\nfunction debounce(fn, ms) {\n  let timer;                              // lives in the closure\n  return function (...args) {\n    clearTimeout(timer);                  // cancel the pending call\n    timer = setTimeout(() => fn.apply(this, args), ms);\n  };\n}\nconst onSearch = debounce(q => fetch(`/api/search?q=${q}`), 300);\n```",
+        "Both rely on a **closure**: the returned wrapper keeps private state between calls: a timer id for debounce, a last-run timestamp (or a \"cooling down\" flag) for throttle. Production versions (Lodash `debounce`/`throttle`) add options: **leading** vs **trailing** edge (fire at the start of a burst, at the end, or both), `maxWait` (a debounce that still fires during very long bursts), and `cancel`/`flush`. Pitfall in React: creating the debounced function inside render makes a new closure every time, so it never debounces; keep it stable with `useMemo`/`useRef`."
       ]
     },
     pl: {
@@ -358,6 +495,13 @@ const FLASHCARDS = [
         "Debounce: wykonaj raz po X ms od ostatniego wywołania (wyszukiwarka, autozapis)",
         "Throttle: wykonuj najwyżej raz na X ms (scroll, resize, mousemove)",
         "Oba zaimplementowane domknięciem na timerze / znaczniku czasu"
+      ],
+      more: [
+        "Niektóre zdarzenia odpalają się znacznie częściej, niż chcemy na nie reagować: `input` przy każdym klawiszu, `scroll`/`resize`/`mousemove` dziesiątki razy na sekundę. Wywołanie API albo ciężki przelicznik layoutu za każdym razem marnuje zasoby i sprawia, że UI się tnie. **Debounce** i **throttle** to dwa sposoby **ograniczania częstotliwości** wywołań funkcji i odpowiadają na różne pytania.",
+        "**Debounce** czeka na przerwę: każde wywołanie resetuje timer, a funkcja wykonuje się dopiero, gdy przez X ms nie przyszło nowe wywołanie. Szybkie wpisanie \"hello\" daje jedno zapytanie, 300 ms po ostatnim klawiszu. Stosuj, gdy liczy się tylko stan końcowy: wyszukiwarka w trakcie pisania, autozapis, walidacja pola, przeliczenie po zakończeniu zmiany rozmiaru okna.",
+        "**Throttle** gwarantuje stałe maksymalne tempo: funkcja wykona się najwyżej raz na X ms, niezależnie od liczby wywołań. W trakcie ciągłego scrollowania nadal odpala regularnie (np. co 100 ms). Stosuj, gdy potrzebujesz bieżących aktualizacji w trakcie aktywności: sprawdzanie pozycji przy infinite scroll, obsługa przeciągania, analityka ruchu myszy. Przy aktualizacjach wizualnych lepszym throttle bywa `requestAnimationFrame` (raz na klatkę).",
+        "```js\nfunction debounce(fn, ms) {\n  let timer;                              // żyje w domknięciu\n  return function (...args) {\n    clearTimeout(timer);                  // anuluj oczekujące wywołanie\n    timer = setTimeout(() => fn.apply(this, args), ms);\n  };\n}\nconst onSearch = debounce(q => fetch(`/api/search?q=${q}`), 300);\n```",
+        "Oba opierają się na **domknięciu**: zwrócony wrapper trzyma prywatny stan między wywołaniami: id timera dla debounce, znacznik czasu ostatniego uruchomienia (albo flagę \"odpoczywam\") dla throttle. Wersje produkcyjne (Lodash `debounce`/`throttle`) dodają opcje: zbocze **leading** vs **trailing** (odpal na początku serii, na końcu albo w obu miejscach), `maxWait` (debounce, który mimo wszystko odpali przy bardzo długiej serii) oraz `cancel`/`flush`. Pułapka w React: tworzenie funkcji z debounce w renderze daje za każdym razem nowe domknięcie, więc debounce nigdy nie działa; trzymaj ją stabilnie przez `useMemo`/`useRef`."
       ]
     }
   },
@@ -370,6 +514,14 @@ const FLASHCARDS = [
         "ESM: `import`/`export`, static → tree-shaking, top-level `await`, async loading",
         "Node picks via `.mjs`/`.cjs` or `\"type\": \"module\"` in package.json",
         "ESM can import CJS; CJS needs dynamic `import()` for ESM (newer Node allows `require(esm)`)"
+      ],
+      more: [
+        "A **module system** lets each file have its own scope and explicitly share values with other files. JavaScript had none for years, so Node invented **CommonJS (CJS)** in 2009: `const x = require('./x')` and `module.exports = ...`. In 2015 the language standardised **ES Modules (ESM)**: `import`/`export`. Today browsers, Deno, Bun and modern Node all speak ESM, but a huge part of npm is still CJS, so both coexist.",
+        "**CommonJS** is dynamic and synchronous. `require` is an ordinary function call executed at runtime: it reads the file, runs it immediately, and returns whatever `module.exports` is at that moment; destructured values are snapshots that don't follow later changes. You can call it conditionally or build the path from a variable. Simple, but tools can't know what's used without running the code.",
+        "**ESM** is static. `import`/`export` must be top-level with string-literal specifiers, so the whole dependency graph is known before any code runs. That enables **tree-shaking** (bundlers drop exports nobody imports), early errors for missing exports, **live bindings** (importers see the current value of an exported `let`), async loading in browsers, and **top-level `await`**. ESM is always strict mode, and CJS globals like `__dirname` are replaced by `import.meta.dirname`/`import.meta.url`. Dynamic loading is still possible with `await import(path)`.",
+        "```json\n{\n  \"name\": \"my-lib\",\n  \"type\": \"module\",\n  \"exports\": {\n    \"import\": \"./dist/index.js\",\n    \"require\": \"./dist/index.cjs\"\n  }\n}\n```",
+        "How Node decides: `.mjs` is always ESM, `.cjs` always CJS, and plain `.js` follows the nearest package.json's `\"type\"` (`\"module\"` or, by default, `\"commonjs\"`). Recent Node versions can also detect ESM syntax in ambiguous files. The `\"exports\"` field lets a library ship both formats.",
+        "Interop: ESM can `import` a CJS module (you get `module.exports` as the default export, named exports only when Node can detect them statically). The reverse used to require async `import()`, because ESM loading can be asynchronous. Since Node 22.12 / 20.19, `require(esm)` works synchronously as long as the ESM graph has no top-level `await`. Watch for the **dual package hazard**: if a package is loaded once as CJS and once as ESM, you get two separate instances (two singletons, failing `instanceof`)."
       ]
     },
     pl: {
@@ -379,6 +531,14 @@ const FLASHCARDS = [
         "ESM: `import`/`export`, statyczne → tree-shaking, top-level `await`, ładowanie asynchroniczne",
         "Node wybiera po `.mjs`/`.cjs` lub `\"type\": \"module\"` w package.json",
         "ESM może importować CJS; CJS potrzebuje dynamicznego `import()` dla ESM (nowszy Node pozwala na `require(esm)`)"
+      ],
+      more: [
+        "**System modułów** pozwala, by każdy plik miał własny zakres i jawnie udostępniał wartości innym plikom. JavaScript przez lata go nie miał, więc Node w 2009 wymyślił **CommonJS (CJS)**: `const x = require('./x')` i `module.exports = ...`. W 2015 język ustandaryzował **ES Modules (ESM)**: `import`/`export`. Dziś przeglądarki, Deno, Bun i współczesny Node mówią ESM, ale ogromna część npm to wciąż CJS, więc oba światy współistnieją.",
+        "**CommonJS** jest dynamiczny i synchroniczny. `require` to zwykłe wywołanie funkcji w runtime: czyta plik, od razu go wykonuje i zwraca to, czym w tym momencie jest `module.exports`; zdestrukturyzowane wartości to migawki, które nie śledzą późniejszych zmian. Można go wywołać warunkowo albo zbudować ścieżkę ze zmiennej. Proste, ale narzędzia nie wiedzą, co jest używane, bez uruchomienia kodu.",
+        "**ESM** jest statyczny. `import`/`export` muszą być na najwyższym poziomie, ze specyfikatorem w postaci literału, więc cały graf zależności jest znany, zanim ruszy jakikolwiek kod. To umożliwia **tree-shaking** (bundler wyrzuca eksporty, których nikt nie importuje), wczesne błędy przy brakujących eksportach, **live bindings** (importujący widzi bieżącą wartość eksportowanego `let`), asynchroniczne ładowanie w przeglądarce i **top-level `await`**. ESM zawsze działa w trybie strict, a globalne zmienne CJS jak `__dirname` zastępuje `import.meta.dirname`/`import.meta.url`. Dynamiczne ładowanie nadal jest możliwe przez `await import(path)`.",
+        "```json\n{\n  \"name\": \"my-lib\",\n  \"type\": \"module\",\n  \"exports\": {\n    \"import\": \"./dist/index.js\",\n    \"require\": \"./dist/index.cjs\"\n  }\n}\n```",
+        "Jak decyduje Node: `.mjs` to zawsze ESM, `.cjs` zawsze CJS, a zwykłe `.js` idzie za polem `\"type\"` najbliższego package.json (`\"module\"` albo domyślnie `\"commonjs\"`). Nowsze wersje Node potrafią też wykryć składnię ESM w niejednoznacznych plikach. Pole `\"exports\"` pozwala bibliotece dostarczać oba formaty.",
+        "Interop: ESM może zrobić `import` modułu CJS (dostajesz `module.exports` jako eksport domyślny, a eksporty nazwane tylko wtedy, gdy Node wykryje je statycznie). W drugą stronę trzeba było używać asynchronicznego `import()`, bo ładowanie ESM może być asynchroniczne. Od Node 22.12 / 20.19 `require(esm)` działa synchronicznie, o ile graf ESM nie zawiera top-level `await`. Uwaga na **dual package hazard**: jeśli pakiet zostanie załadowany raz jako CJS, a raz jako ESM, powstaną dwie osobne instancje (dwa singletony, nieudane `instanceof`)."
       ]
     }
   },
@@ -391,6 +551,15 @@ const FLASHCARDS = [
         "`Set`: unique values, O(1) `has` vs O(n) `array.includes`",
         "`WeakMap`/`WeakSet`: keys are objects held weakly → garbage-collected; for metadata/caches per object",
         "Plain objects: fixed-shape records, JSON-serialisable"
+      ],
+      more: [
+        "Plain objects and arrays can act as dictionaries and collections, but they were designed as **records** (a fixed set of named fields) and **lists**. `Map` and `Set` (ES2015) are purpose-built collections. Knowing when to use which is about correctness first, performance second.",
+        "Why a plain object is an awkward dictionary:",
+        "- Keys are only strings or symbols; `obj[1]` and `obj['1']` are the same key, and using an object as a key turns it into `'[object Object]'`.\n- It inherits from `Object.prototype`, so keys like `toString`, `constructor` or `__proto__` behave strangely (and `__proto__` from user input opens **prototype pollution**).\n- No `size`; you need `Object.keys(obj).length`.\n- Engines optimise objects for stable shapes; frequent add/delete of keys can push them into a slower dictionary mode.",
+        "A **`Map`** accepts keys of any type (objects, numbers, `NaN`), keeps **insertion order** on iteration, has `.size`, `.has`, `.delete`, is directly iterable, has no inherited keys, and is optimised for frequent additions and removals. The trade-off: it doesn't serialise with `JSON.stringify` (you get `{}`), so convert via `Object.fromEntries(map)` or `[...map]`.",
+        "A **`Set`** stores unique values (compared with SameValueZero). `set.has(x)` is O(1) on average (hash lookup), while `array.includes(x)` scans the array: O(n). Checking membership of 10k ids inside a loop over 10k items is 100M comparisons with an array and 10k with a Set. `[...new Set(arr)]` is the idiomatic dedupe, and ES2025 added `union`, `intersection`, `difference` methods.",
+        "```js\nconst meta = new WeakMap();            // key: object, held weakly\nfunction track(req) {\n  meta.set(req, { start: Date.now() }); // attach data without mutating req\n}\nfunction elapsed(req) {\n  return Date.now() - meta.get(req).start;\n}\n// when req is no longer referenced anywhere, its entry can be GC'd\n```",
+        "**`WeakMap`/`WeakSet`** only accept objects (and non-registered symbols) as keys, and hold them **weakly**: the entry doesn't keep the key alive, so once nothing else references the object, the garbage collector can remove it along with its value. That makes them ideal for per-object metadata and caches (e.g. memoising a computation per DOM node or request) without leaks. The price: they're not iterable and have no `size`, since contents may vanish at any time. Use plain objects for fixed-shape records and anything that goes to JSON."
       ]
     },
     pl: {
@@ -400,6 +569,15 @@ const FLASHCARDS = [
         "`Set`: unikalne wartości, `has` O(1) vs `array.includes` O(n)",
         "`WeakMap`/`WeakSet`: klucze-obiekty trzymane słabo → mogą zostać zebrane przez GC; metadane/cache per obiekt",
         "Zwykłe obiekty: rekordy o stałym kształcie, serializowalne do JSON"
+      ],
+      more: [
+        "Zwykłe obiekty i tablice mogą służyć za słowniki i kolekcje, ale zaprojektowano je jako **rekordy** (stały zestaw nazwanych pól) i **listy**. `Map` i `Set` (ES2015) to kolekcje stworzone do tego celu. Wybór to przede wszystkim kwestia poprawności, a dopiero potem wydajności.",
+        "Dlaczego zwykły obiekt to niewygodny słownik:",
+        "- Klucze to tylko stringi lub symbole; `obj[1]` i `obj['1']` to ten sam klucz, a obiekt użyty jako klucz zamienia się w `'[object Object]'`.\n- Dziedziczy z `Object.prototype`, więc klucze typu `toString`, `constructor` czy `__proto__` zachowują się dziwnie (a `__proto__` z danych użytkownika otwiera drogę do **prototype pollution**).\n- Brak `size`; trzeba liczyć `Object.keys(obj).length`.\n- Silniki optymalizują obiekty pod stały kształt; częste dodawanie i usuwanie kluczy może przełączyć je w wolniejszy tryb słownikowy.",
+        "**`Map`** przyjmuje klucze dowolnego typu (obiekty, liczby, `NaN`), zachowuje **kolejność wstawiania** przy iteracji, ma `.size`, `.has`, `.delete`, jest bezpośrednio iterowalna, nie ma odziedziczonych kluczy i jest zoptymalizowana pod częste dodawanie i usuwanie. Koszt: nie serializuje się przez `JSON.stringify` (wychodzi `{}`), więc trzeba konwertować przez `Object.fromEntries(map)` albo `[...map]`.",
+        "**`Set`** przechowuje unikalne wartości (porównywane przez SameValueZero). `set.has(x)` to średnio O(1) (wyszukiwanie w tablicy haszującej), a `array.includes(x)` przeszukuje tablicę: O(n). Sprawdzanie 10 tys. id w pętli po 10 tys. elementów to 100 mln porównań z tablicą i 10 tys. z Setem. `[...new Set(arr)]` to idiomatyczne usuwanie duplikatów, a ES2025 dodał metody `union`, `intersection`, `difference`.",
+        "```js\nconst meta = new WeakMap();            // klucz: obiekt, trzymany słabo\nfunction track(req) {\n  meta.set(req, { start: Date.now() }); // dołącz dane bez mutowania req\n}\nfunction elapsed(req) {\n  return Date.now() - meta.get(req).start;\n}\n// gdy nic już nie wskazuje na req, jego wpis może zostać zebrany przez GC\n```",
+        "**`WeakMap`/`WeakSet`** przyjmują jako klucze tylko obiekty (i niezarejestrowane symbole) i trzymają je **słabo**: wpis nie utrzymuje klucza przy życiu, więc gdy nic innego nie wskazuje na obiekt, garbage collector może go usunąć razem z wartością. Idealne do metadanych i cache per obiekt (np. memoizacja wyniku per węzeł DOM albo per żądanie) bez wycieków. Cena: nie są iterowalne i nie mają `size`, bo zawartość może zniknąć w każdej chwili. Zwykłe obiekty zostaw dla rekordów o stałym kształcie i wszystkiego, co trafia do JSON."
       ]
     }
   },
@@ -414,6 +592,14 @@ const FLASHCARDS = [
         "`interface`: declaration merging, `extends`, slightly better error messages",
         "`type`: unions, intersections, tuples, mapped/conditional types, primitives aliases",
         "Common rule: `interface` for public object contracts, `type` for everything else – be consistent"
+      ],
+      more: [
+        "TypeScript gives you two ways to name a type. An **`interface`** declares the shape of an object (its properties and methods). A **type alias** (`type X = ...`) gives a name to *any* type expression. For a plain object shape they compile to the same thing and are checked the same way, so in everyday code they're mostly interchangeable.",
+        "What only `interface` does:",
+        "- **Declaration merging**: two `interface User` declarations in the same scope merge into one. This is how libraries let you extend their types (**module augmentation**), e.g. adding `user` to Express's `Request` or new keys to `Window`. A `type` declared twice is a duplicate-identifier error.\n- **`extends`**: `interface Admin extends User {}` checks compatibility at declaration and reports conflicting properties clearly, while `type Admin = User & {...}` (an intersection) can silently produce `never` properties when they conflict.\n- Compiler performance and messages: interfaces are cached by name and show up by name in errors; big intersections can be slower to check and print as expanded structures.",
+        "What only `type` does: anything that isn't a single object shape. **Unions** (`'a' | 'b'`), **intersections**, **tuples** (`[string, number]`), aliases of primitives (`type Id = string`), function types, and computed types: **mapped** (`{ [K in keyof T]: ... }`), **conditional** (`T extends U ? X : Y`), template literal types. Discriminated unions, the backbone of good TS domain modelling, need `type`.",
+        "```ts\ninterface User { id: string; name: string }\ninterface User { email: string }          // merged: User has id, name, email\n\ntype Status = 'active' | 'banned';         // union: only possible with type\ntype Pair = [key: string, value: number];  // tuple\ntype ApiResult<T> =\n  | { ok: true; data: T }\n  | { ok: false; error: string };\n```",
+        "The common team rule: `interface` for public object contracts (especially those consumers might augment), `type` for everything else. Some teams simply use `type` everywhere. Either is defensible; the interviewer wants to hear you know the concrete differences and that consistency (enforced by a lint rule like `@typescript-eslint/consistent-type-definitions`) matters more than the choice."
       ]
     },
     pl: {
@@ -423,6 +609,14 @@ const FLASHCARDS = [
         "`interface`: łączenie deklaracji, `extends`, nieco czytelniejsze błędy",
         "`type`: unie, przecięcia, krotki, typy mapowane/warunkowe, aliasy prymitywów",
         "Częsta zasada: `interface` dla publicznych kontraktów obiektów, `type` dla reszty – ważna spójność"
+      ],
+      more: [
+        "TypeScript daje dwa sposoby nazywania typów. **`interface`** deklaruje kształt obiektu (jego pola i metody). **Alias typu** (`type X = ...`) nadaje nazwę *dowolnemu* wyrażeniu typowemu. Dla zwykłego kształtu obiektu oba dają to samo i są sprawdzane tak samo, więc w codziennym kodzie są w większości zamienne.",
+        "Co potrafi tylko `interface`:",
+        "- **Łączenie deklaracji (declaration merging)**: dwie deklaracje `interface User` w tym samym zakresie łączą się w jedną. Tak biblioteki pozwalają rozszerzać swoje typy (**module augmentation**), np. dodać `user` do `Request` z Expressa albo nowe klucze do `Window`. Podwójny `type` to błąd duplikatu identyfikatora.\n- **`extends`**: `interface Admin extends User {}` sprawdza zgodność przy deklaracji i jasno zgłasza konflikt pól, a `type Admin = User & {...}` (przecięcie) przy konflikcie może po cichu dać pola typu `never`.\n- Wydajność kompilatora i komunikaty: interfejsy są cache'owane po nazwie i pojawiają się w błędach pod nazwą; duże przecięcia potrafią być wolniejsze w sprawdzaniu i wypisywane są w rozwiniętej postaci.",
+        "Co potrafi tylko `type`: wszystko, co nie jest pojedynczym kształtem obiektu. **Unie** (`'a' | 'b'`), **przecięcia**, **krotki** (`[string, number]`), aliasy prymitywów (`type Id = string`), typy funkcji i typy wyliczane: **mapowane** (`{ [K in keyof T]: ... }`), **warunkowe** (`T extends U ? X : Y`), typy template literal. Unie dyskryminowane, podstawa dobrego modelowania domeny w TS, wymagają `type`.",
+        "```ts\ninterface User { id: string; name: string }\ninterface User { email: string }          // połączone: User ma id, name, email\n\ntype Status = 'active' | 'banned';         // unia: możliwa tylko z type\ntype Pair = [key: string, value: number];  // krotka\ntype ApiResult<T> =\n  | { ok: true; data: T }\n  | { ok: false; error: string };\n```",
+        "Częsta zasada w zespołach: `interface` dla publicznych kontraktów obiektów (zwłaszcza takich, które konsumenci mogą rozszerzać), `type` dla reszty. Niektóre zespoły po prostu używają wszędzie `type`. Obie opcje da się obronić; rekruter chce usłyszeć, że znasz konkretne różnice i że spójność (wymuszona regułą lintera, np. `@typescript-eslint/consistent-type-definitions`) jest ważniejsza niż sam wybór."
       ]
     }
   },
@@ -435,6 +629,14 @@ const FLASHCARDS = [
         "`unknown`: safe top type – must narrow before use (ideal for `JSON.parse`, `catch (e)`)",
         "`never`: no possible value – functions that throw, exhaustive `switch` checks",
         "`void`: function returns nothing useful"
+      ],
+      more: [
+        "Think of a type as a **set of possible values**: `boolean` is `{true, false}`, a literal `'a'` is a one-element set. A **top type** contains every value; a **bottom type** contains none. TypeScript has two top types (`any`, `unknown`) and one bottom type (`never`), and the difference between them is about what the compiler lets you do.",
+        "**`any`** is an escape hatch that turns type checking off. Anything is assignable to it, it's assignable to everything, and every operation on it is allowed (`x.foo.bar()` compiles even if `x` is a number). Worse, it spreads: the result of an operation on `any` is `any`, silently disabling checks downstream. Use it only at a deliberate, small boundary; `noImplicitAny` and lint rules like `no-explicit-any` keep it out.",
+        "**`unknown`** is the safe top type: anything can be assigned to it, but you can't do anything with it until you **narrow** it (with `typeof`, `instanceof`, a type guard or a schema parse). It's the honest type for values whose shape you don't control: `JSON.parse` output, API responses, and errors in `catch (e)`, which is `unknown` under `strict` (`useUnknownInCatchVariables`) because JS can `throw` anything, not only `Error`.",
+        "```ts\nfunction handle(input: unknown) {\n  input.trim();                    // error: 'input' is of type 'unknown'\n  if (typeof input === 'string') input.trim(); // ok: narrowed to string\n}\nfunction fail(msg: string): never { throw new Error(msg); }\nfunction area(s: Shape): number {\n  switch (s.kind) {\n    case 'circle': return Math.PI * s.r ** 2;\n    case 'square': return s.side ** 2;\n    default: { const _exhaustive: never = s; return _exhaustive; }\n  }\n}\n```",
+        "**`never`** is the empty set: no value has this type. It appears as the return type of functions that never return normally (always throw, or loop forever), and as what's left after narrowing has ruled out every option. That enables **exhaustiveness checks**: in the `default` branch above, `s` should be `never`; if someone adds a `'triangle'` variant to `Shape`, assigning it to `never` becomes a compile error pointing at the missing case.",
+        "**`void`** is different again: it means \"the return value is not meaningful\", used for functions like event handlers. A function returning `void` actually returns `undefined`, and a callback type `() => void` even accepts functions that return something (the result is just ignored), which is why `arr.forEach(x => list.push(x))` type-checks."
       ]
     },
     pl: {
@@ -444,6 +646,14 @@ const FLASHCARDS = [
         "`unknown`: bezpieczny typ nadrzędny – trzeba zawęzić przed użyciem (idealny dla `JSON.parse`, `catch (e)`)",
         "`never`: brak możliwej wartości – funkcje rzucające wyjątek, wyczerpujący `switch`",
         "`void`: funkcja nie zwraca nic użytecznego"
+      ],
+      more: [
+        "Traktuj typ jak **zbiór możliwych wartości**: `boolean` to `{true, false}`, literał `'a'` to zbiór jednoelementowy. **Typ nadrzędny (top type)** zawiera każdą wartość; **typ dolny (bottom type)** nie zawiera żadnej. TypeScript ma dwa typy nadrzędne (`any`, `unknown`) i jeden dolny (`never`), a różnica między nimi dotyczy tego, na co pozwala kompilator.",
+        "**`any`** to furtka, która wyłącza sprawdzanie typów. Wszystko można do niego przypisać, on sam jest przypisywalny do wszystkiego i każda operacja jest dozwolona (`x.foo.bar()` się skompiluje, nawet jeśli `x` to liczba). Co gorsza, rozlewa się: wynik operacji na `any` to `any`, co po cichu wyłącza sprawdzanie dalej w kodzie. Używaj go tylko na świadomej, małej granicy; `noImplicitAny` i reguły lintera typu `no-explicit-any` trzymają go z daleka.",
+        "**`unknown`** to bezpieczny typ nadrzędny: można do niego przypisać cokolwiek, ale nic nie można z nim zrobić, dopóki go nie **zawęzisz** (przez `typeof`, `instanceof`, type guard albo parsowanie schematem). To uczciwy typ dla wartości, których kształtu nie kontrolujesz: wynik `JSON.parse`, odpowiedzi API i błędy w `catch (e)`, które w trybie `strict` są `unknown` (`useUnknownInCatchVariables`), bo w JS można rzucić czymkolwiek, nie tylko `Error`.",
+        "```ts\nfunction handle(input: unknown) {\n  input.trim();                    // błąd: 'input' is of type 'unknown'\n  if (typeof input === 'string') input.trim(); // ok: zawężone do string\n}\nfunction fail(msg: string): never { throw new Error(msg); }\nfunction area(s: Shape): number {\n  switch (s.kind) {\n    case 'circle': return Math.PI * s.r ** 2;\n    case 'square': return s.side ** 2;\n    default: { const _exhaustive: never = s; return _exhaustive; }\n  }\n}\n```",
+        "**`never`** to zbiór pusty: żadna wartość nie ma tego typu. Pojawia się jako typ zwracany funkcji, które nigdy normalnie nie wracają (zawsze rzucają wyjątek albo działają w nieskończonej pętli), oraz jako to, co zostaje, gdy zawężanie wykluczyło wszystkie opcje. To umożliwia **sprawdzanie wyczerpywalności**: w gałęzi `default` powyżej `s` powinno być `never`; jeśli ktoś doda do `Shape` wariant `'triangle'`, przypisanie do `never` stanie się błędem kompilacji wskazującym brakujący przypadek.",
+        "**`void`** to jeszcze coś innego: oznacza \"zwracana wartość nie ma znaczenia\" i stosuje się go np. dla handlerów zdarzeń. Funkcja zwracająca `void` faktycznie zwraca `undefined`, a typ callbacku `() => void` akceptuje nawet funkcje, które coś zwracają (wynik jest po prostu ignorowany), dlatego `arr.forEach(x => list.push(x))` przechodzi sprawdzanie typów."
       ]
     }
   },
@@ -457,6 +667,14 @@ const FLASHCARDS = [
         "Constraint: `function getId<T extends { id: string }>(x: T)`",
         "`keyof`: `function pluck<T, K extends keyof T>(obj: T, key: K): T[K]`",
         "Defaults: `type ApiResponse<T = unknown> = { data: T }`"
+      ],
+      more: [
+        "Without generics you face a bad choice when writing reusable code: write `firstString`, `firstNumber`, `firstUser`… or accept `any` and lose all type information. **Generics** solve this with **type parameters**: placeholders (conventionally `T`, `K`, `V`) that are filled in with a concrete type at each use, so one implementation works for many types while the compiler still tracks exactly which one.",
+        "Usually you don't pass the type explicitly: TypeScript **infers** it from the arguments. In `first([1, 2, 3])`, `T` is inferred as `number`, so the result is `number | undefined`. You can still write `first<string>(...)` when inference needs help.",
+        "A bare `T` could be anything, so inside the function you can't access properties on it. A **constraint** (`T extends Something`) says \"T can be any type, as long as it is assignable to Something\". Now you may use what Something guarantees, and callers get an error if they pass something that doesn't fit, while the specific type is still preserved in the result.",
+        "```ts\nfunction first<T>(arr: T[]): T | undefined { return arr[0]; }\n\nfunction byId<T extends { id: string }>(items: T[], id: string): T | undefined {\n  return items.find(i => i.id === id);   // .id allowed thanks to constraint\n}\nconst u = byId(users, 'u1');             // type is User | undefined, not {id}\n\nfunction pluck<T, K extends keyof T>(obj: T, key: K): T[K] { return obj[key]; }\npluck(user, 'email');                    // string\npluck(user, 'emial');                    // error: not a key of User\n```",
+        "`keyof T` is the union of T's property names (`'id' | 'name' | 'email'`), and `T[K]` is an **indexed access type**: the type of property K in T. Together they let `pluck` return the exact property type and reject typos at compile time. **Default type parameters** (`type ApiResponse<T = unknown> = { data: T }`) work like default function arguments, used when the caller doesn't specify.",
+        "Nuance interviewers like: don't add generics that do nothing. If a type parameter appears only once (e.g. `function log<T>(x: T): void`), it adds no relationship and `unknown` is clearer. Generics earn their place when they **connect** types: input to output, one argument to another. Also, `T extends X` in a parameter list is a constraint, a different thing from `extends` in conditional types."
       ]
     },
     pl: {
@@ -467,6 +685,14 @@ const FLASHCARDS = [
         "Ograniczenie: `function getId<T extends { id: string }>(x: T)`",
         "`keyof`: `function pluck<T, K extends keyof T>(obj: T, key: K): T[K]`",
         "Domyślne: `type ApiResponse<T = unknown> = { data: T }`"
+      ],
+      more: [
+        "Bez generyków pisanie kodu wielokrotnego użytku stawia przed złym wyborem: pisać `firstString`, `firstNumber`, `firstUser`… albo przyjąć `any` i stracić informację o typach. **Generyki** rozwiązują to przez **parametry typów**: zmienne na typy (zwyczajowo `T`, `K`, `V`), które przy każdym użyciu wypełniane są konkretnym typem. Jedna implementacja działa dla wielu typów, a kompilator nadal dokładnie wie, dla którego.",
+        "Zwykle nie podajesz typu jawnie: TypeScript go **wnioskuje (inferuje)** z argumentów. W `first([1, 2, 3])` `T` zostaje wywnioskowane jako `number`, więc wynik to `number | undefined`. Nadal możesz napisać `first<string>(...)`, gdy inferencja potrzebuje pomocy.",
+        "Samo `T` może być czymkolwiek, więc w środku funkcji nie wolno odwołać się do jego pól. **Ograniczenie (constraint)** `T extends Something` mówi: \"T może być dowolnym typem, byle przypisywalnym do Something\". Wtedy możesz korzystać z tego, co gwarantuje Something, wywołujący dostaje błąd, gdy przekaże coś niepasującego, a konkretny typ nadal zostaje zachowany w wyniku.",
+        "```ts\nfunction first<T>(arr: T[]): T | undefined { return arr[0]; }\n\nfunction byId<T extends { id: string }>(items: T[], id: string): T | undefined {\n  return items.find(i => i.id === id);   // .id dozwolone dzięki ograniczeniu\n}\nconst u = byId(users, 'u1');             // typ to User | undefined, nie {id}\n\nfunction pluck<T, K extends keyof T>(obj: T, key: K): T[K] { return obj[key]; }\npluck(user, 'email');                    // string\npluck(user, 'emial');                    // błąd: to nie klucz User\n```",
+        "`keyof T` to unia nazw pól T (`'id' | 'name' | 'email'`), a `T[K]` to **typ dostępu indeksowego (indexed access type)**: typ pola K w T. Razem pozwalają `pluck` zwracać dokładny typ pola i odrzucać literówki w czasie kompilacji. **Domyślne parametry typów** (`type ApiResponse<T = unknown> = { data: T }`) działają jak domyślne argumenty funkcji: używane, gdy wywołujący nic nie poda.",
+        "Niuans, który lubią rekruterzy: nie dodawaj generyków, które nic nie robią. Jeśli parametr typu występuje tylko raz (np. `function log<T>(x: T): void`), nie tworzy żadnej relacji i `unknown` będzie czytelniejsze. Generyki mają sens, gdy **łączą** typy: wejście z wyjściem, jeden argument z drugim. Poza tym `T extends X` na liście parametrów to ograniczenie, coś innego niż `extends` w typach warunkowych."
       ]
     }
   },
@@ -480,6 +706,13 @@ const FLASHCARDS = [
         "`Record<K, V>` – dictionaries",
         "`ReturnType<F>`, `Parameters<F>`, `Awaited<P>`",
         "`NonNullable<T>`, `Exclude<U, X>`, `Extract<U, X>`"
+      ],
+      more: [
+        "**Utility types** are generic types shipped with TypeScript (in `lib.es5.d.ts` and friends) that transform other types. They're written with mapped and conditional types, so there's no magic, but knowing them lets you derive types from a single source of truth instead of copy-pasting shapes that then drift apart.",
+        "- `Partial<T>`: all properties optional. Typical for PATCH payloads or update functions: `update(id, changes: Partial<User>)`.\n- `Required<T>`: removes all `?`.\n- `Readonly<T>`: all properties `readonly`, for data that must not be mutated (state, config). Like `Partial` and `Required` it is **shallow**: nested objects keep their original modifiers.\n- `Pick<T, 'a' | 'b'>`: keep only listed keys. `Omit<T, 'password'>`: drop them. Classic for deriving **DTOs** (Data Transfer Objects, the shapes sent over the API) from entities, e.g. a public user without `passwordHash`.\n- `Record<K, V>`: an object type with keys K and values V, e.g. `Record<Role, Permission[]>`; if K is a union of literals, every key is required, which catches missing entries.",
+        "```ts\ninterface User { id: string; email: string; passwordHash: string; createdAt: Date }\n\ntype PublicUser  = Omit<User, 'passwordHash'>;\ntype CreateUser  = Pick<User, 'email'> & { password: string };\ntype UpdateUser  = Partial<Omit<User, 'id' | 'createdAt'>>;\n\nasync function getUser(id: string) { /* ... */ return {} as PublicUser; }\ntype Loaded = Awaited<ReturnType<typeof getUser>>;  // PublicUser\ntype Args   = Parameters<typeof getUser>;           // [id: string]\n```",
+        "Working with functions and promises: `ReturnType<F>` and `Parameters<F>` extract a function's result and argument tuple, useful for typing wrappers around a library function whose types aren't exported. `Awaited<P>` unwraps promises recursively (`Awaited<Promise<Promise<X>>>` is `X`), the same way `await` does.",
+        "Filtering unions: `Exclude<U, X>` removes union members assignable to X (`Exclude<Status, 'deleted'>`), `Extract<U, X>` keeps only them, and `NonNullable<T>` removes `null` and `undefined`. Pitfall: `Omit` is not **distributive**: `Omit<A | B, 'x'>` collapses the union to only their common keys, so for discriminated unions you need a distributive helper (`T extends any ? Omit<T, K> : never`). Also, `Omit`'s key isn't checked against T, so a typo is silently ignored."
       ]
     },
     pl: {
@@ -490,6 +723,13 @@ const FLASHCARDS = [
         "`Record<K, V>` – słowniki",
         "`ReturnType<F>`, `Parameters<F>`, `Awaited<P>`",
         "`NonNullable<T>`, `Exclude<U, X>`, `Extract<U, X>`"
+      ],
+      more: [
+        "**Typy narzędziowe (utility types)** to generyczne typy dostarczane z TypeScriptem (w `lib.es5.d.ts` i pokrewnych), które przekształcają inne typy. Są zbudowane z typów mapowanych i warunkowych, więc nie ma tu magii, ale ich znajomość pozwala wyprowadzać typy z jednego źródła prawdy zamiast kopiować kształty, które potem się rozjeżdżają.",
+        "- `Partial<T>`: wszystkie pola opcjonalne. Typowe dla payloadów PATCH i funkcji aktualizujących: `update(id, changes: Partial<User>)`.\n- `Required<T>`: usuwa wszystkie `?`.\n- `Readonly<T>`: wszystkie pola `readonly`, dla danych, których nie wolno mutować (stan, konfiguracja). Podobnie jak `Partial` i `Required` działa **płytko**: zagnieżdżone obiekty zachowują oryginalne modyfikatory.\n- `Pick<T, 'a' | 'b'>`: zostaw tylko wymienione klucze. `Omit<T, 'password'>`: usuń je. Klasyka przy wyprowadzaniu **DTO** (Data Transfer Object, kształt wysyłany przez API) z encji, np. publiczny użytkownik bez `passwordHash`.\n- `Record<K, V>`: typ obiektu o kluczach K i wartościach V, np. `Record<Role, Permission[]>`; jeśli K to unia literałów, każdy klucz jest wymagany, co wyłapuje brakujące wpisy.",
+        "```ts\ninterface User { id: string; email: string; passwordHash: string; createdAt: Date }\n\ntype PublicUser  = Omit<User, 'passwordHash'>;\ntype CreateUser  = Pick<User, 'email'> & { password: string };\ntype UpdateUser  = Partial<Omit<User, 'id' | 'createdAt'>>;\n\nasync function getUser(id: string) { /* ... */ return {} as PublicUser; }\ntype Loaded = Awaited<ReturnType<typeof getUser>>;  // PublicUser\ntype Args   = Parameters<typeof getUser>;           // [id: string]\n```",
+        "Praca z funkcjami i promise'ami: `ReturnType<F>` i `Parameters<F>` wyciągają wynik i krotkę argumentów funkcji, przydatne przy typowaniu wrapperów wokół funkcji z biblioteki, która nie eksportuje swoich typów. `Awaited<P>` rekurencyjnie rozpakowuje promise'y (`Awaited<Promise<Promise<X>>>` to `X`), tak jak robi to `await`.",
+        "Filtrowanie unii: `Exclude<U, X>` usuwa z unii elementy przypisywalne do X (`Exclude<Status, 'deleted'>`), `Extract<U, X>` zostawia tylko je, a `NonNullable<T>` usuwa `null` i `undefined`. Pułapka: `Omit` nie jest **rozdzielny (distributive)**: `Omit<A | B, 'x'>` spłaszcza unię do wspólnych kluczy, więc dla unii dyskryminowanych potrzebny jest własny helper (`T extends any ? Omit<T, K> : never`). Do tego klucz w `Omit` nie jest sprawdzany względem T, więc literówka przechodzi po cichu."
       ]
     }
   },
@@ -503,6 +743,15 @@ const FLASHCARDS = [
         "Other narrowing: `typeof`, `instanceof`, `in`, truthiness",
         "Custom guard: `function isUser(x: unknown): x is User`",
         "Exhaustiveness: `default: const _x: never = value` → compile error when a case is missing"
+      ],
+      more: [
+        "A **union type** (`A | B`) says a value is one of several types. Before you can use members specific to `A`, the compiler needs proof it's actually an `A`. **Narrowing** is how TypeScript gets that proof: it follows your runtime checks through the code (**control flow analysis**) and, inside each branch, treats the value as the more specific type that the check allows.",
+        "Built-in narrowing checks:",
+        "- `typeof x === 'string'` for primitives (note `typeof null === 'object'`).\n- `x instanceof Date` for class instances.\n- `'email' in x` for \"does this object have that property\".\n- Truthiness (`if (x)`) removes `null`/`undefined`, but also `0` and `''`, which is a classic bug.\n- Equality: `x === null`, or comparing to a literal.\n- Early `return`/`throw` narrows everything after it.",
+        "A **discriminated (tagged) union** is a union of object types that all share one property with a distinct **literal type** (the discriminant, e.g. `status: 'ok'` vs `status: 'error'`). Checking that single field tells the compiler exactly which variant you have, so in each branch only that variant's fields are accessible. It's the standard way to model states, API results, events and domain variants without optional-field soup.",
+        "```ts\ntype Result<T> =\n  | { status: 'ok'; data: T }\n  | { status: 'error'; error: string };\n\nfunction render(r: Result<User>) {\n  switch (r.status) {\n    case 'ok':    return r.data.name;   // r narrowed: has data\n    case 'error': return r.error;       // r narrowed: has error\n    default: { const _x: never = r; throw new Error('unhandled'); }\n  }\n}\n```",
+        "When the built-ins aren't enough, write a **user-defined type guard**: a function returning `x is User`. When it returns true, the caller's variable is narrowed to `User`. Caution: the compiler trusts your implementation; a buggy guard is a lie with type-system authority. For external data, prefer generating guards from a schema (Zod etc.). Since TS 5.5, simple guards like `arr.filter(x => x !== undefined)` are inferred automatically. Related: **assertion functions** (`asserts x is User`) narrow by throwing instead of returning a boolean.",
+        "**Exhaustiveness checking**: after all cases are handled, the remaining type is `never`. Assigning the value to a `never` variable in `default` makes the compiler flag every switch that forgets a newly added variant, so adding `status: 'loading'` produces errors exactly where handling is missing."
       ]
     },
     pl: {
@@ -513,6 +762,15 @@ const FLASHCARDS = [
         "Inne zawężanie: `typeof`, `instanceof`, `in`, truthiness",
         "Własny guard: `function isUser(x: unknown): x is User`",
         "Wyczerpywalność: `default: const _x: never = value` → błąd kompilacji, gdy brakuje przypadku"
+      ],
+      more: [
+        "**Typ unii** (`A | B`) mówi, że wartość jest jednym z kilku typów. Zanim użyjesz pól specyficznych dla `A`, kompilator potrzebuje dowodu, że to naprawdę `A`. **Zawężanie (narrowing)** to sposób, w jaki TypeScript zdobywa ten dowód: śledzi twoje sprawdzenia w runtime przez kod (**analiza przepływu sterowania, control flow analysis**) i w każdej gałęzi traktuje wartość jako węższy typ, na który pozwala sprawdzenie.",
+        "Wbudowane sposoby zawężania:",
+        "- `typeof x === 'string'` dla prymitywów (uwaga: `typeof null === 'object'`).\n- `x instanceof Date` dla instancji klas.\n- `'email' in x`, czyli \"czy obiekt ma takie pole\".\n- Truthiness (`if (x)`) usuwa `null`/`undefined`, ale też `0` i `''`, co jest klasycznym błędem.\n- Porównania: `x === null` albo porównanie z literałem.\n- Wczesny `return`/`throw` zawęża wszystko, co jest za nim.",
+        "**Unia dyskryminowana (tagged union)** to unia typów obiektowych, które mają wspólne pole o różnym **typie literałowym** (dyskryminator, np. `status: 'ok'` vs `status: 'error'`). Sprawdzenie tego jednego pola mówi kompilatorowi dokładnie, z którym wariantem ma do czynienia, więc w każdej gałęzi dostępne są tylko pola tego wariantu. To standardowy sposób modelowania stanów, wyników API, zdarzeń i wariantów domenowych bez zupy z opcjonalnych pól.",
+        "```ts\ntype Result<T> =\n  | { status: 'ok'; data: T }\n  | { status: 'error'; error: string };\n\nfunction render(r: Result<User>) {\n  switch (r.status) {\n    case 'ok':    return r.data.name;   // r zawężone: ma data\n    case 'error': return r.error;       // r zawężone: ma error\n    default: { const _x: never = r; throw new Error('unhandled'); }\n  }\n}\n```",
+        "Gdy wbudowane sprawdzenia nie wystarczą, pisze się **własny type guard**: funkcję zwracającą `x is User`. Gdy zwróci true, zmienna u wywołującego jest zawężona do `User`. Uwaga: kompilator ufa implementacji; błędny guard to kłamstwo z autorytetem systemu typów. Dla danych zewnętrznych lepiej generować guardy ze schematu (Zod itp.). Od TS 5.5 proste guardy, jak `arr.filter(x => x !== undefined)`, są wnioskowane automatycznie. Pokrewne: **funkcje asercji** (`asserts x is User`) zawężają, rzucając wyjątek zamiast zwracać boolean.",
+        "**Sprawdzanie wyczerpywalności**: po obsłużeniu wszystkich przypadków pozostały typ to `never`. Przypisanie wartości do zmiennej typu `never` w `default` sprawia, że kompilator zgłosi każdy `switch`, który zapomniał o nowo dodanym wariancie, więc dodanie `status: 'loading'` daje błędy dokładnie tam, gdzie brakuje obsługi."
       ]
     }
   },
@@ -525,6 +783,13 @@ const FLASHCARDS = [
         "Any object with the required properties fits the type",
         "Excess property check only for fresh object literals",
         "Need nominal IDs (`UserId` vs `OrderId`)? → branded types: `string & { __brand: 'UserId' }`"
+      ],
+      more: [
+        "Type systems decide compatibility in one of two ways. **Nominal typing** (Java, C#, Rust structs) compares names: a value is a `User` only if it was declared as a `User`, even if another class has identical fields. **Structural typing** (TypeScript, Go interfaces) compares shapes: a value fits a type if it has all the required properties with compatible types, whatever it's called or wherever it came from. It's often described as compile-time duck typing.",
+        "TypeScript chose structural typing because JavaScript code is full of anonymous object literals and ad-hoc shapes; forcing everything to declare `implements` would make typing existing JS impractical. The consequence: extra properties are fine. An object with `{ id, name, email, role }` can be passed where `{ id: string; name: string }` is expected, because it has at least what's required.",
+        "The exception is the **excess property check**. When you write a **fresh object literal** directly where a type is expected, TypeScript flags unknown properties, because they're almost certainly typos (`{ nmae: 'x' }`) and nothing else could ever read them. Once the object is stored in a variable first, it's no longer fresh and the normal structural rules apply.",
+        "```ts\ntype Point = { x: number; y: number };\nconst p3 = { x: 1, y: 2, z: 3 };\nconst a: Point = p3;                    // ok: structurally compatible\nconst b: Point = { x: 1, y: 2, z: 3 };  // error: excess property 'z'\n\ntype UserId  = string & { readonly __brand: 'UserId' };\ntype OrderId = string & { readonly __brand: 'OrderId' };\nconst asUserId = (s: string) => s as UserId;\nfunction getUser(id: UserId) { /* ... */ }\ngetUser(orderId);                        // error: OrderId is not UserId\n```",
+        "The pitfall: when two concepts share a representation, structural typing can't tell them apart. `type UserId = string` and `type OrderId = string` are both just `string`, so passing an order id to `getUser` compiles fine. The fix is **branded (nominal-ish) types**: intersect the primitive with a phantom property that never exists at runtime. Values are created only through a constructor function (ideally one that validates, e.g. after parsing input), and the brands make the two ids incompatible at zero runtime cost. Zod has `.brand()` built in. Also good to know: classes with `private`/`#private` members behave nominally, since only instances of that class can have them."
       ]
     },
     pl: {
@@ -534,6 +799,13 @@ const FLASHCARDS = [
         "Każdy obiekt z wymaganymi polami pasuje do typu",
         "Sprawdzanie nadmiarowych pól tylko dla świeżych literałów obiektów",
         "Potrzebne nominalne ID (`UserId` vs `OrderId`)? → typy brandowane: `string & { __brand: 'UserId' }`"
+      ],
+      more: [
+        "Systemy typów decydują o zgodności na jeden z dwóch sposobów. **Typowanie nominalne** (Java, C#, struktury w Rust) porównuje nazwy: wartość jest `User` tylko wtedy, gdy zadeklarowano ją jako `User`, nawet jeśli inna klasa ma identyczne pola. **Typowanie strukturalne** (TypeScript, interfejsy w Go) porównuje kształty: wartość pasuje do typu, jeśli ma wszystkie wymagane pola ze zgodnymi typami, niezależnie od nazwy i pochodzenia. Często nazywa się to duck typingiem w czasie kompilacji.",
+        "TypeScript wybrał typowanie strukturalne, bo kod JavaScript jest pełen anonimowych literałów obiektów i doraźnych kształtów; wymuszanie wszędzie `implements` uczyniłoby typowanie istniejącego JS niepraktycznym. Konsekwencja: dodatkowe pola nie przeszkadzają. Obiekt `{ id, name, email, role }` można przekazać tam, gdzie oczekiwane jest `{ id: string; name: string }`, bo ma co najmniej to, co wymagane.",
+        "Wyjątkiem jest **sprawdzanie nadmiarowych pól (excess property check)**. Gdy piszesz **świeży literał obiektu** bezpośrednio tam, gdzie oczekiwany jest typ, TypeScript zgłasza nieznane pola, bo niemal na pewno to literówki (`{ nmae: 'x' }`) i nic nigdy by ich nie odczytało. Gdy obiekt najpierw trafi do zmiennej, przestaje być świeży i obowiązują zwykłe reguły strukturalne.",
+        "```ts\ntype Point = { x: number; y: number };\nconst p3 = { x: 1, y: 2, z: 3 };\nconst a: Point = p3;                    // ok: zgodne strukturalnie\nconst b: Point = { x: 1, y: 2, z: 3 };  // błąd: nadmiarowe pole 'z'\n\ntype UserId  = string & { readonly __brand: 'UserId' };\ntype OrderId = string & { readonly __brand: 'OrderId' };\nconst asUserId = (s: string) => s as UserId;\nfunction getUser(id: UserId) { /* ... */ }\ngetUser(orderId);                        // błąd: OrderId to nie UserId\n```",
+        "Pułapka: gdy dwa pojęcia mają tę samą reprezentację, typowanie strukturalne ich nie rozróżni. `type UserId = string` i `type OrderId = string` to po prostu `string`, więc przekazanie id zamówienia do `getUser` się skompiluje. Rozwiązanie to **typy brandowane (quasi-nominalne)**: przecięcie prymitywu z fantomowym polem, które nigdy nie istnieje w runtime. Wartości tworzy się wyłącznie przez funkcję-konstruktor (najlepiej walidującą, np. po sparsowaniu wejścia), a brandy czynią oba id niezgodnymi przy zerowym koszcie w runtime. Zod ma wbudowane `.brand()`. Warto też wiedzieć: klasy z polami `private`/`#private` zachowują się nominalnie, bo tylko instancje tej klasy mogą je mieć."
       ]
     }
   },
@@ -546,6 +818,13 @@ const FLASHCARDS = [
         "Request bodies, env vars, 3rd-party responses are `unknown` at runtime",
         "Validate at boundaries with a schema: Zod, Valibot, class-validator, JSON Schema (Ajv)",
         "Zod: `const User = z.object({...}); type User = z.infer<typeof User>` – one source of truth"
+      ],
+      more: [
+        "TypeScript is a **compile-time** tool. `tsc` (or esbuild, swc, Node's type stripping) checks your code and then **erases** every type annotation, producing plain JavaScript. At runtime nothing is left of `interface User`: no checks, no metadata. Types only describe what you *believe* the data looks like; they can't verify data that enters the program from outside.",
+        "Everything crossing a **trust boundary** is therefore effectively `unknown`: HTTP request bodies, query params and headers, environment variables, messages from queues, responses from third-party APIs, rows from a DB another service writes to, `JSON.parse` output. Writing `const body = req.body as CreateUserDto` is a promise to the compiler, not a check. If a client sends `{ age: \"abc\" }`, your \"typed\" code happily passes a string into arithmetic, stores garbage, or crashes deep inside business logic far from the real cause.",
+        "The fix is to **validate at the boundary** with a runtime schema: an object that describes the expected shape and can check a value against it, returning either typed data or a list of errors. Popular options: **Zod** and **Valibot** (TS-first, infer types from schemas), **class-validator** with DTO classes (NestJS style), and **JSON Schema** validated by **Ajv** (fast, language-neutral, great with OpenAPI). Many libraries now implement **Standard Schema**, a shared interface that lets frameworks accept any of them.",
+        "```ts\nimport { z } from 'zod';\nconst CreateUser = z.object({\n  email: z.string().email(),\n  age: z.number().int().min(18),\n});\ntype CreateUser = z.infer<typeof CreateUser>; // { email: string; age: number }\n\napp.post('/users', (req, res) => {\n  const result = CreateUser.safeParse(req.body);  // unknown in, typed out\n  if (!result.success) return res.status(400).json(result.error.issues);\n  createUser(result.data);                         // result.data: CreateUser\n});\n```",
+        "Why derive the type from the schema (`z.infer`) instead of writing both? With two definitions, someone adds a field to the interface and forgets the validator, and the type system can't notice because the two aren't connected. With the schema as the **single source of truth**, the static type and the runtime check can't drift apart. The underlying principle is often summarised as **\"parse, don't validate\"**: turn untrusted `unknown` into a well-typed value once, at the edge, and let the rest of the code rely on the types. Validate env config at startup too, so the service fails fast instead of on the first request."
       ]
     },
     pl: {
@@ -555,6 +834,13 @@ const FLASHCARDS = [
         "Body żądań, zmienne środowiskowe, odpowiedzi zewnętrznych API to w runtime `unknown`",
         "Walidacja na granicach schematem: Zod, Valibot, class-validator, JSON Schema (Ajv)",
         "Zod: `const User = z.object({...}); type User = z.infer<typeof User>` – jedno źródło prawdy"
+      ],
+      more: [
+        "TypeScript to narzędzie działające **w czasie kompilacji**. `tsc` (albo esbuild, swc, type stripping w Node) sprawdza kod, a potem **usuwa** wszystkie adnotacje typów, zostawiając zwykły JavaScript. W runtime po `interface User` nie ma śladu: żadnych sprawdzeń, żadnych metadanych. Typy opisują tylko to, jak *wierzysz*, że wyglądają dane; nie potrafią zweryfikować danych, które wchodzą do programu z zewnątrz.",
+        "Wszystko, co przekracza **granicę zaufania**, jest więc w praktyce `unknown`: body żądań HTTP, parametry query i nagłówki, zmienne środowiskowe, wiadomości z kolejek, odpowiedzi zewnętrznych API, wiersze z bazy, do której pisze inny serwis, wynik `JSON.parse`. Zapis `const body = req.body as CreateUserDto` to obietnica złożona kompilatorowi, a nie sprawdzenie. Jeśli klient wyśle `{ age: \"abc\" }`, twój \"otypowany\" kod radośnie wrzuci stringa do obliczeń, zapisze śmieci albo wywali się głęboko w logice biznesowej, daleko od prawdziwej przyczyny.",
+        "Rozwiązanie to **walidacja na granicy** schematem działającym w runtime: obiektem opisującym oczekiwany kształt, który potrafi sprawdzić wartość i zwrócić otypowane dane albo listę błędów. Popularne opcje: **Zod** i **Valibot** (TS-first, wnioskują typy ze schematów), **class-validator** z klasami DTO (styl NestJS) oraz **JSON Schema** walidowany przez **Ajv** (szybki, niezależny od języka, świetny z OpenAPI). Wiele bibliotek implementuje dziś **Standard Schema**, wspólny interfejs, dzięki któremu frameworki przyjmują dowolną z nich.",
+        "```ts\nimport { z } from 'zod';\nconst CreateUser = z.object({\n  email: z.string().email(),\n  age: z.number().int().min(18),\n});\ntype CreateUser = z.infer<typeof CreateUser>; // { email: string; age: number }\n\napp.post('/users', (req, res) => {\n  const result = CreateUser.safeParse(req.body);  // wchodzi unknown, wychodzi typ\n  if (!result.success) return res.status(400).json(result.error.issues);\n  createUser(result.data);                         // result.data: CreateUser\n});\n```",
+        "Po co wyprowadzać typ ze schematu (`z.infer`), zamiast pisać oba? Przy dwóch definicjach ktoś doda pole do interfejsu i zapomni o walidatorze, a system typów tego nie zauważy, bo nic ich nie łączy. Gdy schemat jest **jedynym źródłem prawdy**, typ statyczny i sprawdzenie w runtime nie mogą się rozjechać. Stojącą za tym zasadę często streszcza się jako **\"parse, don't validate\"**: raz, na brzegu systemu, zamień niezaufane `unknown` w dobrze otypowaną wartość, a reszta kodu może polegać na typach. Konfigurację z env też waliduj przy starcie, żeby serwis padł od razu, a nie przy pierwszym żądaniu."
       ]
     }
   },
@@ -567,6 +853,13 @@ const FLASHCARDS = [
         "Union `'draft' | 'published'` – zero runtime cost, great inference",
         "Need values at runtime? `const Status = {...} as const; type Status = typeof Status[keyof typeof Status]`",
         "Prefer unions / `as const` objects in most codebases"
+      ],
+      more: [
+        "You often need a variable restricted to a fixed set of values: order status, user role, log level. TypeScript offers two main tools. An **`enum`** is a named set of constants (`enum Status { Draft = 'draft', Published = 'published' }`). A **string literal union** is a type listing the allowed values directly: `type Status = 'draft' | 'published'`.",
+        "The key difference: `enum` is one of the few TypeScript features that is **not type-only**. It compiles to a real JavaScript object (an IIFE that builds it), so it adds runtime code and can't simply be erased. That matters more every year: Node's built-in type stripping and TS's `erasableSyntaxOnly` flag (TS 5.8) reject enums, because they can't be removed by simply deleting type syntax. A `const enum` is inlined instead, but it breaks under `isolatedModules` across files and in published libraries.",
+        "**Numeric enums** have extra quirks. They get a **reverse mapping** (`Status[0] === 'Draft'`), so `Object.values` returns both names and numbers. And they're loosely typed: any value of type `number` is assignable to a numeric enum (since TS 5.0 an out-of-range *literal* like `5` is an error, but a computed `number` still passes). String enums are stricter, but **nominal**: you can't pass the plain string `'draft'` where `Status` is expected, only `Status.Draft`, which is awkward with JSON from an API.",
+        "```ts\n// Union: zero runtime code, plain strings work everywhere\ntype PostStatus = 'draft' | 'published';\n\n// Need the values at runtime too (validation, dropdowns)?\nconst Status = { Draft: 'draft', Published: 'published' } as const;\ntype Status = (typeof Status)[keyof typeof Status]; // 'draft' | 'published'\n\nconst all = Object.values(Status);           // ['draft', 'published']\nfunction publish(s: Status) {}\npublish('draft'); publish(Status.Draft);    // both ok\n```",
+        "A **literal union** has zero runtime cost, excellent inference and autocomplete, works with narrowing and exhaustive `switch`, and accepts plain strings from JSON. When you also need the list of values at runtime (to validate input, render a select), use an **`as const` object**: `as const` makes the properties readonly literal types, and `typeof Status[keyof typeof Status]` turns its values into the union. Declaring a value and a type with the same name is legal because they live in different namespaces. Most modern codebases and style guides prefer these two patterns; enums remain fine in existing code or frameworks built around them."
       ]
     },
     pl: {
@@ -576,6 +869,13 @@ const FLASHCARDS = [
         "Unia `'draft' | 'published'` – zero kosztu w runtime, dobra inferencja",
         "Potrzebne wartości w runtime? `const Status = {...} as const; type Status = typeof Status[keyof typeof Status]`",
         "W większości projektów lepsze unie / obiekty `as const`"
+      ],
+      more: [
+        "Często potrzebna jest zmienna ograniczona do stałego zbioru wartości: status zamówienia, rola użytkownika, poziom logowania. TypeScript daje dwa główne narzędzia. **`enum`** to nazwany zbiór stałych (`enum Status { Draft = 'draft', Published = 'published' }`). **Unia literałów tekstowych** to typ wymieniający dozwolone wartości wprost: `type Status = 'draft' | 'published'`.",
+        "Kluczowa różnica: `enum` to jedna z nielicznych funkcji TypeScriptu, która **nie jest wyłącznie typem**. Kompiluje się do prawdziwego obiektu JavaScript (IIFE, które go buduje), więc dodaje kod w runtime i nie da się go po prostu wymazać. To ma coraz większe znaczenie: wbudowany type stripping w Node i flaga `erasableSyntaxOnly` (TS 5.8) odrzucają enumy, bo nie da się ich usunąć przez samo wycięcie składni typów. `const enum` jest za to wstawiany w miejscu użycia, ale psuje się przy `isolatedModules` między plikami i w publikowanych bibliotekach.",
+        "**Numeryczne enumy** mają dodatkowe dziwactwa. Dostają **mapowanie odwrotne** (`Status[0] === 'Draft'`), więc `Object.values` zwraca i nazwy, i liczby. Są też luźno typowane: każda wartość typu `number` jest przypisywalna do numerycznego enuma (od TS 5.0 *literał* spoza zakresu, np. `5`, daje błąd, ale wyliczony `number` nadal przechodzi). Enumy tekstowe są ściślejsze, ale **nominalne**: nie przekażesz zwykłego stringa `'draft'` tam, gdzie oczekiwany jest `Status`, tylko `Status.Draft`, co jest niewygodne przy JSON-ie z API.",
+        "```ts\n// Unia: zero kodu w runtime, zwykłe stringi działają wszędzie\ntype PostStatus = 'draft' | 'published';\n\n// Potrzebne wartości także w runtime (walidacja, dropdowny)?\nconst Status = { Draft: 'draft', Published: 'published' } as const;\ntype Status = (typeof Status)[keyof typeof Status]; // 'draft' | 'published'\n\nconst all = Object.values(Status);           // ['draft', 'published']\nfunction publish(s: Status) {}\npublish('draft'); publish(Status.Draft);    // oba ok\n```",
+        "**Unia literałów** ma zerowy koszt w runtime, świetną inferencję i podpowiedzi, działa z zawężaniem i wyczerpującym `switch` oraz przyjmuje zwykłe stringi z JSON-a. Gdy dodatkowo potrzebujesz listy wartości w runtime (walidacja wejścia, render selecta), użyj **obiektu `as const`**: `as const` robi z pól readonly typy literałowe, a `typeof Status[keyof typeof Status]` zamienia jego wartości w unię. Zadeklarowanie wartości i typu o tej samej nazwie jest legalne, bo żyją w różnych przestrzeniach nazw. Większość współczesnych projektów i style guide'ów preferuje te dwa wzorce; enumy są ok w istniejącym kodzie albo we frameworkach na nich zbudowanych."
       ]
     }
   },
@@ -589,6 +889,14 @@ const FLASHCARDS = [
         "Conditional: `T extends U ? X : Y`; distributes over unions",
         "`infer` extracts a type: `T extends Promise<infer R> ? R : T`",
         "Template literal types: `on${Capitalize<E>}` → `onClick`"
+      ],
+      more: [
+        "TypeScript's type system is a small programming language of its own: you can compute new types from existing ones. The main building blocks are **mapped types** (loop over keys), **conditional types** (if/else on types), **`infer`** (pattern-match and extract), and **template literal types** (string manipulation). Built-in utilities like `Partial`, `ReturnType` and `Awaited` are written with exactly these.",
+        "A **mapped type** iterates over a union of keys and produces an object type: `{ [K in keyof T]: T[K] }` copies T. You can change **modifiers** along the way: add `readonly` or `?`, or remove them with `-readonly` and `-?` (that's how `Required<T>` is defined). Since TS 4.1 you can **remap keys** with `as`, renaming keys or filtering them out by mapping to `never`.",
+        "A **conditional type** `T extends U ? X : Y` reads \"if T is assignable to U, then X, else Y\". When T is a bare type parameter and receives a union, the condition is applied to each member separately and the results are unioned: it's **distributive**. `Exclude<T, U> = T extends U ? never : T` relies on this. Wrap both sides in brackets (`[T] extends [U]`) to turn distribution off.",
+        "```ts\ntype Mutable<T> = { -readonly [K in keyof T]: T[K] };\ntype Getters<T> = {\n  [K in keyof T as `get${Capitalize<string & K>}`]: () => T[K];\n};\ntype G = Getters<{ name: string }>;          // { getName: () => string }\n\ntype UnwrapPromise<T> = T extends Promise<infer R> ? R : T;\ntype A = UnwrapPromise<Promise<number>>;     // number\ntype ElementOf<T> = T extends (infer E)[] ? E : never;\ntype B = ElementOf<string[] | number[]>;     // string | number (distributed)\n```",
+        "**`infer`** can only appear inside the `extends` clause of a conditional type. It declares a type variable that TS fills in by matching the pattern: \"if T looks like `Promise<something>`, call that something R and give me R\". That's how `ReturnType`, `Parameters` and `Awaited` extract parts of other types.",
+        "**Template literal types** apply JS template-string syntax to types: `on${Capitalize<E>}` with `E = 'click' | 'focus'` yields `'onClick' | 'onFocus'` (unions multiply out). Helpers `Uppercase`, `Lowercase`, `Capitalize`, `Uncapitalize` are built in. Real uses: typed event names, route params, ORM/query builders. The nuance to mention: these tools shine in library code; in application code, deeply clever types hurt readability and compile times, so prefer simple, explicit types unless the payoff is clear."
       ]
     },
     pl: {
@@ -599,6 +907,14 @@ const FLASHCARDS = [
         "Warunkowe: `T extends U ? X : Y`; rozkładają się na unie",
         "`infer` wyciąga typ: `T extends Promise<infer R> ? R : T`",
         "Typy template literal: `on${Capitalize<E>}` → `onClick`"
+      ],
+      more: [
+        "System typów TypeScriptu to mały, osobny język programowania: z istniejących typów można wyliczać nowe. Główne klocki to **typy mapowane** (pętla po kluczach), **typy warunkowe** (if/else na typach), **`infer`** (dopasowanie wzorca i wyciągnięcie typu) oraz **typy template literal** (operacje na stringach). Wbudowane narzędzia jak `Partial`, `ReturnType` czy `Awaited` są napisane dokładnie tymi środkami.",
+        "**Typ mapowany** iteruje po unii kluczy i tworzy typ obiektowy: `{ [K in keyof T]: T[K] }` kopiuje T. Po drodze można zmieniać **modyfikatory**: dodać `readonly` lub `?` albo usunąć je przez `-readonly` i `-?` (tak zdefiniowany jest `Required<T>`). Od TS 4.1 można **przemapować klucze** przez `as`: zmienić ich nazwy albo odfiltrować, mapując na `never`.",
+        "**Typ warunkowy** `T extends U ? X : Y` czyta się \"jeśli T jest przypisywalny do U, to X, w przeciwnym razie Y\". Gdy T to goły parametr typu, a trafi do niego unia, warunek stosowany jest do każdego elementu osobno, a wyniki składane w unię: typ jest **rozdzielny (distributive)**. Na tym opiera się `Exclude<T, U> = T extends U ? never : T`. Owinięcie obu stron w nawiasy kwadratowe (`[T] extends [U]`) wyłącza rozkładanie.",
+        "```ts\ntype Mutable<T> = { -readonly [K in keyof T]: T[K] };\ntype Getters<T> = {\n  [K in keyof T as `get${Capitalize<string & K>}`]: () => T[K];\n};\ntype G = Getters<{ name: string }>;          // { getName: () => string }\n\ntype UnwrapPromise<T> = T extends Promise<infer R> ? R : T;\ntype A = UnwrapPromise<Promise<number>>;     // number\ntype ElementOf<T> = T extends (infer E)[] ? E : never;\ntype B = ElementOf<string[] | number[]>;     // string | number (rozłożone)\n```",
+        "**`infer`** może wystąpić tylko w klauzuli `extends` typu warunkowego. Deklaruje zmienną typu, którą TS wypełnia przez dopasowanie wzorca: \"jeśli T wygląda jak `Promise<coś>`, nazwij to coś R i daj mi R\". Tak `ReturnType`, `Parameters` i `Awaited` wyciągają fragmenty innych typów.",
+        "**Typy template literal** przenoszą składnię template stringów z JS na typy: `on${Capitalize<E>}` dla `E = 'click' | 'focus'` daje `'onClick' | 'onFocus'` (unie się wymnażają). Wbudowane helpery to `Uppercase`, `Lowercase`, `Capitalize`, `Uncapitalize`. Realne zastosowania: typowane nazwy zdarzeń, parametry tras, ORM-y i query buildery. Niuans warty wspomnienia: te narzędzia błyszczą w kodzie bibliotek; w kodzie aplikacji zbyt sprytne typy szkodzą czytelności i czasowi kompilacji, więc wybieraj proste, jawne typy, chyba że zysk jest wyraźny."
       ]
     }
   },
@@ -611,6 +927,14 @@ const FLASHCARDS = [
         "`const x = ... satisfies T` – checks against `T` but keeps the narrow inferred type",
         "`as T` – assertion, no real check; avoid except at trusted boundaries",
         "Typical use: config objects, route maps"
+      ],
+      more: [
+        "There are three ways to relate a value to a type, and they trade off safety against precision. The key concept is **widening**: when TS knows a type for a variable, it uses that type from then on, forgetting anything more specific it could have inferred from the value itself (like exact string literals or which keys exist).",
+        "**Type annotation** `const x: T = value` checks that the value fits T, then the variable's type *is* T. You get validation (including excess property checks), but lose detail: if `T` is `Record<string, string>`, TS no longer knows which keys exist, so `x.typo` compiles and `x.home` is typed as possibly missing (under `noUncheckedIndexedAccess`).",
+        "**`satisfies`** (TS 4.9) `const x = value satisfies T` checks the value against T exactly like an annotation (missing keys, wrong value types, excess properties all error), but the variable keeps its own **inferred type**. You get both: validation against a contract and precise autocomplete and literal types afterwards. Combined with `as const` (`{...} as const satisfies T`) you also get readonly, literal values.",
+        "```ts\ntype Routes = Record<string, { path: string; auth: boolean }>;\n\nconst a: Routes = { home: { path: '/', auth: false } };\na.hom;          // no error: any string key is allowed by Routes\n\nconst b = {\n  home:  { path: '/', auth: false },\n  admin: { path: '/admin', auth: true },\n} satisfies Routes;               // checked against Routes...\nb.admin.path;   // ...but keys are known: autocomplete, and b.hom is an error\n```",
+        "**`as T`** is a **type assertion**: you tell the compiler \"trust me, this is T\". It performs no real verification (it only refuses obviously impossible conversions, and `as unknown as T` bypasses even that). It's the right tool only when you genuinely know more than the compiler, e.g. right after runtime validation or for a DOM element you know exists. Using `as` for configs or API data hides bugs.",
+        "Typical `satisfies` use cases: config objects, route maps, lookup tables like `Record<Status, Color>` (you're forced to cover every status, yet values keep their literal types), theme tokens, and handler maps where the concrete keys matter to later code."
       ]
     },
     pl: {
@@ -620,6 +944,14 @@ const FLASHCARDS = [
         "`const x = ... satisfies T` – sprawdza zgodność z `T`, ale zachowuje wąski wywnioskowany typ",
         "`as T` – asercja, bez realnego sprawdzenia; unikać poza zaufanymi granicami",
         "Typowe użycie: obiekty konfiguracyjne, mapy tras"
+      ],
+      more: [
+        "Są trzy sposoby powiązania wartości z typem i każdy inaczej waży bezpieczeństwo i precyzję. Kluczowe pojęcie to **poszerzanie (widening)**: gdy TS zna typ zmiennej, używa go od tej pory i zapomina o wszystkim bardziej szczegółowym, co mógłby wywnioskować z samej wartości (np. dokładne literały tekstowe albo jakie klucze istnieją).",
+        "**Adnotacja typu** `const x: T = value` sprawdza, czy wartość pasuje do T, a potem typem zmiennej *jest* T. Dostajesz walidację (łącznie ze sprawdzaniem nadmiarowych pól), ale tracisz szczegóły: jeśli `T` to `Record<string, string>`, TS nie wie już, jakie klucze istnieją, więc `x.typo` się kompiluje, a `x.home` jest typowane jako potencjalnie brakujące (przy `noUncheckedIndexedAccess`).",
+        "**`satisfies`** (TS 4.9) `const x = value satisfies T` sprawdza wartość względem T dokładnie jak adnotacja (brakujące klucze, złe typy wartości, nadmiarowe pola dają błąd), ale zmienna zachowuje własny **wywnioskowany typ**. Masz oba efekty: walidację względem kontraktu i precyzyjne podpowiedzi oraz typy literałowe później. W połączeniu z `as const` (`{...} as const satisfies T`) dostajesz też wartości readonly i literałowe.",
+        "```ts\ntype Routes = Record<string, { path: string; auth: boolean }>;\n\nconst a: Routes = { home: { path: '/', auth: false } };\na.hom;          // brak błędu: Routes dopuszcza dowolny klucz string\n\nconst b = {\n  home:  { path: '/', auth: false },\n  admin: { path: '/admin', auth: true },\n} satisfies Routes;               // sprawdzone względem Routes...\nb.admin.path;   // ...ale klucze są znane: podpowiedzi, a b.hom to błąd\n```",
+        "**`as T`** to **asercja typu**: mówisz kompilatorowi \"zaufaj mi, to jest T\". Nie ma realnej weryfikacji (odrzucane są tylko oczywiście niemożliwe konwersje, a `as unknown as T` omija nawet to). To właściwe narzędzie tylko wtedy, gdy naprawdę wiesz więcej niż kompilator, np. zaraz po walidacji w runtime albo dla elementu DOM, o którym wiesz, że istnieje. Używanie `as` dla konfiguracji czy danych z API ukrywa błędy.",
+        "Typowe zastosowania `satisfies`: obiekty konfiguracyjne, mapy tras, tablice lookup typu `Record<Status, Color>` (musisz pokryć każdy status, a wartości zachowują typy literałowe), tokeny motywu i mapy handlerów, w których konkretne klucze mają znaczenie dla dalszego kodu."
       ]
     }
   },
@@ -633,6 +965,15 @@ const FLASHCARDS = [
         "Existing TS: enable flags one by one, fix per module; `// @ts-expect-error` with a ticket, not `any`",
         "Also useful: `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`",
         "Type-check in CI (`tsc --noEmit`) so it cannot regress"
+      ],
+      more: [
+        "By default TypeScript is lenient so that existing JavaScript compiles with minimal friction. **`strict: true`** in `tsconfig.json` is an umbrella flag that turns on a family of stricter checks, and any check added to the family in future versions too. The important ones:",
+        "- `noImplicitAny`: error when TS can't infer a type and would silently fall back to `any`.\n- `strictNullChecks`: `null` and `undefined` are no longer assignable to every type; you must handle them. This catches the largest class of real bugs (\"cannot read properties of undefined\").\n- `strictFunctionTypes`: function parameters are checked contravariantly, catching unsafe callback assignments.\n- Also `strictPropertyInitialization`, `strictBindCallApply`, `noImplicitThis`, `useUnknownInCatchVariables`, `alwaysStrict`.",
+        "Turning it all on in a large codebase typically produces thousands of errors, which is why migration must be **incremental**. For a JavaScript project: enable `allowJs` so `.js` and `.ts` coexist, optionally `checkJs` (or `// @ts-check` per file) to get type checking from JSDoc, then rename files to `.ts` one at a time. Start where types pay off most: shared domain types, API boundaries (request/response DTOs, DB models), utilities imported everywhere. Once those are typed, everything that imports them benefits.",
+        "For a TypeScript project that's not yet strict: enable the flags **one at a time** (`noImplicitAny` first, then `strictNullChecks`, the biggest one) and fix module by module. Tools help: `typescript-strict-plugin` lets you mark files as strict gradually, and snapshot tools like Betterer fail CI only if the error count goes *up*. Where a fix must wait, use `// @ts-expect-error` with a ticket reference instead of `any`: unlike `@ts-ignore`, it errors once the underlying problem is fixed, so suppressions can't silently outlive their reason.",
+        "```json\n{\n  \"compilerOptions\": {\n    \"strict\": true,\n    \"noUncheckedIndexedAccess\": true,\n    \"exactOptionalPropertyTypes\": true,\n    \"noImplicitOverride\": true,\n    \"noEmit\": true\n  }\n}\n```",
+        "Two valuable flags that `strict` does **not** include: `noUncheckedIndexedAccess` makes `arr[i]` and `record[key]` return `T | undefined`, because the element may not exist; `exactOptionalPropertyTypes` distinguishes \"property absent\" from \"property explicitly set to `undefined`\", which matters for PATCH semantics and `Object.keys`.",
+        "Finally, lock it in: run `tsc --noEmit` in CI (and pre-commit if fast enough), since most bundlers and test runners strip types without checking them. Pair it with typescript-eslint rules like `no-explicit-any` and `no-floating-promises` so the codebase can't regress once migrated."
       ]
     },
     pl: {
@@ -643,6 +984,15 @@ const FLASHCARDS = [
         "Istniejący TS: włączaj flagi po kolei, poprawiaj moduł po module; `// @ts-expect-error` z ticketem, nie `any`",
         "Przydatne też: `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`",
         "Sprawdzanie typów w CI (`tsc --noEmit`), żeby nie było regresji"
+      ],
+      more: [
+        "Domyślnie TypeScript jest pobłażliwy, żeby istniejący JavaScript kompilował się bez większych tarć. **`strict: true`** w `tsconfig.json` to flaga-parasol, która włącza całą rodzinę ostrzejszych sprawdzeń, także te dodawane do niej w przyszłych wersjach. Najważniejsze:",
+        "- `noImplicitAny`: błąd, gdy TS nie potrafi wywnioskować typu i po cichu użyłby `any`.\n- `strictNullChecks`: `null` i `undefined` nie są już przypisywalne do każdego typu; trzeba je obsłużyć. To łapie największą klasę realnych błędów (\"cannot read properties of undefined\").\n- `strictFunctionTypes`: parametry funkcji sprawdzane są kontrawariantnie, co wyłapuje niebezpieczne przypisania callbacków.\n- Poza tym `strictPropertyInitialization`, `strictBindCallApply`, `noImplicitThis`, `useUnknownInCatchVariables`, `alwaysStrict`.",
+        "Włączenie wszystkiego naraz w dużym projekcie daje zwykle tysiące błędów, dlatego migracja musi być **przyrostowa**. W projekcie JavaScript: włącz `allowJs`, żeby `.js` i `.ts` mogły współistnieć, opcjonalnie `checkJs` (albo `// @ts-check` per plik), by dostać sprawdzanie typów z JSDoc, a potem zmieniaj pliki na `.ts` jeden po drugim. Zacznij tam, gdzie typy najbardziej się opłacają: wspólne typy domenowe, granice API (DTO żądań i odpowiedzi, modele bazy), narzędzia importowane wszędzie. Gdy one są otypowane, korzysta na tym wszystko, co je importuje.",
+        "W projekcie TypeScript, który jeszcze nie jest strict: włączaj flagi **po jednej** (najpierw `noImplicitAny`, potem `strictNullChecks`, najbardziej pracochłonną) i poprawiaj moduł po module. Pomagają narzędzia: `typescript-strict-plugin` pozwala stopniowo oznaczać pliki jako strict, a narzędzia snapshotowe typu Betterer blokują CI tylko wtedy, gdy liczba błędów *rośnie*. Tam, gdzie poprawka musi poczekać, użyj `// @ts-expect-error` z numerem ticketu zamiast `any`: w przeciwieństwie do `@ts-ignore` zgłosi błąd, gdy problem zniknie, więc wyciszenia nie przeżyją po cichu swojego powodu.",
+        "```json\n{\n  \"compilerOptions\": {\n    \"strict\": true,\n    \"noUncheckedIndexedAccess\": true,\n    \"exactOptionalPropertyTypes\": true,\n    \"noImplicitOverride\": true,\n    \"noEmit\": true\n  }\n}\n```",
+        "Dwie wartościowe flagi, których `strict` **nie** obejmuje: `noUncheckedIndexedAccess` sprawia, że `arr[i]` i `record[key]` zwracają `T | undefined`, bo elementu może nie być; `exactOptionalPropertyTypes` odróżnia \"pola nie ma\" od \"pole jawnie ustawione na `undefined`\", co ma znaczenie przy semantyce PATCH i `Object.keys`.",
+        "Na koniec zabetonuj efekt: uruchamiaj `tsc --noEmit` w CI (i w pre-commit, jeśli jest dość szybkie), bo większość bundlerów i test runnerów usuwa typy bez ich sprawdzania. Dołóż reguły typescript-eslint, np. `no-explicit-any` i `no-floating-promises`, żeby po migracji projekt nie mógł się cofnąć."
       ]
     }
   },
@@ -658,6 +1008,14 @@ const FLASHCARDS = [
         "fs, `dns.lookup`, crypto, zlib use the libuv thread pool (default 4, `UV_THREADPOOL_SIZE`)",
         "`process.nextTick` and promise microtasks run between each callback",
         "CPU-heavy sync code blocks every request in the process"
+      ],
+      more: [
+        "Node.js runs your JavaScript on **a single thread**: at any moment exactly one piece of your JS code is executing. Yet a single Node process can serve thousands of concurrent connections. The trick is that it never waits on that thread. When your code asks for I/O (read a socket, query a database, read a file), Node hands the work off and immediately moves on; when the result is ready, a callback is queued to run later. The component that does this bookkeeping is **libuv**, a C library that provides the **event loop** and a small thread pool.",
+        "The event loop is literally a loop that cycles through **phases**, each with its own queue of callbacks:",
+        "- **timers**: callbacks from `setTimeout` / `setInterval` whose delay has expired\n- **pending callbacks**: some deferred system-level callbacks (e.g. certain TCP errors)\n- **poll**: waits for new I/O events and runs their callbacks (most of your app's work happens here)\n- **check**: callbacks scheduled with `setImmediate`\n- **close callbacks**: e.g. `socket.on('close')`",
+        "How does the I/O actually happen without blocking? For **network I/O**, libuv uses the operating system's native readiness APIs: **epoll** on Linux, **kqueue** on macOS/BSD, **IOCP** on Windows. The kernel tracks thousands of sockets and tells libuv which ones are ready, so no extra threads are needed. Some operations have no good async OS API, so libuv runs them on its **thread pool** (default 4 threads, configurable with the `UV_THREADPOOL_SIZE` env var): file system calls (`fs.*`), `dns.lookup` (used by default for hostname resolution), CPU-heavy `crypto` functions like `pbkdf2`/`scrypt`, and `zlib` compression. Your JS still only sees a callback or a resolved promise.",
+        "Between every single callback, Node drains two extra queues: the `process.nextTick` queue first, then the **microtask** queue (promise `.then` / `await` continuations). This is why an `await` continuation runs \"right away\" rather than waiting for the next loop phase.",
+        "The big consequence: because there is one JS thread, **any synchronous CPU-heavy code blocks everything**. If one request spends 500 ms in a tight loop or a huge `JSON.parse`, every other request in that process waits 500 ms too, since the loop cannot reach the poll phase. This is the nuance interviewers look for: Node is excellent at waiting on many things at once, not at computing hard. Also note the thread pool can become a hidden bottleneck: 4 threads shared by all fs/crypto/dns work means the fifth concurrent `pbkdf2` call queues up."
       ]
     },
     pl: {
@@ -669,6 +1027,14 @@ const FLASHCARDS = [
         "fs, `dns.lookup`, crypto, zlib korzystają z puli wątków libuv (domyślnie 4, `UV_THREADPOOL_SIZE`)",
         "`process.nextTick` i mikrozadania Promise wykonują się między każdym callbackiem",
         "Ciężki synchroniczny kod CPU blokuje wszystkie żądania w procesie"
+      ],
+      more: [
+        "Node.js wykonuje Twój kod JavaScript w **jednym wątku**: w danej chwili działa dokładnie jeden fragment kodu JS. Mimo to jeden proces Node obsługuje tysiące równoczesnych połączeń. Sekret polega na tym, że ten wątek nigdy nie czeka. Gdy kod potrzebuje I/O (odczyt z gniazda, zapytanie do bazy, odczyt pliku), Node zleca pracę i od razu idzie dalej; gdy wynik jest gotowy, do kolejki trafia callback. Całą tę logistykę zapewnia **libuv** – biblioteka w C dostarczająca **pętlę zdarzeń (event loop)** i niewielką pulę wątków.",
+        "Pętla zdarzeń to dosłownie pętla, która przechodzi przez kolejne **fazy**, każda z własną kolejką callbacków:",
+        "- **timers**: callbacki z `setTimeout` / `setInterval`, których czas minął\n- **pending callbacks**: część odroczonych callbacków systemowych (np. niektóre błędy TCP)\n- **poll**: oczekiwanie na nowe zdarzenia I/O i wykonanie ich callbacków (tu dzieje się większość pracy aplikacji)\n- **check**: callbacki zaplanowane przez `setImmediate`\n- **close callbacks**: np. `socket.on('close')`",
+        "Jak I/O dzieje się bez blokowania? Przy **I/O sieciowym** libuv korzysta z natywnych mechanizmów systemu: **epoll** na Linuksie, **kqueue** na macOS/BSD, **IOCP** na Windows. Jądro śledzi tysiące gniazd i informuje libuv, które są gotowe – dodatkowe wątki nie są potrzebne. Niektóre operacje nie mają dobrego asynchronicznego API w systemie, więc libuv wykonuje je w **puli wątków** (domyślnie 4, zmienna `UV_THREADPOOL_SIZE`): operacje na plikach (`fs.*`), `dns.lookup` (domyślne rozwiązywanie nazw hostów), ciężkie funkcje `crypto` jak `pbkdf2`/`scrypt` oraz kompresja `zlib`. Kod JS i tak widzi tylko callback albo rozwiązany Promise.",
+        "Między każdym pojedynczym callbackiem Node opróżnia dwie dodatkowe kolejki: najpierw kolejkę `process.nextTick`, potem kolejkę **mikrozadań** (`.then` z Promise i kontynuacje po `await`). Dlatego kod po `await` wykonuje się „od razu”, a nie dopiero w kolejnej fazie pętli.",
+        "Najważniejsza konsekwencja: skoro wątek JS jest jeden, **każdy synchroniczny, ciężki obliczeniowo kod blokuje wszystko**. Jeśli jedno żądanie spędzi 500 ms w pętli albo w ogromnym `JSON.parse`, każde inne żądanie w tym procesie też czeka 500 ms, bo pętla nie dociera do fazy poll. Tego niuansu szuka rekruter: Node świetnie czeka na wiele rzeczy naraz, ale nie nadaje się do intensywnych obliczeń. Warto też pamiętać, że pula wątków bywa ukrytym wąskim gardłem – 4 wątki współdzielone przez całe fs/crypto/dns oznaczają, że piąte równoczesne wywołanie `pbkdf2` czeka w kolejce."
       ]
     }
   },
@@ -682,6 +1048,13 @@ const FLASHCARDS = [
         "`setImmediate`: check phase, after poll (I/O)",
         "`setTimeout(0)`: timers phase (min ~1 ms); order vs `setImmediate` random in main module, `setImmediate` first inside I/O callbacks",
         "Recursive `nextTick` can starve I/O – prefer `setImmediate` for yielding"
+      ],
+      more: [
+        "All three APIs mean \"run this function later\", but \"later\" differs, and the difference comes from where in the event loop each callback is queued. Recall the loop: phases (timers → poll → check → …) and, between every callback, two high-priority queues are drained: the `process.nextTick` queue and then the promise **microtask** queue.",
+        "- `process.nextTick(fn)`: runs as soon as the current JS operation finishes, before any promise callbacks and before the loop moves on. Highest priority.\n- `Promise.resolve().then(fn)` / code after `await`: a microtask; runs right after the nextTick queue is empty.\n- `setImmediate(fn)`: runs in the **check** phase, i.e. after the loop has polled for I/O in this iteration.\n- `setTimeout(fn, 0)`: runs in the **timers** phase once at least ~1 ms has passed (Node clamps 0 to 1).",
+        "```js\nsetTimeout(() => console.log('timeout'), 0);\nsetImmediate(() => console.log('immediate'));\nPromise.resolve().then(() => console.log('promise'));\nprocess.nextTick(() => console.log('nextTick'));\nconsole.log('sync');\n// sync, nextTick, promise, then timeout/immediate in either order\n```",
+        "Why is `timeout` vs `immediate` unpredictable in the main module? When the loop starts, it enters the timers phase; whether 1 ms has already elapsed depends on how fast the process booted. If yes, the timeout fires first; if not, the loop continues to poll and check, so immediate wins. Inside an **I/O callback** the order is deterministic: you are in the poll phase, the next phase is check, so `setImmediate` always runs before the timer.",
+        "The pitfall interviewers probe: **starvation**. Because the loop drains the whole nextTick queue before continuing, a function that recursively schedules itself with `process.nextTick` (or an endless promise chain) never lets the loop reach the poll phase, so no I/O is processed and the server hangs. If you split a long task into chunks to \"yield\" to other requests, use `setImmediate`: each chunk runs once per loop iteration, and I/O gets a turn in between. Use `nextTick` only for things like emitting an event after the constructor returns, where you need \"after this code, but before anything else\"."
       ]
     },
     pl: {
@@ -692,6 +1065,13 @@ const FLASHCARDS = [
         "`setImmediate`: faza check, po poll (I/O)",
         "`setTimeout(0)`: faza timers (min ~1 ms); kolejność względem `setImmediate` losowa w module głównym, w callbacku I/O `setImmediate` pierwszy",
         "Rekurencyjny `nextTick` może zagłodzić I/O – do oddania sterowania lepszy `setImmediate`"
+      ],
+      more: [
+        "Wszystkie trzy API znaczą „uruchom tę funkcję później”, ale to „później” jest różne – zależy od tego, gdzie w pętli zdarzeń trafia callback. Przypomnienie: pętla ma fazy (timers → poll → check → …), a między każdym callbackiem opróżniane są dwie kolejki o wysokim priorytecie: kolejka `process.nextTick`, a potem kolejka **mikrozadań** Promise.",
+        "- `process.nextTick(fn)`: wykonuje się zaraz po zakończeniu bieżącej operacji JS, przed callbackami Promise i zanim pętla pójdzie dalej. Najwyższy priorytet.\n- `Promise.resolve().then(fn)` / kod po `await`: mikrozadanie; wykonuje się, gdy kolejka nextTick jest pusta.\n- `setImmediate(fn)`: wykonuje się w fazie **check**, czyli po sprawdzeniu I/O w danej iteracji pętli.\n- `setTimeout(fn, 0)`: wykonuje się w fazie **timers**, gdy minie co najmniej ~1 ms (Node zamienia 0 na 1).",
+        "```js\nsetTimeout(() => console.log('timeout'), 0);\nsetImmediate(() => console.log('immediate'));\nPromise.resolve().then(() => console.log('promise'));\nprocess.nextTick(() => console.log('nextTick'));\nconsole.log('sync');\n// sync, nextTick, promise, potem timeout/immediate w dowolnej kolejności\n```",
+        "Dlaczego kolejność `timeout` i `immediate` w module głównym jest nieprzewidywalna? Po starcie pętla wchodzi w fazę timers; to, czy minęła już 1 ms, zależy od szybkości uruchomienia procesu. Jeśli tak – pierwszy odpali timeout; jeśli nie – pętla przechodzi do poll i check, więc wygrywa immediate. Wewnątrz **callbacku I/O** kolejność jest deterministyczna: jesteśmy w fazie poll, następna jest check, więc `setImmediate` zawsze wyprzedzi timer.",
+        "Pułapka, o którą pytają rekruterzy: **zagłodzenie (starvation)**. Pętla opróżnia całą kolejkę nextTick, zanim pójdzie dalej, więc funkcja rekurencyjnie planująca samą siebie przez `process.nextTick` (albo niekończący się łańcuch Promise) nigdy nie pozwoli dojść do fazy poll – I/O nie jest obsługiwane i serwer „wisi”. Jeśli dzielisz długie zadanie na kawałki, żeby oddać sterowanie innym żądaniom, użyj `setImmediate`: każdy kawałek wykonuje się raz na iterację pętli, a I/O dostaje swoją kolej pomiędzy. `nextTick` zostaw dla sytuacji typu emisja zdarzenia po powrocie z konstruktora, gdzie potrzebujesz „po tym kodzie, ale przed wszystkim innym”."
       ]
     }
   },
@@ -704,6 +1084,15 @@ const FLASHCARDS = [
         "Good: shared TypeScript with frontend, huge npm ecosystem",
         "Poor: CPU-heavy work (video transcoding, ML, big computations) on the main thread",
         "Mitigate: worker threads, job queue + workers, or a service in another language"
+      ],
+      more: [
+        "Node's strengths and weaknesses both follow from its architecture: one JavaScript thread driven by an event loop, with I/O handed off to the OS or libuv. A workload is **I/O-bound** when most of a request's time is spent waiting (for a database, another HTTP service, a file, a socket), and **CPU-bound** when most of the time is spent computing. Node is superb at the first and weak at the second.",
+        "Why it fits I/O-bound work: while request A waits 50 ms for Postgres, the single thread happily serves requests B, C and D. There is no thread per connection, so memory per connection is tiny and thousands of idle **WebSocket** connections are cheap. That makes Node a natural choice for:",
+        "- REST/GraphQL APIs that mostly shuffle data between a DB and clients\n- a **BFF** (Backend for Frontend): a thin layer that aggregates several backend calls and shapes the response for one specific UI\n- real-time apps: chat, notifications, live dashboards\n- streaming data (proxies, file uploads) thanks to the streams API\n- **serverless** functions, where fast cold start and small footprint matter",
+        "There are also organisational reasons: the same language and often the same **TypeScript** types on frontend and backend (shared validation schemas, DTOs), easy movement of people between layers, and the enormous npm ecosystem.",
+        "Why it is a poor fit for CPU-heavy work: video transcoding, image processing at scale, ML inference or training, large numerical computations. While a request is computing on the main thread, every other request in that process is frozen, so latency spikes for all users. It also cannot use more than one core per process for your JS without extra machinery. The nuance an interviewer wants is that \"poor fit\" does not mean \"never use Node\". You can mitigate:",
+        "- **worker threads** to run the computation off the main thread\n- a **job queue** (BullMQ, SQS) with separate worker processes, so the API responds with a job ID immediately\n- delegating the heavy part to a service written in a more suitable language (Go, Rust, Python for ML), or a native addon / WASM module",
+        "A senior answer picks the tool per workload rather than defending a favourite."
       ]
     },
     pl: {
@@ -713,6 +1102,15 @@ const FLASHCARDS = [
         "Dobry: wspólny TypeScript z frontendem, ogromny ekosystem npm",
         "Zły: ciężka praca CPU (transkodowanie wideo, ML, duże obliczenia) w głównym wątku",
         "Rozwiązania: worker threads, kolejka zadań + workery lub usługa w innym języku"
+      ],
+      more: [
+        "Mocne i słabe strony Node wynikają z jego architektury: jeden wątek JavaScript napędzany pętlą zdarzeń, a I/O oddawane systemowi lub libuv. Obciążenie jest **ograniczone przez I/O (I/O-bound)**, gdy większość czasu żądania to czekanie (na bazę, inny serwis HTTP, plik, gniazdo), a **ograniczone przez CPU (CPU-bound)**, gdy większość czasu to obliczenia. Node świetnie radzi sobie z pierwszym, słabo z drugim.",
+        "Dlaczego pasuje do pracy I/O: gdy żądanie A czeka 50 ms na Postgresa, ten sam wątek obsługuje żądania B, C i D. Nie ma wątku na połączenie, więc pamięć na połączenie jest minimalna, a tysiące bezczynnych połączeń **WebSocket** są tanie. Dlatego Node naturalnie sprawdza się w:",
+        "- API REST/GraphQL, które głównie przerzucają dane między bazą a klientami\n- **BFF** (Backend for Frontend): cienka warstwa agregująca kilka wywołań backendu i dopasowująca odpowiedź do konkretnego UI\n- aplikacjach real-time: czat, powiadomienia, dashboardy na żywo\n- przetwarzaniu strumieniowym (proxy, upload plików) dzięki API strumieni\n- funkcjach **serverless**, gdzie liczy się szybki cold start i mały narzut",
+        "Są też powody organizacyjne: ten sam język, a często te same typy **TypeScript** na froncie i backendzie (wspólne schematy walidacji, DTO), łatwe przechodzenie ludzi między warstwami i ogromny ekosystem npm.",
+        "Dlaczego słabo pasuje do ciężkiej pracy CPU: transkodowanie wideo, masowe przetwarzanie obrazów, inferencja lub trening ML, duże obliczenia numeryczne. Gdy jedno żądanie liczy w głównym wątku, wszystkie inne żądania w procesie stoją, więc opóźnienia rosną dla wszystkich użytkowników. Dodatkowo bez dodatkowych mechanizmów jeden proces wykorzysta dla Twojego JS tylko jeden rdzeń. Niuans, którego oczekuje rekruter: „zły wybór” nie znaczy „nigdy nie używaj Node”. Można to złagodzić:",
+        "- **worker threads** – obliczenia poza głównym wątkiem\n- **kolejka zadań** (BullMQ, SQS) z osobnymi procesami workerów, a API od razu zwraca ID zadania\n- przeniesienie ciężkiej części do usługi w lepiej dopasowanym języku (Go, Rust, Python dla ML) albo do natywnego addonu / modułu WASM",
+        "Seniorska odpowiedź dobiera narzędzie do obciążenia, zamiast bronić ulubionej technologii."
       ]
     }
   },
@@ -725,6 +1123,14 @@ const FLASHCARDS = [
         "`child_process`: separate OS process (`spawn`, `fork`, `exec`); run other programs, full isolation",
         "`cluster`: fork N processes sharing one port – use all CPU cores",
         "In containers/K8s usually one process per pod and scale replicas instead of `cluster`"
+      ],
+      more: [
+        "A single Node process runs your JavaScript on one thread and therefore one CPU core. When you need more parallelism, Node offers three built-in modules, and they differ in what runs in parallel and how isolated it is. A **thread** shares its parent process's memory space; a **process** has its own memory, and the OS keeps processes fully separated.",
+        "**`worker_threads`** starts additional threads inside the same process. Each worker has its own V8 isolate (its own heap) and its own event loop, so it can run a heavy computation while the main thread keeps serving requests. Communication happens via `postMessage` (data is copied using the structured clone algorithm), transferable objects like `ArrayBuffer` (ownership moved, no copy), or a `SharedArrayBuffer` that both threads read and write directly, coordinated with `Atomics`. Workers are the go-to for CPU tasks such as hashing, image resizing or parsing big files. In practice use a pool (e.g. `piscina`) instead of spawning one worker per request, as startup costs tens of milliseconds.",
+        "```js\nimport { Worker } from 'node:worker_threads';\nconst w = new Worker('./heavy.js', { workerData: { n: 42 } });\nw.on('message', (result) => console.log(result));\nw.on('error', console.error);\n// heavy.js: parentPort.postMessage(compute(workerData.n))\n```",
+        "**`child_process`** starts a completely separate OS process. `spawn` runs any executable and streams its stdout/stderr (e.g. `ffmpeg`, `git`), `exec` runs a shell command and buffers output (beware shell injection with user input), and `fork` starts another Node script with an IPC channel for messages. You get full isolation: a crash or memory leak in the child cannot corrupt the parent, at the cost of higher memory and slower startup.",
+        "**`cluster`** is a convenience on top of `fork`: a primary process forks N workers (typically one per core) that all accept connections on the **same port**, with the primary distributing them. It was the classic way to use all cores for an HTTP server (PM2 does the same).",
+        "The modern nuance: in **containers and Kubernetes** you usually run one Node process per container and let the orchestrator scale **replicas** horizontally. Health checks, restarts, resource limits and load balancing are then handled by the platform, and each pod is simpler to reason about. `cluster` inside a pod duplicates that job and complicates memory limits and signal handling. `worker_threads` remain relevant, since they solve a different problem: keeping CPU work off the event loop inside one service."
       ]
     },
     pl: {
@@ -734,6 +1140,14 @@ const FLASHCARDS = [
         "`child_process`: osobny proces systemowy (`spawn`, `fork`, `exec`); uruchamianie innych programów, pełna izolacja",
         "`cluster`: fork N procesów na jednym porcie – wykorzystanie wszystkich rdzeni",
         "W kontenerach/K8s zwykle jeden proces na pod i skalowanie replik zamiast `cluster`"
+      ],
+      more: [
+        "Pojedynczy proces Node wykonuje Twój JavaScript w jednym wątku, a więc na jednym rdzeniu CPU. Gdy potrzebujesz więcej równoległości, Node daje trzy wbudowane moduły, które różnią się tym, co działa równolegle i jak bardzo jest izolowane. **Wątek** współdzieli przestrzeń pamięci z procesem-rodzicem; **proces** ma własną pamięć, a system operacyjny całkowicie oddziela procesy od siebie.",
+        "**`worker_threads`** uruchamia dodatkowe wątki w tym samym procesie. Każdy worker ma własny izolat V8 (własny heap) i własną pętlę zdarzeń, więc może wykonywać ciężkie obliczenia, podczas gdy główny wątek dalej obsługuje żądania. Komunikacja odbywa się przez `postMessage` (dane są kopiowane algorytmem structured clone), obiekty transferowalne jak `ArrayBuffer` (przeniesienie własności bez kopiowania) albo `SharedArrayBuffer`, który oba wątki czytają i zapisują bezpośrednio, synchronizując się przez `Atomics`. Workery to podstawowe narzędzie do zadań CPU: hashowanie, skalowanie obrazów, parsowanie dużych plików. W praktyce używa się puli (np. `piscina`), a nie nowego workera na żądanie – start kosztuje dziesiątki milisekund.",
+        "```js\nimport { Worker } from 'node:worker_threads';\nconst w = new Worker('./heavy.js', { workerData: { n: 42 } });\nw.on('message', (result) => console.log(result));\nw.on('error', console.error);\n// heavy.js: parentPort.postMessage(compute(workerData.n))\n```",
+        "**`child_process`** uruchamia całkowicie osobny proces systemowy. `spawn` odpala dowolny program i strumieniuje jego stdout/stderr (np. `ffmpeg`, `git`), `exec` wykonuje polecenie w shellu i buforuje wynik (uwaga na shell injection przy danych od użytkownika), a `fork` uruchamia inny skrypt Node z kanałem IPC do wymiany wiadomości. Dostajesz pełną izolację: awaria lub wyciek pamięci w dziecku nie zepsuje rodzica, kosztem większego zużycia pamięci i wolniejszego startu.",
+        "**`cluster`** to wygodna nakładka na `fork`: proces główny tworzy N workerów (zwykle po jednym na rdzeń), które przyjmują połączenia na **tym samym porcie**, a proces główny je rozdziela. To klasyczny sposób na wykorzystanie wszystkich rdzeni przez serwer HTTP (PM2 robi to samo).",
+        "Współczesny niuans: w **kontenerach i Kubernetesie** zwykle uruchamia się jeden proces Node na kontener, a orkiestrator skaluje poziomo **repliki**. Health checki, restarty, limity zasobów i load balancing zapewnia wtedy platforma, a każdy pod jest prostszy. `cluster` w podzie dubluje tę pracę i komplikuje limity pamięci oraz obsługę sygnałów. `worker_threads` pozostają przydatne, bo rozwiązują inny problem: wyprowadzenie pracy CPU z pętli zdarzeń wewnątrz jednej usługi."
       ]
     }
   },
@@ -747,6 +1161,15 @@ const FLASHCARDS = [
         "Enforce size/type limits early; validate records incrementally",
         "Better for big files: presigned URL → client uploads straight to S3",
         "Heavy processing → return `202 Accepted` + job ID, process in a worker, expose status"
+      ],
+      more: [
+        "The naive way to handle an upload is to read the entire request body into a `Buffer` and then process it. For a 5 GB file that means 5 GB of RAM per concurrent upload, which will crash a typical container with a 512 MB limit (Node's max `Buffer` size is also bounded). A **stream** instead processes data in small **chunks** (typically 16–64 KB) as they arrive, so memory stays constant no matter how big the file is.",
+        "Node has four stream types: **Readable** (source, e.g. the incoming HTTP request), **Writable** (destination, e.g. a file or an S3 upload), **Duplex** (both, e.g. a TCP socket) and **Transform** (a duplex that modifies data in flight, e.g. gzip, CSV parser). You chain them into a pipeline: request → parse → validate → write. A key concept is **backpressure**: if the destination is slower than the source, the source must pause so chunks don't pile up in memory.",
+        "```js\nimport { pipeline } from 'node:stream/promises';\napp.post('/import', async (req, res) => {\n  await pipeline(req, csvParser(), validateRows(), dbBatchWriter());\n  res.status(201).end();\n});\n```",
+        "`stream.pipeline()` wires the streams together, propagates backpressure, and, crucially, if any stage fails it destroys all the others and reports one error. The older `a.pipe(b)` does not forward errors or clean up, which leaks file handles and connections.",
+        "Fail fast and cheap: check `Content-Length` and content type before reading, and count bytes as they flow so you abort once a limit is exceeded (clients can lie about length). Validate **incrementally**, record by record, instead of loading everything and validating at the end; you can report \"row 18 234 is invalid\" without holding earlier rows.",
+        "For really large files the best move is often to keep bytes away from your server entirely. The API issues a **presigned URL**: a time-limited, signed S3 URL that allows one specific upload. The client uploads directly to S3 (multipart upload for multi-GB files, with resumable parts), and your service only handles metadata. No bandwidth, memory or request timeouts on your side.",
+        "If processing takes minutes (parsing, importing millions of rows), do not keep the HTTP request open. Respond with `202 Accepted` plus a job ID, push the work onto a queue, let a worker process it (e.g. triggered by the S3 upload event), and expose a status endpoint like `GET /jobs/:id` (or push a notification). This survives load balancer timeouts, deploys and retries."
       ]
     },
     pl: {
@@ -757,6 +1180,15 @@ const FLASHCARDS = [
         "Wczesne limity rozmiaru/typu; walidacja rekordów przyrostowo",
         "Lepiej dla dużych plików: presigned URL → klient wysyła prosto do S3",
         "Ciężkie przetwarzanie → `202 Accepted` + ID zadania, przetwarzanie w workerze, endpoint statusu"
+      ],
+      more: [
+        "Naiwne podejście do uploadu to wczytanie całego body żądania do `Buffer`, a potem przetworzenie. Dla pliku 5 GB oznacza to 5 GB RAM na każdy równoczesny upload – typowy kontener z limitem 512 MB po prostu padnie (maksymalny rozmiar `Buffer` w Node też jest ograniczony). **Strumień (stream)** przetwarza dane małymi **kawałkami (chunkami)**, zwykle 16–64 KB, w miarę ich napływania, więc zużycie pamięci jest stałe niezależnie od rozmiaru pliku.",
+        "Node ma cztery typy strumieni: **Readable** (źródło, np. przychodzące żądanie HTTP), **Writable** (cel, np. plik lub upload do S3), **Duplex** (oba naraz, np. gniazdo TCP) i **Transform** (duplex modyfikujący dane w locie, np. gzip, parser CSV). Łączy się je w pipeline: żądanie → parsowanie → walidacja → zapis. Kluczowe pojęcie to **backpressure**: jeśli cel jest wolniejszy niż źródło, źródło musi się wstrzymać, żeby kawałki nie gromadziły się w pamięci.",
+        "```js\nimport { pipeline } from 'node:stream/promises';\napp.post('/import', async (req, res) => {\n  await pipeline(req, csvParser(), validateRows(), dbBatchWriter());\n  res.status(201).end();\n});\n```",
+        "`stream.pipeline()` łączy strumienie, przenosi backpressure i – co najważniejsze – gdy dowolny etap zawiedzie, niszczy pozostałe i zgłasza jeden błąd. Starsze `a.pipe(b)` nie przekazuje błędów ani nie sprząta, co powoduje wycieki deskryptorów plików i połączeń.",
+        "Odrzucaj wcześnie i tanio: sprawdź `Content-Length` i typ treści przed czytaniem, a w trakcie licz bajty i przerwij po przekroczeniu limitu (klient może skłamać co do długości). Waliduj **przyrostowo**, rekord po rekordzie, zamiast wczytywać wszystko i sprawdzać na końcu – możesz zgłosić „wiersz 18 234 jest błędny” bez trzymania poprzednich wierszy w pamięci.",
+        "Przy naprawdę dużych plikach najlepiej w ogóle nie przepuszczać bajtów przez swój serwer. API wystawia **presigned URL**: podpisany, ważny przez krótki czas adres S3 pozwalający na jeden konkretny upload. Klient wysyła plik prosto do S3 (dla plików wielogigabajtowych multipart upload z możliwością wznawiania części), a usługa obsługuje tylko metadane. Zero obciążenia łącza, pamięci i problemów z timeoutami po Twojej stronie.",
+        "Jeśli przetwarzanie trwa minuty (parsowanie, import milionów wierszy), nie trzymaj otwartego żądania HTTP. Zwróć `202 Accepted` z ID zadania, wrzuć pracę do kolejki, niech przetworzy ją worker (np. uruchamiany zdarzeniem uploadu w S3), i udostępnij endpoint statusu typu `GET /jobs/:id` (albo wyślij powiadomienie). Takie rozwiązanie przetrwa timeouty load balancera, deploye i ponowienia."
       ]
     }
   },
@@ -770,6 +1202,13 @@ const FLASHCARDS = [
         "Producer should pause until the `'drain'` event",
         "`pipe()` / `pipeline()` handle it automatically",
         "Ignoring it → unbounded memory growth, OOM crashes"
+      ],
+      more: [
+        "Imagine reading a file from a fast SSD at 2 GB/s and uploading it over a network link that manages 50 MB/s. If the reader just keeps pushing chunks, the difference has to go somewhere: into an in-memory buffer that grows by ~1.95 GB every second. **Backpressure** is the mechanism by which a slow consumer signals a fast producer to slow down, so memory use stays bounded.",
+        "In Node streams every Writable has an internal buffer and a threshold called **`highWaterMark`** (16 KB by default for byte streams, 16 objects in object mode). Calling `writable.write(chunk)` always accepts the chunk, but its return value is the signal: `true` means \"keep going\", `false` means \"my buffer is above `highWaterMark`, please stop\". Once the buffer has been flushed, the writable emits a **`'drain'`** event, meaning it is safe to resume. Note that `highWaterMark` is a threshold, not a hard limit: if you ignore `false`, write keeps buffering.",
+        "```js\nimport { once } from 'node:events';\nfor await (const chunk of source) {\n  if (!dest.write(chunk)) {\n    await once(dest, 'drain'); // pause the producer until buffer empties\n  }\n}\ndest.end();\n```",
+        "You rarely write this by hand. `readable.pipe(writable)` and, better, `stream.pipeline()` implement exactly this loop: they pause the readable when `write()` returns `false` and resume it on `'drain'`, through every stage of a chain. Async iteration (`for await`) over a Readable also pulls data only as fast as you consume it. `pipeline()` is preferred because it also propagates errors and destroys all streams on failure.",
+        "The classic bug is code like `readable.on('data', c => dest.write(c))` that ignores the return value. It works fine in tests with small files, then in production with a slow client or a big file memory grows without bound until the process is **OOM-killed** (out of memory). The same concept applies beyond Node streams: message queues with bounded prefetch, HTTP/2 flow control, and reactive libraries all implement backpressure so a slow component cannot be flooded by a fast one."
       ]
     },
     pl: {
@@ -780,6 +1219,13 @@ const FLASHCARDS = [
         "Producent powinien wstrzymać się do zdarzenia `'drain'`",
         "`pipe()` / `pipeline()` obsługują to automatycznie",
         "Ignorowanie → nieograniczony wzrost pamięci, awarie OOM"
+      ],
+      more: [
+        "Wyobraź sobie odczyt pliku z szybkiego SSD z prędkością 2 GB/s i wysyłkę przez łącze, które daje 50 MB/s. Jeśli czytający po prostu dalej wypycha kawałki, różnica musi gdzieś trafić – do bufora w pamięci, który rośnie o ~1,95 GB co sekundę. **Backpressure** (przeciwciśnienie) to mechanizm, dzięki któremu wolny odbiorca sygnalizuje szybkiemu producentowi, żeby zwolnił, a zużycie pamięci pozostaje ograniczone.",
+        "W strumieniach Node każdy Writable ma wewnętrzny bufor i próg zwany **`highWaterMark`** (domyślnie 16 KB dla strumieni bajtowych, 16 obiektów w trybie obiektowym). Wywołanie `writable.write(chunk)` zawsze przyjmuje kawałek, ale wartość zwracana jest sygnałem: `true` to „pisz dalej”, `false` to „mój bufor przekroczył `highWaterMark`, przestań”. Gdy bufor zostanie opróżniony, writable emituje zdarzenie **`'drain'`**, czyli można wznowić. Uwaga: `highWaterMark` to próg, a nie twardy limit – jeśli zignorujesz `false`, write dalej buforuje.",
+        "```js\nimport { once } from 'node:events';\nfor await (const chunk of source) {\n  if (!dest.write(chunk)) {\n    await once(dest, 'drain'); // wstrzymaj producenta, aż bufor się opróżni\n  }\n}\ndest.end();\n```",
+        "Rzadko pisze się to ręcznie. `readable.pipe(writable)`, a lepiej `stream.pipeline()`, implementują dokładnie tę pętlę: wstrzymują readable, gdy `write()` zwraca `false`, i wznawiają go po `'drain'`, na każdym etapie łańcucha. Asynchroniczna iteracja (`for await`) po Readable też pobiera dane tylko tak szybko, jak je konsumujesz. `pipeline()` jest preferowany, bo dodatkowo przekazuje błędy i niszczy wszystkie strumienie przy awarii.",
+        "Klasyczny błąd to kod typu `readable.on('data', c => dest.write(c))`, który ignoruje wartość zwracaną. W testach z małymi plikami działa, ale na produkcji, przy wolnym kliencie albo dużym pliku, pamięć rośnie bez ograniczeń, aż proces zostanie zabity przez **OOM** (brak pamięci). To samo pojęcie występuje poza strumieniami Node: kolejki wiadomości z ograniczonym prefetchem, kontrola przepływu w HTTP/2, biblioteki reaktywne – wszystkie implementują backpressure, żeby szybki komponent nie zalał wolnego."
       ]
     }
   },
@@ -794,6 +1240,14 @@ const FLASHCARDS = [
         "Cross-cutting in middleware: auth, logging, request ID, rate limiting",
         "One central error handler; config validated at startup",
         "Organise by feature/module, not by technical type, once the app grows"
+      ],
+      more: [
+        "Express is deliberately minimal: it gives you routing and middleware, and nothing about how to organise code. Small apps often end up with everything inside route callbacks: parsing the request, SQL queries, business rules and response formatting mixed together. That works for ten endpoints and becomes unmaintainable at a hundred, because nothing can be reused or tested without spinning up HTTP. The fix is **separation of concerns** into layers, each with one job.",
+        "- **Routes / controllers** (HTTP layer): know about `req` and `res`. They validate and parse input (e.g. with a Zod schema), call a service, and map the result to a status code and JSON body.\n- **Services** (business logic): plain functions or classes such as `orderService.placeOrder(userId, items)`. They know nothing about Express, so they can be called from a controller, a queue consumer or a CLI, and unit-tested with no HTTP at all.\n- **Repositories** (data access): the only place that talks to the database or ORM. Swapping Prisma for Knex, or mocking the DB in tests, touches just this layer.",
+        "```ts\nrouter.post('/orders', auth(), async (req, res) => {\n  const input = CreateOrder.parse(req.body);          // validate\n  const order = await orders.place(req.user.id, input); // service\n  res.status(201).json(toOrderDto(order));             // map response\n});\n```",
+        "**Cross-cutting concerns** are things every request needs regardless of business logic: authentication, structured logging, attaching a **request ID** (a unique ID propagated through logs so one request can be traced), rate limiting, CORS. They belong in **middleware**, registered once, not copy-pasted into controllers.",
+        "Two more pillars: a **single central error handler** (controllers and services throw typed errors like `NotFoundError`, one middleware maps them to HTTP responses, so the format is consistent), and **config validated at startup** so a missing env var crashes on boot, not at 3 a.m. on the first request that needs it.",
+        "Finally, folder structure. Grouping by technical type (`controllers/`, `services/`, `models/`) spreads one feature across many folders. As the app grows, prefer **feature/module folders** (`orders/`, `users/`, `billing/`) that each contain their own routes, service and repository. Changes stay local, ownership is clear, and a module can later be extracted into its own service. This is essentially what NestJS enforces by convention."
       ]
     },
     pl: {
@@ -805,6 +1259,14 @@ const FLASHCARDS = [
         "Sprawy przekrojowe w middleware: auth, logowanie, request ID, rate limiting",
         "Jeden centralny handler błędów; konfiguracja walidowana przy starcie",
         "Przy większej aplikacji podział na moduły/funkcje, nie typy techniczne"
+      ],
+      more: [
+        "Express jest celowo minimalny: daje routing i middleware, ale nic nie mówi o organizacji kodu. Małe aplikacje często kończą ze wszystkim w callbackach tras: parsowanie żądania, zapytania SQL, reguły biznesowe i formatowanie odpowiedzi w jednym miejscu. Przy dziesięciu endpointach to działa, przy stu staje się nie do utrzymania, bo niczego nie da się ponownie użyć ani przetestować bez stawiania HTTP. Rozwiązaniem jest **separacja odpowiedzialności** na warstwy, z których każda ma jedno zadanie.",
+        "- **Trasy / kontrolery** (warstwa HTTP): znają `req` i `res`. Walidują i parsują wejście (np. schematem Zod), wywołują serwis i mapują wynik na kod statusu oraz body JSON.\n- **Serwisy** (logika biznesowa): zwykłe funkcje lub klasy, np. `orderService.placeOrder(userId, items)`. Nic nie wiedzą o Expressie, więc można je wywołać z kontrolera, konsumenta kolejki czy CLI i testować jednostkowo bez HTTP.\n- **Repozytoria** (dostęp do danych): jedyne miejsce rozmawiające z bazą lub ORM. Zamiana Prismy na Knexa albo mockowanie bazy w testach dotyka tylko tej warstwy.",
+        "```ts\nrouter.post('/orders', auth(), async (req, res) => {\n  const input = CreateOrder.parse(req.body);          // walidacja\n  const order = await orders.place(req.user.id, input); // serwis\n  res.status(201).json(toOrderDto(order));             // mapowanie odpowiedzi\n});\n```",
+        "**Sprawy przekrojowe (cross-cutting concerns)** to rzeczy potrzebne każdemu żądaniu niezależnie od logiki biznesowej: uwierzytelnianie, ustrukturyzowane logowanie, nadawanie **request ID** (unikalny identyfikator przekazywany w logach, by prześledzić jedno żądanie), rate limiting, CORS. Ich miejsce to **middleware** rejestrowane raz, a nie kopiowane do kontrolerów.",
+        "Dwa kolejne filary: **jeden centralny handler błędów** (kontrolery i serwisy rzucają typowane błędy jak `NotFoundError`, a jedno middleware mapuje je na odpowiedzi HTTP, więc format jest spójny) oraz **konfiguracja walidowana przy starcie**, żeby brak zmiennej środowiskowej wywrócił aplikację przy uruchomieniu, a nie o 3 w nocy przy pierwszym żądaniu, które jej potrzebuje.",
+        "Na koniec struktura katalogów. Grupowanie po typie technicznym (`controllers/`, `services/`, `models/`) rozrzuca jedną funkcjonalność po wielu folderach. Gdy aplikacja rośnie, lepsze są **foldery modułów/funkcjonalności** (`orders/`, `users/`, `billing/`), z których każdy zawiera własne trasy, serwis i repozytorium. Zmiany pozostają lokalne, własność kodu jest jasna, a moduł można później wydzielić do osobnej usługi. W zasadzie to właśnie wymusza konwencja NestJS."
       ]
     }
   },
@@ -818,6 +1280,14 @@ const FLASHCARDS = [
         "`next(err)` skips to error middleware `(err, req, res, next)` – 4 args",
         "Scoped: app-level, router-level, route-level",
         "Order matters: body parser before routes, error handler last"
+      ],
+      more: [
+        "In Express, handling a request means passing it through a **chain of functions**. Each function in the chain is a **middleware**: `(req, res, next) => { ... }`. It can read or modify `req` and `res` (e.g. attach `req.user` after checking a token), and then must do one of two things: **end the response** (`res.json(...)`, `res.status(401).end()`), or call **`next()`** to hand control to the next middleware. If it does neither, the request hangs until the client times out, which is a common bug.",
+        "Middleware runs in **registration order**. `app.use(express.json())` registered at the top parses the JSON body so that later route handlers can read `req.body`; register it after the routes and `req.body` will be `undefined`. Route handlers themselves are just middleware at the end of the chain.",
+        "```js\napp.use(requestId);               // app-level: every request\napp.use(express.json({ limit: '1mb' }));\napp.use('/admin', adminRouter);   // router-level: only /admin/*\nadminRouter.use(requireRole('admin'));\napp.get('/me', auth, getMe);      // route-level: only this route\napp.use((err, req, res, next) => { // error handler: 4 args, last\n  res.status(err.status ?? 500).json({ error: err.expose ? err.message : 'Internal error' });\n});\n```",
+        "**Scoping**: `app.use(fn)` applies to everything; `router.use(fn)` applies only to routes mounted on that router; passing middleware directly to `app.get(path, mw1, mw2, handler)` applies it to one route. This lets you, say, authenticate `/api/*` but not `/health`.",
+        "**Error handling**: calling `next(err)` with an argument tells Express to skip all remaining normal middleware and jump to **error-handling middleware**. Express recognises error middleware purely by its **arity**: a function declared with exactly four parameters `(err, req, res, next)`. Drop the unused `next` parameter and it silently becomes normal middleware. It must be registered **last**, after all routes, so that errors from anything above reach it. There is also `next('route')` to skip to the next matching route, rarely used.",
+        "Interview nuance: middleware is Express's version of the **chain of responsibility** pattern, and order bugs are the typical pitfall: CORS after auth (preflight requests fail with 401), body parser after routes, rate limiter after an expensive handler, or a 404 catch-all placed before real routes."
       ]
     },
     pl: {
@@ -828,6 +1298,14 @@ const FLASHCARDS = [
         "`next(err)` przeskakuje do middleware błędów `(err, req, res, next)` – 4 argumenty",
         "Zakres: aplikacja, router, pojedyncza trasa",
         "Kolejność ma znaczenie: parser body przed trasami, handler błędów na końcu"
+      ],
+      more: [
+        "W Expressie obsługa żądania polega na przepuszczeniu go przez **łańcuch funkcji**. Każda z nich to **middleware**: `(req, res, next) => { ... }`. Może czytać lub modyfikować `req` i `res` (np. dopisać `req.user` po sprawdzeniu tokenu), a potem musi zrobić jedną z dwóch rzeczy: **zakończyć odpowiedź** (`res.json(...)`, `res.status(401).end()`) albo wywołać **`next()`**, przekazując sterowanie dalej. Jeśli nie zrobi żadnej, żądanie „wisi” aż do timeoutu po stronie klienta – częsty błąd.",
+        "Middleware wykonuje się w **kolejności rejestracji**. `app.use(express.json())` zarejestrowane na górze parsuje body JSON, dzięki czemu późniejsze handlery tras mają `req.body`; zarejestruj je po trasach, a `req.body` będzie `undefined`. Handlery tras to po prostu middleware na końcu łańcucha.",
+        "```js\napp.use(requestId);               // poziom aplikacji: każde żądanie\napp.use(express.json({ limit: '1mb' }));\napp.use('/admin', adminRouter);   // poziom routera: tylko /admin/*\nadminRouter.use(requireRole('admin'));\napp.get('/me', auth, getMe);      // poziom trasy: tylko ta trasa\napp.use((err, req, res, next) => { // handler błędów: 4 argumenty, na końcu\n  res.status(err.status ?? 500).json({ error: err.expose ? err.message : 'Internal error' });\n});\n```",
+        "**Zakres**: `app.use(fn)` dotyczy wszystkiego; `router.use(fn)` tylko tras zamontowanych na tym routerze; middleware podane bezpośrednio w `app.get(path, mw1, mw2, handler)` dotyczy jednej trasy. Dzięki temu możesz np. uwierzytelniać `/api/*`, ale nie `/health`.",
+        "**Obsługa błędów**: wywołanie `next(err)` z argumentem mówi Expressowi, by pominął pozostałe zwykłe middleware i przeskoczył do **middleware błędów**. Express rozpoznaje je wyłącznie po **liczbie parametrów**: funkcja zadeklarowana z dokładnie czterema `(err, req, res, next)`. Usuniesz nieużywany `next` – i po cichu staje się zwykłym middleware. Trzeba je zarejestrować **na końcu**, po wszystkich trasach, żeby trafiały do niego błędy z całego łańcucha. Istnieje też `next('route')`, przeskakujące do następnej pasującej trasy – rzadko używane.",
+        "Niuans na rozmowę: middleware to expressowa wersja wzorca **łańcucha odpowiedzialności (chain of responsibility)**, a typowa pułapka to błędy kolejności: CORS po auth (zapytania preflight dostają 401), parser body po trasach, rate limiter za kosztownym handlerem albo catch-all 404 przed właściwymi trasami."
       ]
     }
   },
@@ -841,6 +1319,14 @@ const FLASHCARDS = [
         "Custom error classes (`NotFoundError`, `ValidationError`) → mapped to status codes centrally",
         "Log unexpected errors with request ID; return generic 500 without stack traces",
         "Process-level: `unhandledRejection` / `uncaughtException` → log and exit, let orchestrator restart"
+      ],
+      more: [
+        "Express was designed in the callback era. In **Express 4**, if a route handler is an `async` function and it throws (or an awaited promise rejects), the function returns a **rejected promise**, and Express 4 simply ignores the return value. The error never reaches your error middleware: the client waits until timeout and Node logs an `unhandledRejection` (which since Node 15 crashes the process by default).",
+        "The fixes for Express 4: wrap every async handler in a tiny helper that catches the rejection and passes it to `next`, or install `express-async-errors`, which monkey-patches the router to do the same. **Express 5** (stable since late 2024) does this natively: a rejected promise returned from a handler or middleware is forwarded to `next(err)` automatically.",
+        "```js\nconst asyncHandler = (fn) => (req, res, next) =>\n  Promise.resolve(fn(req, res, next)).catch(next);\n\napp.get('/users/:id', asyncHandler(async (req, res) => {\n  const user = await users.find(req.params.id);\n  if (!user) throw new NotFoundError('User not found');\n  res.json(user);\n}));\n```",
+        "Once errors reliably reach one place, make that place smart. Define **custom error classes** (`NotFoundError`, `ValidationError`, `ForbiddenError`, often extending an `AppError` with a `status` and a safe `code`). Services throw meaningful errors without knowing HTTP; the central error middleware maps them: `ValidationError` → 400 with field details, `NotFoundError` → 404, anything unknown → 500.",
+        "Distinguish **expected (operational) errors** from **unexpected** ones (bugs). Expected errors are returned to the client with a useful message. Unexpected errors are logged in full, with stack trace and the **request ID**, so you can find them in the logs, but the client only gets a generic `500 Internal Server Error`. Leaking stack traces reveals file paths, library versions and query shapes to attackers.",
+        "Last safety net at the **process level**: `process.on('unhandledRejection')` and `process.on('uncaughtException')`. After an uncaught exception the process may be in an inconsistent state (half-written data, leaked locks), so the right move is: log it, try a quick graceful shutdown, and **exit with a non-zero code**. Let the orchestrator (Kubernetes, ECS, systemd) restart a clean instance. Swallowing these errors and carrying on is the anti-pattern interviewers look for."
       ]
     },
     pl: {
@@ -851,6 +1337,14 @@ const FLASHCARDS = [
         "Własne klasy błędów (`NotFoundError`, `ValidationError`) → centralne mapowanie na kody statusu",
         "Nieoczekiwane błędy logowane z request ID; ogólne 500 bez stack trace",
         "Poziom procesu: `unhandledRejection` / `uncaughtException` → log i wyjście, orkiestrator restartuje"
+      ],
+      more: [
+        "Express powstał w erze callbacków. W **Expressie 4**, gdy handler trasy jest funkcją `async` i rzuci wyjątek (albo odrzucony zostanie awaitowany Promise), funkcja zwraca **odrzucony Promise**, a Express 4 po prostu ignoruje zwracaną wartość. Błąd nigdy nie trafia do middleware błędów: klient czeka do timeoutu, a Node zgłasza `unhandledRejection` (od Node 15 domyślnie kończy to proces).",
+        "Rozwiązania dla Expressa 4: opakować każdy asynchroniczny handler małym helperem, który łapie odrzucenie i przekazuje je do `next`, albo zainstalować `express-async-errors`, które monkey-patchuje router, robiąc to samo. **Express 5** (stabilny od końca 2024) robi to natywnie: odrzucony Promise zwrócony z handlera lub middleware jest automatycznie przekazywany do `next(err)`.",
+        "```js\nconst asyncHandler = (fn) => (req, res, next) =>\n  Promise.resolve(fn(req, res, next)).catch(next);\n\napp.get('/users/:id', asyncHandler(async (req, res) => {\n  const user = await users.find(req.params.id);\n  if (!user) throw new NotFoundError('User not found');\n  res.json(user);\n}));\n```",
+        "Gdy błędy niezawodnie trafiają w jedno miejsce, warto to miejsce uczynić mądrym. Zdefiniuj **własne klasy błędów** (`NotFoundError`, `ValidationError`, `ForbiddenError`, często dziedziczące po `AppError` z polem `status` i bezpiecznym `code`). Serwisy rzucają znaczące błędy bez wiedzy o HTTP, a centralne middleware je mapuje: `ValidationError` → 400 ze szczegółami pól, `NotFoundError` → 404, wszystko nieznane → 500.",
+        "Odróżniaj **błędy oczekiwane (operacyjne)** od **nieoczekiwanych** (bugów). Oczekiwane wracają do klienta z użytecznym komunikatem. Nieoczekiwane są logowane w całości, ze stack trace i **request ID**, żeby dało się je znaleźć w logach, ale klient dostaje tylko ogólne `500 Internal Server Error`. Ujawnianie stack trace zdradza atakującym ścieżki plików, wersje bibliotek i kształt zapytań.",
+        "Ostatnia siatka bezpieczeństwa na **poziomie procesu**: `process.on('unhandledRejection')` i `process.on('uncaughtException')`. Po nieobsłużonym wyjątku proces może być w niespójnym stanie (częściowo zapisane dane, niezwolnione blokady), więc właściwa reakcja to: zalogować, spróbować szybkiego graceful shutdown i **zakończyć z niezerowym kodem**. Czystą instancję uruchomi ponownie orkiestrator (Kubernetes, ECS, systemd). Połykanie tych błędów i działanie dalej to antywzorzec, na który zwracają uwagę rekruterzy."
       ]
     }
   },
@@ -864,6 +1358,13 @@ const FLASHCARDS = [
         "NestJS: opinionated – modules, DI, decorators, guards/pipes; runs on Express or Fastify",
         "Nest pays off in large teams / many services; Express/Fastify for small, focused services",
         "Choice driven by team conventions and consistency across services"
+      ],
+      more: [
+        "These are the three most common ways to build HTTP services in Node, and they sit at different points on the \"freedom vs structure\" scale. A framework is **opinionated** when it prescribes how to organise code (folders, patterns, lifecycle); **unopinionated** when it gives you primitives and leaves the architecture to you.",
+        "**Express** is the veteran: routing plus middleware, almost nothing else. Its strengths are simplicity, a huge ecosystem (every tutorial, every auth library, every middleware supports it) and familiarity. The downside is that structure, validation, error handling and TypeScript typing are all your responsibility, so two Express codebases can look nothing alike. Express 5 finally handles async errors natively, but performance is still modest.",
+        "**Fastify** keeps the minimal feel but is built for speed and correctness. You declare a **JSON Schema** for each route's body, params and response; Fastify validates input with it and uses the response schema to generate a very fast serialiser (which also prevents accidentally leaking fields not in the schema). It has an **encapsulated plugin system** (each plugin gets its own scope for decorators and hooks), a built-in logger (pino), and good TypeScript support including type providers for Zod/TypeBox. Benchmarks typically show it handling 2–3× more requests per second than Express, though in real apps the database usually dominates.",
+        "**NestJS** is a full application framework inspired by Angular. Code is organised into **modules**; classes receive their dependencies via **dependency injection (DI)**, a container that creates and wires instances for you, which makes swapping implementations in tests trivial. **Decorators** (`@Controller`, `@Get`, `@Injectable`) declare behaviour, **guards** decide authorisation, **pipes** validate/transform input, **interceptors** wrap handlers for logging or caching. Under the hood it runs on an HTTP adapter: Express by default, or Fastify.",
+        "How to choose: Nest's conventions pay off with **large teams and many services**, because every service looks the same, onboarding is faster, and features like microservice transports, CQRS and OpenAPI generation are built in. The cost is boilerplate, a learning curve and more \"magic\" (reflection, decorators). For a small, focused service or a lambda, Express or Fastify is lighter. The senior answer: the biggest factor is usually **consistency with what the team already runs**, not raw benchmarks."
       ]
     },
     pl: {
@@ -874,6 +1375,13 @@ const FLASHCARDS = [
         "NestJS: narzuca strukturę – moduły, DI, dekoratory, guardy/pipe'y; działa na Express lub Fastify",
         "Nest opłaca się w dużych zespołach / wielu usługach; Express/Fastify dla małych usług",
         "Wybór wg konwencji zespołu i spójności między usługami"
+      ],
+      more: [
+        "To trzy najpopularniejsze sposoby budowania usług HTTP w Node, a każdy leży w innym miejscu skali „swoboda kontra struktura”. Framework jest **opiniotwórczy (opinionated)**, gdy narzuca organizację kodu (katalogi, wzorce, cykl życia); **nieopiniotwórczy**, gdy daje prymitywy, a architekturę zostawia Tobie.",
+        "**Express** to weteran: routing i middleware, prawie nic więcej. Jego zalety to prostota, ogromny ekosystem (każdy tutorial, biblioteka auth i middleware go wspiera) i powszechna znajomość. Wada: struktura, walidacja, obsługa błędów i typowanie TypeScript są w całości po Twojej stronie, więc dwa projekty w Expressie mogą wyglądać zupełnie inaczej. Express 5 wreszcie natywnie obsługuje błędy async, ale wydajność wciąż jest umiarkowana.",
+        "**Fastify** zachowuje minimalizm, ale jest zbudowany z myślą o szybkości i poprawności. Dla każdej trasy deklarujesz **JSON Schema** dla body, parametrów i odpowiedzi; Fastify waliduje nim wejście, a ze schematu odpowiedzi generuje bardzo szybki serializer (który przy okazji zapobiega przypadkowemu wyciekowi pól spoza schematu). Ma **enkapsulowany system pluginów** (każdy plugin ma własny zakres dekoratorów i hooków), wbudowany logger (pino) i dobre wsparcie TypeScript, w tym type providery dla Zod/TypeBox. Benchmarki zwykle pokazują 2–3× więcej żądań na sekundę niż Express, choć w realnych aplikacjach i tak dominuje baza danych.",
+        "**NestJS** to pełny framework aplikacyjny inspirowany Angularem. Kod dzieli się na **moduły**; klasy dostają zależności przez **wstrzykiwanie zależności (DI)** – kontener sam tworzy i łączy instancje, więc podmiana implementacji w testach jest trywialna. **Dekoratory** (`@Controller`, `@Get`, `@Injectable`) deklarują zachowanie, **guardy** decydują o autoryzacji, **pipe'y** walidują/transformują wejście, **interceptory** opakowują handlery dla logowania czy cache. Pod spodem działa adapter HTTP: domyślnie Express albo Fastify.",
+        "Jak wybrać: konwencje Nesta opłacają się przy **dużych zespołach i wielu usługach**, bo każda usługa wygląda tak samo, onboarding jest szybszy, a transporty mikroserwisowe, CQRS czy generowanie OpenAPI są wbudowane. Koszt to boilerplate, krzywa uczenia i więcej „magii” (refleksja, dekoratory). Dla małej, skupionej usługi albo lambdy Express lub Fastify będą lżejsze. Seniorska odpowiedź: największym czynnikiem jest zwykle **spójność z tym, czego zespół już używa**, a nie surowe benchmarki."
       ]
     }
   },
@@ -888,6 +1396,15 @@ const FLASHCARDS = [
         "Stop queue consumers, close DB pools / Redis connections",
         "Hard timeout (below K8s `terminationGracePeriodSeconds`, default 30 s) then `process.exit`",
         "Run node as PID 1 carefully: `CMD [\"node\", ...]` exec form or `--init`/tini so signals arrive"
+      ],
+      more: [
+        "Services are stopped all the time: every deploy, autoscaling event or node drain in Kubernetes kills old instances. If the process just dies, in-flight requests get connection resets, half-processed queue messages are lost or redelivered, and database transactions are aborted. **Graceful shutdown** means: stop taking new work, finish (or safely hand back) the work in progress, release resources, then exit.",
+        "How the platform tells you: Docker (`docker stop`) and Kubernetes send **`SIGTERM`** to the container's main process, wait a grace period, then send **`SIGKILL`**, which cannot be caught. In Kubernetes that period is `terminationGracePeriodSeconds`, 30 s by default. Everything must finish inside that window.",
+        "The usual sequence:",
+        "- On `SIGTERM`, flip a flag so the **readiness probe** (the endpoint K8s calls to decide if the pod should receive traffic) starts returning 503, and the pod is removed from the Service endpoints. Because that removal propagates asynchronously, many teams also wait a few seconds before closing the server.\n- Call `server.close()`: stops accepting new connections and waits for in-flight requests to complete. Idle keep-alive connections can hold it open, so use `server.closeIdleConnections()` (Node 18.2+).\n- Stop **queue consumers** from pulling new messages and let current handlers finish (or nack them for redelivery).\n- Close **DB pools**, Redis clients, flush logs and metrics.\n- Exit with code 0.",
+        "```js\nprocess.on('SIGTERM', async () => {\n  isShuttingDown = true;                // readiness now returns 503\n  setTimeout(() => process.exit(1), 25_000).unref(); // hard deadline\n  await new Promise((r) => server.close(r));\n  await consumer.stop();\n  await db.end();\n  process.exit(0);\n});\n```",
+        "The **hard timeout** matters: if something hangs (a stuck request, a DB that won't answer), you would rather exit on your own terms a bit before the grace period than be `SIGKILL`ed mid-cleanup. Set it lower than `terminationGracePeriodSeconds`.",
+        "The subtle pitfall is **PID 1**. The first process in a container is PID 1, and Linux gives it special treatment: no default signal handlers, and it must reap zombie processes. If your Dockerfile uses the shell form `CMD npm start`, PID 1 is `/bin/sh` (and then npm), which may not forward `SIGTERM` to Node, so your handler never runs and the container is killed after 30 s. Use the **exec form** `CMD [\"node\", \"dist/server.js\"]` so Node is PID 1 and receives signals directly, or run a tiny init like **tini** (`docker run --init`) that forwards signals and reaps zombies."
       ]
     },
     pl: {
@@ -899,6 +1416,15 @@ const FLASHCARDS = [
         "Zatrzymanie konsumentów kolejek, zamknięcie puli DB / połączeń Redis",
         "Twardy timeout (poniżej `terminationGracePeriodSeconds` w K8s, domyślnie 30 s), potem `process.exit`",
         "Node jako PID 1: `CMD [\"node\", ...]` w formie exec lub `--init`/tini, żeby sygnały docierały"
+      ],
+      more: [
+        "Usługi są zatrzymywane cały czas: każdy deploy, autoskalowanie czy drain węzła w Kubernetesie ubija stare instancje. Jeśli proces po prostu padnie, trwające żądania dostają zerwane połączenie, w połowie przetworzone wiadomości z kolejki giną lub wracają, a transakcje bazodanowe są przerywane. **Graceful shutdown** (łagodne zamknięcie) oznacza: przestań przyjmować nową pracę, dokończ (lub bezpiecznie oddaj) bieżącą, zwolnij zasoby, a potem zakończ proces.",
+        "Jak platforma daje znać: Docker (`docker stop`) i Kubernetes wysyłają **`SIGTERM`** do głównego procesu kontenera, czekają okres karencji, a potem wysyłają **`SIGKILL`**, którego nie da się przechwycić. W Kubernetesie ten okres to `terminationGracePeriodSeconds`, domyślnie 30 s. Wszystko musi zmieścić się w tym oknie.",
+        "Typowa sekwencja:",
+        "- Po `SIGTERM` ustaw flagę, żeby **readiness probe** (endpoint, który K8s odpytuje, by zdecydować, czy pod ma dostawać ruch) zaczął zwracać 503, a pod został usunięty z endpointów Service. Propagacja tej zmiany jest asynchroniczna, więc wiele zespołów czeka jeszcze kilka sekund przed zamknięciem serwera.\n- Wywołaj `server.close()`: przestaje przyjmować nowe połączenia i czeka na zakończenie trwających żądań. Bezczynne połączenia keep-alive mogą go blokować, więc użyj `server.closeIdleConnections()` (Node 18.2+).\n- Zatrzymaj **konsumentów kolejek**, żeby nie pobierali nowych wiadomości, a bieżące handlery dokończyły pracę (albo zrób nack do ponownego dostarczenia).\n- Zamknij **pule DB**, klienty Redis, opróżnij bufory logów i metryk.\n- Zakończ proces z kodem 0.",
+        "```js\nprocess.on('SIGTERM', async () => {\n  isShuttingDown = true;                // readiness zwraca teraz 503\n  setTimeout(() => process.exit(1), 25_000).unref(); // twardy limit czasu\n  await new Promise((r) => server.close(r));\n  await consumer.stop();\n  await db.end();\n  process.exit(0);\n});\n```",
+        "**Twardy timeout** jest ważny: jeśli coś zawiśnie (zablokowane żądanie, baza, która nie odpowiada), lepiej zakończyć proces na własnych warunkach tuż przed końcem okresu karencji, niż dostać `SIGKILL` w połowie sprzątania. Ustaw go poniżej `terminationGracePeriodSeconds`.",
+        "Subtelna pułapka to **PID 1**. Pierwszy proces w kontenerze ma PID 1, a Linux traktuje go specjalnie: nie ma domyślnych handlerów sygnałów i musi sprzątać procesy zombie. Jeśli Dockerfile używa formy shell `CMD npm start`, PID 1 to `/bin/sh` (a potem npm), które mogą nie przekazać `SIGTERM` do Node – Twój handler nigdy się nie wykona, a kontener zostanie zabity po 30 s. Użyj **formy exec** `CMD [\"node\", \"dist/server.js\"]`, by Node był PID 1 i dostawał sygnały bezpośrednio, albo małego procesu init jak **tini** (`docker run --init`), który przekazuje sygnały i sprząta zombie."
       ]
     }
   },
@@ -912,6 +1438,15 @@ const FLASHCARDS = [
         "Secrets from a secret store (AWS Secrets Manager, SSM, K8s Secrets), never in git or images",
         "`.env` only for local dev; never log secrets",
         "Typed config object passed around instead of `process.env` everywhere"
+      ],
+      more: [
+        "**Configuration** is everything that varies between environments (dev, staging, prod): database URLs, API endpoints, feature toggles, log levels. **Secrets** are the sensitive subset: passwords, API keys, signing keys. The problem is keeping them out of code while making sure the app always starts with a complete, valid set.",
+        "The widely used baseline is the **12-factor app** methodology: read config from **environment variables**. The benefit is that you build **one Docker image** and promote the exact same artefact through staging to production, changing only the environment. If config were baked into the image, what you tested would not be what you shipped.",
+        "**Validate at startup** and **fail fast**: parse `process.env` once, when the process boots, against a schema. A missing `DATABASE_URL` or a `PORT` of `\"abc\"` should crash the process immediately with a clear message, so the deploy fails and the old version keeps running, instead of crashing hours later on the first code path that needs the value. Libraries like Zod or envalid also convert strings to real types (numbers, booleans, URLs).",
+        "```ts\nimport { z } from 'zod';\nconst Env = z.object({\n  NODE_ENV: z.enum(['development', 'test', 'production']),\n  PORT: z.coerce.number().default(3000),\n  DATABASE_URL: z.string().url(),\n  JWT_SECRET: z.string().min(32),\n});\nexport const config = Env.parse(process.env); // throws on boot if invalid\n```",
+        "Then pass this **typed config object** around (or inject it) instead of reading `process.env.X` all over the codebase. You get autocompletion, one place to see every setting, and easy overrides in tests.",
+        "**Secrets** belong in a dedicated **secret store**: AWS Secrets Manager or SSM Parameter Store, HashiCorp Vault, GCP Secret Manager, or Kubernetes Secrets (ideally synced from a cloud store via External Secrets Operator and encrypted at rest). They are injected at runtime as env vars or mounted files, access is controlled by IAM and audited, and they can be rotated without a rebuild. Never commit them to git (history keeps them forever; use secret scanning in CI) and never bake them into images (anyone who can pull the image can read its layers).",
+        "A `.env` file (loaded by `dotenv` or Node's built-in `--env-file` flag, available since Node 20.6) is a **local development** convenience only, and must be in `.gitignore`. Finally, **never log secrets**: be careful with logging the whole config or request headers, and use redaction in your logger (e.g. pino's `redact` option)."
       ]
     },
     pl: {
@@ -922,6 +1457,15 @@ const FLASHCARDS = [
         "Sekrety z magazynu sekretów (AWS Secrets Manager, SSM, K8s Secrets), nigdy w git ani obrazach",
         "`.env` tylko lokalnie; nigdy nie logować sekretów",
         "Typowany obiekt konfiguracji zamiast `process.env` w całym kodzie"
+      ],
+      more: [
+        "**Konfiguracja** to wszystko, co różni się między środowiskami (dev, staging, prod): adresy baz, endpointy API, przełączniki funkcji, poziomy logowania. **Sekrety** to jej wrażliwy podzbiór: hasła, klucze API, klucze podpisujące. Problem polega na tym, by trzymać je poza kodem, a jednocześnie mieć pewność, że aplikacja zawsze startuje z kompletnym, poprawnym zestawem.",
+        "Powszechny punkt wyjścia to metodyka **12-factor app**: konfiguracja ze **zmiennych środowiskowych**. Korzyść: budujesz **jeden obraz Dockera** i promujesz dokładnie ten sam artefakt przez staging na produkcję, zmieniając tylko środowisko. Gdyby konfiguracja była wbudowana w obraz, to, co przetestowano, nie byłoby tym, co wdrożono.",
+        "**Waliduj przy starcie** i **zawódź szybko (fail fast)**: sparsuj `process.env` raz, przy uruchomieniu procesu, według schematu. Brak `DATABASE_URL` albo `PORT` równy `\"abc\"` powinien od razu wywrócić proces z czytelnym komunikatem – wtedy deploy się nie udaje, a stara wersja dalej działa – zamiast awarii kilka godzin później w pierwszej ścieżce kodu, która potrzebuje tej wartości. Biblioteki jak Zod czy envalid przy okazji konwertują stringi na właściwe typy (liczby, booleany, URL).",
+        "```ts\nimport { z } from 'zod';\nconst Env = z.object({\n  NODE_ENV: z.enum(['development', 'test', 'production']),\n  PORT: z.coerce.number().default(3000),\n  DATABASE_URL: z.string().url(),\n  JWT_SECRET: z.string().min(32),\n});\nexport const config = Env.parse(process.env); // rzuca błąd przy starcie, jeśli niepoprawne\n```",
+        "Następnie przekazuj ten **typowany obiekt konfiguracji** (lub wstrzykuj go) zamiast czytać `process.env.X` w całym kodzie. Zyskujesz podpowiedzi w IDE, jedno miejsce z wszystkimi ustawieniami i łatwe nadpisywanie w testach.",
+        "**Sekrety** powinny trafiać do dedykowanego **magazynu sekretów**: AWS Secrets Manager lub SSM Parameter Store, HashiCorp Vault, GCP Secret Manager albo Kubernetes Secrets (najlepiej synchronizowane z magazynu chmurowego przez External Secrets Operator i szyfrowane at rest). Są wstrzykiwane w czasie działania jako zmienne środowiskowe lub montowane pliki, dostęp kontroluje i audytuje IAM, a rotacja nie wymaga przebudowy. Nigdy nie commituj ich do gita (historia trzyma je na zawsze; włącz skanowanie sekretów w CI) i nie wbudowuj w obrazy (każdy, kto może pobrać obraz, przeczyta jego warstwy).",
+        "Plik `.env` (ładowany przez `dotenv` albo wbudowaną flagę Node `--env-file`, dostępną od Node 20.6) to wyłącznie wygoda przy **lokalnym developmencie** i musi być w `.gitignore`. Na koniec: **nigdy nie loguj sekretów** – uważaj na logowanie całej konfiguracji lub nagłówków żądań i używaj redakcji w loggerze (np. opcja `redact` w pino)."
       ]
     }
   },
@@ -935,6 +1479,14 @@ const FLASHCARDS = [
         "Reproduce under load; take heap snapshots (`--inspect`, Chrome DevTools, `--heapsnapshot-signal`) and compare",
         "Look for retained object counts growing between snapshots",
         "Fix: LRU with max size/TTL, remove listeners, `WeakMap`; add memory alerts"
+      ],
+      more: [
+        "JavaScript has a **garbage collector (GC)**: V8 periodically finds objects that are no longer **reachable** from any root (globals, the current stack, active closures, pending callbacks) and frees them. A **memory leak** in JS is therefore not \"forgot to free\" but \"still referenced by mistake\": something long-lived keeps a pointer to data you no longer need, so the GC is not allowed to collect it. Memory grows with every request until the process hits its heap limit or the container's memory limit.",
+        "First **confirm** it is a leak and not just high usage. Chart **heap used** and **RSS** (resident set size, the total memory the OS gives the process, including buffers and native memory) over hours. A healthy service shows a sawtooth that returns to a stable baseline after GC; a leak shows the baseline climbing steadily. In Kubernetes the symptom is pods restarting with reason `OOMKilled`; in Node itself, a crash with \"JavaScript heap out of memory\".",
+        "Usual suspects:",
+        "- **Unbounded caches**: a module-level `Map` used as a cache with no size limit or expiry\n- **Event listeners** added per request to a long-lived emitter and never removed (Node warns with `MaxListenersExceededWarning`)\n- **Timers**: `setInterval` never cleared, holding its closure alive\n- **Closures** capturing big objects (a whole request or result set) and being stored somewhere long-lived\n- **Global arrays** that are only ever pushed to (e.g. collecting metrics or \"recent requests\")",
+        "To find the culprit, reproduce under load (locally or in staging with a load tool like k6 or autocannon) and take **heap snapshots**: a full dump of every object on the heap and what references it. Start Node with `--inspect` and use Chrome DevTools → Memory, or send a signal to a running process with `--heapsnapshot-signal=SIGUSR2`. Take one snapshot, run traffic, take another, and use the **Comparison** view: object types whose count keeps growing between snapshots are your leak. The **retainers** panel shows the reference chain keeping them alive, which usually points straight to the offending line.",
+        "Fixes follow the cause: replace ad-hoc maps with an **LRU cache** (least recently used eviction) with a max size and TTL, e.g. `lru-cache`; remove listeners (`off`, `once`, or `AbortSignal`) and clear timers on cleanup; use a **`WeakMap`** when you want to attach data to an object without preventing its collection (entries disappear when the key object is garbage-collected). Finally add **memory alerts** on heap/RSS trends so the next leak is caught before users are affected. Note: taking a snapshot pauses the process and needs roughly as much memory again, so be careful doing it on a nearly-full production pod."
       ]
     },
     pl: {
@@ -945,6 +1497,14 @@ const FLASHCARDS = [
         "Odtworzenie pod obciążeniem; heap snapshoty (`--inspect`, Chrome DevTools, `--heapsnapshot-signal`) i porównanie",
         "Szukam obiektów, których liczba rośnie między snapshotami",
         "Naprawa: LRU z limitem/TTL, usuwanie listenerów, `WeakMap`; alerty na pamięć"
+      ],
+      more: [
+        "JavaScript ma **garbage collector (GC)**: V8 okresowo wyszukuje obiekty, które nie są już **osiągalne** z żadnego korzenia (zmienne globalne, bieżący stos, aktywne domknięcia, oczekujące callbacki), i je zwalnia. **Wyciek pamięci** w JS to więc nie „zapomniałem zwolnić”, tylko „przez pomyłkę wciąż trzymam referencję”: coś długowiecznego wskazuje na dane, których już nie potrzebujesz, więc GC nie może ich usunąć. Pamięć rośnie z każdym żądaniem, aż proces dojdzie do limitu heapa albo limitu pamięci kontenera.",
+        "Najpierw **potwierdź**, że to wyciek, a nie po prostu duże zużycie. Wykreśl **heap used** i **RSS** (resident set size, całkowita pamięć przydzielona procesowi przez system, łącznie z buforami i pamięcią natywną) w ciągu godzin. Zdrowa usługa pokazuje piłokształtny wykres wracający po GC do stałego poziomu; wyciek to poziom bazowy, który stale rośnie. W Kubernetesie objawem są restarty podów z powodem `OOMKilled`, w samym Node – awaria z komunikatem „JavaScript heap out of memory”.",
+        "Typowi podejrzani:",
+        "- **Nieograniczone cache**: `Map` na poziomie modułu używana jako cache bez limitu rozmiaru i wygasania\n- **Listenery zdarzeń** dodawane przy każdym żądaniu do długowiecznego emitera i nigdy nieusuwane (Node ostrzega `MaxListenersExceededWarning`)\n- **Timery**: `setInterval`, którego nikt nie czyści, trzyma przy życiu swoje domknięcie\n- **Domknięcia** przechwytujące duże obiekty (całe żądanie, wynik zapytania) i zapisane w długowiecznym miejscu\n- **Globalne tablice**, do których tylko się dopisuje (np. zbieranie metryk czy „ostatnich żądań”)",
+        "Żeby znaleźć winowajcę, odtwórz problem pod obciążeniem (lokalnie lub na stagingu, narzędziem typu k6 czy autocannon) i zrób **heap snapshoty**: pełny zrzut każdego obiektu na heapie wraz z tym, co go referencjonuje. Uruchom Node z `--inspect` i użyj Chrome DevTools → Memory albo wyślij sygnał do działającego procesu z `--heapsnapshot-signal=SIGUSR2`. Zrób jeden snapshot, puść ruch, zrób drugi i użyj widoku **Comparison**: typy obiektów, których liczba rośnie między snapshotami, to Twój wyciek. Panel **retainers** pokazuje łańcuch referencji trzymający je przy życiu i zwykle prowadzi prosto do winnej linii.",
+        "Naprawa zależy od przyczyny: zastąp doraźne mapy **cache LRU** (usuwanie najdawniej używanych) z maksymalnym rozmiarem i TTL, np. `lru-cache`; usuwaj listenery (`off`, `once` lub `AbortSignal`) i czyść timery przy sprzątaniu; używaj **`WeakMap`**, gdy chcesz dołączyć dane do obiektu bez blokowania jego usunięcia (wpis znika, gdy obiekt-klucz zostanie zebrany przez GC). Na koniec dodaj **alerty na pamięć** oparte na trendach heap/RSS, żeby następny wyciek wykryć, zanim odczują go użytkownicy. Uwaga: zrobienie snapshotu wstrzymuje proces i wymaga mniej więcej drugie tyle pamięci, więc ostrożnie z prawie pełnym podem produkcyjnym."
       ]
     }
   },
@@ -958,6 +1518,14 @@ const FLASHCARDS = [
         "Thread-pool saturation: many fs/crypto/dns calls with only 4 threads",
         "Measure: `perf_hooks.monitorEventLoopDelay`, APM event-loop lag metric, `--cpu-prof` / clinic.js flame graphs",
         "Fix: async variants, streaming, pagination, offload to worker threads"
+      ],
+      more: [
+        "If one endpoint is slow, the cause is usually that endpoint's query or downstream call. If **all** endpoints slow down at the same time, including trivial ones like `/health`, suspect the **event loop**. Node runs all JavaScript on one thread; while that thread is busy with something synchronous, no other callback can run. **Event-loop lag (delay)** is how late the loop is compared to when it should have run a callback. Healthy services see single-digit milliseconds; spikes of hundreds of ms mean something is hogging the thread.",
+        "Common culprits:",
+        "- **Synchronous CPU work**: `JSON.parse`/`JSON.stringify` of multi-MB payloads, sorting or filtering huge arrays in memory, heavy template rendering\n- **ReDoS** (regular expression denial of service): a regex with nested quantifiers like `/(a+)+$/` can take exponential time on crafted input because the engine **backtracks** through every combination; one malicious request can freeze the process for seconds\n- **Sync APIs**: `fs.readFileSync`, `crypto.pbkdf2Sync`, `zlib.gzipSync`, `child_process.execSync` inside request handlers\n- **Thread-pool saturation**: not blocking the main thread, but fs, `dns.lookup`, crypto and zlib share libuv's pool of 4 threads; a burst of password hashing can make unrelated file reads and DNS lookups queue up",
+        "**Measure** before guessing. Node's `perf_hooks.monitorEventLoopDelay()` gives a histogram of loop delay; export its p99 as a metric. Most APMs (Datadog, New Relic, Elastic, OpenTelemetry runtime metrics) show event-loop lag out of the box. To see what is running, capture a CPU profile with `node --cpu-prof` or use clinic.js (`clinic flame`) and look at a **flame graph**: wide bars are functions consuming the most CPU time.",
+        "```js\nimport { monitorEventLoopDelay } from 'node:perf_hooks';\nconst h = monitorEventLoopDelay({ resolution: 20 });\nh.enable();\nsetInterval(() => {\n  metrics.gauge('event_loop_delay_p99_ms', h.percentile(99) / 1e6);\n  h.reset();\n}, 10_000);\n```",
+        "**Fixes**: use async versions of APIs; stream large payloads instead of parsing them whole; paginate instead of loading 100k rows; rewrite or bound dangerous regexes (or use a linear-time engine like RE2); raise `UV_THREADPOOL_SIZE` if the pool is the bottleneck; and move truly CPU-heavy work to **worker threads** or a background job so the main loop only does quick, I/O-bound handling."
       ]
     },
     pl: {
@@ -968,6 +1536,14 @@ const FLASHCARDS = [
         "Nasycenie puli wątków: dużo wywołań fs/crypto/dns przy 4 wątkach",
         "Pomiar: `perf_hooks.monitorEventLoopDelay`, metryka event-loop lag w APM, flame graphy `--cpu-prof` / clinic.js",
         "Naprawa: wersje asynchroniczne, streaming, paginacja, worker threads"
+      ],
+      more: [
+        "Jeśli wolny jest jeden endpoint, przyczyną zwykle jest jego zapytanie lub wywołanie zależnej usługi. Jeśli **wszystkie** endpointy zwalniają jednocześnie, łącznie z trywialnymi jak `/health`, podejrzewaj **pętlę zdarzeń**. Node wykonuje cały JavaScript w jednym wątku; dopóki ten wątek jest zajęty czymś synchronicznym, żaden inny callback nie ruszy. **Event-loop lag (opóźnienie pętli)** to to, o ile później pętla wykonuje callback, niż powinna. Zdrowe usługi mają pojedyncze milisekundy; skoki do setek ms oznaczają, że coś zajmuje wątek.",
+        "Typowe przyczyny:",
+        "- **Synchroniczna praca CPU**: `JSON.parse`/`JSON.stringify` wielomegabajtowych danych, sortowanie lub filtrowanie ogromnych tablic w pamięci, ciężkie renderowanie szablonów\n- **ReDoS** (regular expression denial of service): regex z zagnieżdżonymi kwantyfikatorami jak `/(a+)+$/` może na spreparowanym wejściu działać w czasie wykładniczym, bo silnik **wraca (backtracking)** przez każdą kombinację; jedno złośliwe żądanie zamraża proces na sekundy\n- **API synchroniczne**: `fs.readFileSync`, `crypto.pbkdf2Sync`, `zlib.gzipSync`, `child_process.execSync` w handlerach żądań\n- **Nasycenie puli wątków**: nie blokuje głównego wątku, ale fs, `dns.lookup`, crypto i zlib dzielą 4 wątki puli libuv; seria hashowania haseł sprawia, że niezwiązane odczyty plików i zapytania DNS czekają w kolejce",
+        "**Mierz**, zanim zgadniesz. `perf_hooks.monitorEventLoopDelay()` w Node daje histogram opóźnień pętli; eksportuj jego p99 jako metrykę. Większość APM (Datadog, New Relic, Elastic, metryki runtime OpenTelemetry) pokazuje event-loop lag od ręki. Żeby zobaczyć, co się wykonuje, zbierz profil CPU przez `node --cpu-prof` albo użyj clinic.js (`clinic flame`) i obejrzyj **flame graph**: szerokie paski to funkcje zużywające najwięcej czasu CPU.",
+        "```js\nimport { monitorEventLoopDelay } from 'node:perf_hooks';\nconst h = monitorEventLoopDelay({ resolution: 20 });\nh.enable();\nsetInterval(() => {\n  metrics.gauge('event_loop_delay_p99_ms', h.percentile(99) / 1e6);\n  h.reset();\n}, 10_000);\n```",
+        "**Naprawa**: wersje asynchroniczne API; strumieniowanie dużych danych zamiast parsowania w całości; paginacja zamiast ładowania 100 tys. wierszy; przepisanie lub ograniczenie niebezpiecznych regexów (albo silnik liniowy jak RE2); zwiększenie `UV_THREADPOOL_SIZE`, jeśli wąskim gardłem jest pula; a naprawdę ciężką pracę CPU przenieś do **worker threads** lub zadania w tle, żeby główna pętla robiła tylko szybką obsługę I/O."
       ]
     }
   },
@@ -982,6 +1558,15 @@ const FLASHCARDS = [
         "Dependencies: lockfile, `npm audit` / Dependabot / Snyk in CI",
         "Avoid `eval`, unsafe regex, prototype pollution (`__proto__` in merged JSON)",
         "Run as non-root, secrets out of code, no stack traces in responses"
+      ],
+      more: [
+        "Hardening means reducing the ways an attacker can abuse your API. No single tool does it; it is layers of defence (**defence in depth**), so that if one layer fails another still stops the attack. **Input**: treat everything from the client (body, query, params, headers) as untrusted. Validate it against a schema (Zod, JSON Schema) that defines exact types, lengths and allowed fields, and reject everything else. Never build queries by string concatenation: **parameterised queries** (`WHERE id = $1`) send data separately from SQL, so input cannot change the query's meaning. The NoSQL equivalent: in MongoDB a body like `{ \"password\": { \"$ne\": null } }` turns an equality check into \"any password\"; schema validation that requires a string prevents it.",
+        "**HTTP layer**:",
+        "- `helmet` sets security headers: `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, a Content Security Policy, frame protection\n- **CORS** with an explicit allow-list of origins, not `*` combined with credentials\n- **Rate limiting** per IP/user (especially on login and expensive endpoints) to slow brute force and abuse\n- **Body size limits** (`express.json({ limit: '100kb' })`) so one request cannot exhaust memory",
+        "**Access control**: **AuthN** (authentication) establishes who the caller is; **AuthZ** (authorisation) decides what they may do. Apply both on every endpoint, deny by default. The most common real-world bug is **IDOR** (insecure direct object reference): `GET /invoices/123` returns invoice 123 to any logged-in user because the code checks \"is logged in\" but not \"owns invoice 123\".",
+        "**Dependencies**: most of your code is other people's packages. Commit a **lockfile** and install with `npm ci` for reproducible builds; run `npm audit`, Dependabot/Renovate or Snyk in CI; be wary of install scripts and typosquatted package names.",
+        "**Dangerous JS patterns**: `eval`, `new Function` or `vm` with user input allow code execution; regexes with nested quantifiers allow ReDoS. **Prototype pollution** happens when a naive deep-merge copies a key like `__proto__` from user JSON onto a plain object, so every object in the process suddenly inherits attacker-controlled properties (e.g. `isAdmin: true`). Use safe merge libraries, `Object.create(null)` maps, or validation that strips unknown keys.",
+        "**Runtime**: run the container as a **non-root** user (`USER node` in the Dockerfile) so a compromise has limited reach; keep secrets in a secret store, not in code; and return generic error messages without **stack traces**, which reveal internals useful to attackers."
       ]
     },
     pl: {
@@ -993,6 +1578,15 @@ const FLASHCARDS = [
         "Zależności: lockfile, `npm audit` / Dependabot / Snyk w CI",
         "Unikać `eval`, niebezpiecznych regexów, prototype pollution (`__proto__` w scalanym JSON)",
         "Uruchamianie jako nie-root, sekrety poza kodem, brak stack trace w odpowiedziach"
+      ],
+      more: [
+        "Utwardzanie (hardening) to zmniejszanie liczby sposobów, na jakie atakujący może nadużyć API. Nie załatwi tego jedno narzędzie; to warstwy obrony (**defence in depth**), dzięki którym, gdy zawiedzie jedna warstwa, atak zatrzyma kolejna. **Wejście**: wszystko od klienta (body, query, parametry, nagłówki) traktuj jako niezaufane. Waliduj schematem (Zod, JSON Schema), który określa dokładne typy, długości i dozwolone pola, a resztę odrzucaj. Nigdy nie buduj zapytań przez sklejanie stringów: **zapytania parametryzowane** (`WHERE id = $1`) przesyłają dane oddzielnie od SQL, więc wejście nie może zmienić znaczenia zapytania. Odpowiednik NoSQL: w MongoDB body typu `{ \"password\": { \"$ne\": null } }` zamienia porównanie w „dowolne hasło”; walidacja wymagająca stringa temu zapobiega.",
+        "**Warstwa HTTP**:",
+        "- `helmet` ustawia nagłówki bezpieczeństwa: `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, Content Security Policy, ochronę przed osadzaniem w ramkach\n- **CORS** z jawną listą dozwolonych originów, a nie `*` w połączeniu z credentials\n- **Rate limiting** per IP/użytkownik (szczególnie na logowaniu i kosztownych endpointach) spowalnia brute force i nadużycia\n- **Limity rozmiaru body** (`express.json({ limit: '100kb' })`), żeby jedno żądanie nie wyczerpało pamięci",
+        "**Kontrola dostępu**: **AuthN** (uwierzytelnianie) ustala, kim jest wywołujący; **AuthZ** (autoryzacja) decyduje, co mu wolno. Stosuj oba na każdym endpoincie, domyślnie odmawiaj. Najczęstszy realny błąd to **IDOR** (insecure direct object reference): `GET /invoices/123` zwraca fakturę 123 każdemu zalogowanemu, bo kod sprawdza „czy zalogowany”, a nie „czy jest właścicielem faktury 123”.",
+        "**Zależności**: większość Twojego kodu to cudze paczki. Commituj **lockfile** i instaluj przez `npm ci` dla powtarzalnych buildów; uruchamiaj `npm audit`, Dependabot/Renovate lub Snyk w CI; uważaj na skrypty instalacyjne i paczki o łudząco podobnych nazwach (typosquatting).",
+        "**Niebezpieczne wzorce JS**: `eval`, `new Function` czy `vm` z danymi użytkownika pozwalają wykonać kod; regexy z zagnieżdżonymi kwantyfikatorami umożliwiają ReDoS. **Prototype pollution** występuje, gdy naiwny deep-merge kopiuje klucz `__proto__` z JSON-a użytkownika do zwykłego obiektu – nagle każdy obiekt w procesie dziedziczy właściwości kontrolowane przez atakującego (np. `isAdmin: true`). Używaj bezpiecznych bibliotek merge, map z `Object.create(null)` albo walidacji usuwającej nieznane klucze.",
+        "**Środowisko uruchomieniowe**: uruchamiaj kontener jako użytkownik **nie-root** (`USER node` w Dockerfile), żeby włamanie miało ograniczony zasięg; trzymaj sekrety w magazynie sekretów, a nie w kodzie; zwracaj ogólne komunikaty błędów bez **stack trace**, który zdradza atakującym szczegóły wnętrza aplikacji."
       ]
     }
   },
@@ -1009,6 +1603,13 @@ const FLASHCARDS = [
         "Commit phase applies only the DOM changes",
         "Different element type → subtree remounted; `key` identifies list items",
         "Re-render ≠ DOM update"
+      ],
+      more: [
+        "React follows the idea **UI = f(state)**: a component is a function that takes **props** (inputs passed from its parent) and its own **state** (data it remembers between renders) and returns **React elements** – lightweight JS objects describing what should be on screen, e.g. `{ type: 'button', props: { children: 'Save' } }`. JSX is just syntax for creating these objects. **Rendering** means React calling your component function to get fresh elements; by itself it does not touch the browser DOM.",
+        "A render is triggered by the first mount, a state update (`setState`), a change in a context value the component reads, or its parent re-rendering. By default, when a component re-renders, all of its children re-render too, whether or not their props changed – React doesn't know they are pure unless you tell it (`React.memo`) or the React Compiler does that for you.",
+        "- **Render phase**: React calls components and builds a new element tree. It must be pure (no side effects), because React may call it, pause it or throw the result away (concurrent rendering).\n- **Reconciliation**: React diffs the new tree against the previous one (kept internally as the **Fiber** tree) to work out what changed.\n- **Commit phase**: React applies the minimal set of DOM mutations in one go, then runs layout effects and schedules `useEffect`.",
+        "A full diff of two arbitrary trees is O(n³), so React uses heuristics that make it O(n). An element of a **different type** at the same position (`<div>` → `<section>`, or `<UserCard>` → `<AdminCard>`) means the whole subtree is discarded and **remounted**: DOM recreated, state lost. Same type → React keeps the DOM node or component instance and only updates the changed attributes/props. In lists, children are matched by `key` instead of by position.",
+        "The point interviewers probe: **re-render ≠ DOM update**. A component can re-render 100 times and produce identical output, and then the commit phase changes nothing in the DOM. Re-renders cost CPU (calling functions, diffing), which is usually cheap; they only hurt in large trees or with expensive computations. A classic pitfall: defining a component inside another component – every render creates a new function, i.e. a new type, so React remounts it and its state is lost on each render."
       ]
     },
     pl: {
@@ -1020,6 +1621,13 @@ const FLASHCARDS = [
         "Faza commit nakłada tylko zmiany w DOM",
         "Inny typ elementu → poddrzewo montowane od nowa; `key` identyfikuje elementy listy",
         "Rerender ≠ aktualizacja DOM"
+      ],
+      more: [
+        "React opiera się na idei **UI = f(stan)**: komponent to funkcja, która na podstawie **propsów** (danych od rodzica) i własnego **stanu** (danych pamiętanych między renderami) zwraca **elementy React** – lekkie obiekty JS opisujące, co ma być na ekranie, np. `{ type: 'button', props: { children: 'Zapisz' } }`. JSX to tylko składnia do tworzenia tych obiektów. **Renderowanie** to wywołanie przez React funkcji komponentu w celu uzyskania świeżych elementów – samo w sobie nie dotyka DOM przeglądarki.",
+        "Render wywołuje: pierwsze zamontowanie, aktualizacja stanu (`setState`), zmiana wartości contextu, z którego komponent czyta, albo rerender rodzica. Domyślnie rerender komponentu pociąga za sobą rerender wszystkich jego dzieci, niezależnie od tego, czy ich propsy się zmieniły – React nie wie, że są „czyste”, dopóki mu tego nie powiesz (`React.memo`) albo nie zrobi tego za ciebie React Compiler.",
+        "- **Faza render**: React wywołuje komponenty i buduje nowe drzewo elementów. Musi być czysta (bez efektów ubocznych), bo React może ją wywołać, wstrzymać albo wyrzucić wynik (renderowanie współbieżne).\n- **Rekoncyliacja**: React porównuje nowe drzewo z poprzednim (trzymanym wewnętrznie jako drzewo **Fiber**), żeby ustalić, co się zmieniło.\n- **Faza commit**: React nakłada minimalny zestaw zmian w DOM za jednym razem, potem uruchamia efekty layoutu i planuje `useEffect`.",
+        "Pełne porównanie dwóch dowolnych drzew to O(n³), więc React stosuje heurystyki dające O(n). Element **innego typu** na tej samej pozycji (`<div>` → `<section>` albo `<UserCard>` → `<AdminCard>`) oznacza, że całe poddrzewo jest wyrzucane i **montowane od nowa**: DOM tworzony ponownie, stan tracony. Ten sam typ → React zachowuje węzeł DOM lub instancję komponentu i aktualizuje tylko zmienione atrybuty/propsy. W listach dzieci są dopasowywane po `key`, a nie po pozycji.",
+        "Na tym rekruter chce cię złapać: **rerender ≠ aktualizacja DOM**. Komponent może się wyrenderować 100 razy z identycznym wynikiem i wtedy faza commit niczego w DOM nie zmienia. Rerendery kosztują CPU (wywołanie funkcji, porównanie), co zwykle jest tanie – problemem stają się dopiero w dużych drzewach lub przy kosztownych obliczeniach. Klasyczna pułapka: definiowanie komponentu wewnątrz innego komponentu – każdy render tworzy nową funkcję, czyli nowy typ, więc React montuje go od nowa i przy każdym renderze gubi jego stan."
       ]
     }
   },
@@ -1032,6 +1640,13 @@ const FLASHCARDS = [
         "Call only from components or custom hooks",
         "Why: React tracks hook state by call order on each render",
         "Enforced by `eslint-plugin-react-hooks`"
+      ],
+      more: [
+        "**Hooks** are functions such as `useState`, `useEffect` and `useContext` that let function components use React features like state and lifecycle. The rules: call them only at the **top level** of the component body – never inside `if`, loops, nested functions or after an early `return` – and call them only from React function components or from **custom hooks** (functions whose name starts with `use`), not from ordinary utilities or class components.",
+        "Why: a function component has no instance to store fields on. React keeps each component's hook data in an ordered list attached to its Fiber (React's internal node for that component). On every render the 1st `useState` call gets slot 1, the 2nd gets slot 2, and so on. Hooks carry no names – **call order is their only identity**. If the order changes between renders, React hands one hook's data to another, or throws \"Rendered fewer hooks than expected\".",
+        "```jsx\nfunction Profile({ user }) {\n  if (!user) return null;               // early return BEFORE a hook – breaks the rules\n  const [name, setName] = useState(user.name);\n  // render 1: user set → 1 hook; render 2: user null → 0 hooks → error\n}\n\nfunction ProfileFixed({ user }) {\n  const [name, setName] = useState(user?.name ?? '');  // all hooks first\n  if (!user) return null;                               // then branch\n}\n```",
+        "Put the condition inside the hook instead: `useEffect(() => { if (enabled) {...} }, [enabled])`. If a piece of logic is genuinely optional, render a separate component conditionally – each component has its own hook list. One exception: React 19's `use()` may be called inside conditions and loops, because it reads a promise or context rather than owning a state slot.",
+        "`eslint-plugin-react-hooks` enforces the rules: `rules-of-hooks` flags conditional or misplaced calls, and `exhaustive-deps` checks the dependency arrays of `useEffect`, `useMemo` and `useCallback`. Recent versions also ship React Compiler-based checks. Treat its errors as bugs, not style warnings."
       ]
     },
     pl: {
@@ -1041,6 +1656,13 @@ const FLASHCARDS = [
         "Tylko w komponentach lub własnych hookach",
         "Dlaczego: React śledzi stan hooków po kolejności wywołań w każdym renderze",
         "Pilnuje tego `eslint-plugin-react-hooks`"
+      ],
+      more: [
+        "**Hooki** to funkcje takie jak `useState`, `useEffect`, `useContext`, dzięki którym komponenty funkcyjne korzystają z możliwości Reacta, np. stanu i cyklu życia. Zasady: wywołuj je tylko na **najwyższym poziomie** ciała komponentu – nigdy w `if`, pętlach, zagnieżdżonych funkcjach ani po wczesnym `return` – i tylko z komponentów funkcyjnych albo z **własnych hooków** (funkcji o nazwie zaczynającej się od `use`), a nie ze zwykłych funkcji pomocniczych czy komponentów klasowych.",
+        "Dlaczego: komponent funkcyjny nie ma instancji, w której można by trzymać pola. React przechowuje dane hooków każdego komponentu w uporządkowanej liście przypiętej do jego Fibera (wewnętrznego węzła Reacta). W każdym renderze pierwsze wywołanie `useState` dostaje slot 1, drugie slot 2 itd. Hooki nie mają nazw – **kolejność wywołań to ich jedyna tożsamość**. Jeśli kolejność zmieni się między renderami, React przekaże dane jednego hooka innemu albo rzuci błąd „Rendered fewer hooks than expected”.",
+        "```jsx\nfunction Profile({ user }) {\n  if (!user) return null;               // wczesny return PRZED hookiem – łamie zasady\n  const [name, setName] = useState(user.name);\n  // render 1: jest user → 1 hook; render 2: user null → 0 hooków → błąd\n}\n\nfunction ProfileFixed({ user }) {\n  const [name, setName] = useState(user?.name ?? '');  // najpierw wszystkie hooki\n  if (!user) return null;                               // potem rozgałęzienie\n}\n```",
+        "Warunek przenieś do środka hooka: `useEffect(() => { if (enabled) {...} }, [enabled])`. Jeśli jakaś logika jest naprawdę opcjonalna, wyrenderuj warunkowo osobny komponent – każdy komponent ma własną listę hooków. Wyjątek: `use()` z Reacta 19 można wywoływać w warunkach i pętlach, bo odczytuje promise albo context, a nie zajmuje slotu stanu.",
+        "Zasad pilnuje `eslint-plugin-react-hooks`: reguła `rules-of-hooks` wyłapuje warunkowe lub źle umieszczone wywołania, a `exhaustive-deps` sprawdza tablice zależności `useEffect`, `useMemo` i `useCallback`. Nowsze wersje zawierają też reguły oparte na React Compilerze. Jego błędy traktuj jak bugi, nie uwagi stylistyczne."
       ]
     }
   },
@@ -1055,6 +1677,14 @@ const FLASHCARDS = [
         "Fetching: ignore stale responses (`AbortController` / flag) to avoid race conditions",
         "Not for derived state – compute during render; not for event logic – use handlers",
         "StrictMode runs effects twice in dev to surface missing cleanups"
+      ],
+      more: [
+        "`useEffect` runs code **after** React has committed a render to the screen. Its purpose is **synchronising a component with an external system** – something React doesn't control: a WebSocket subscription, `setInterval`, a browser API (`document.title`, `IntersectionObserver`), a third-party widget, a network request. Think of it not as a lifecycle method but as \"keep this external thing in sync with these values\".",
+        "The **dependency array** tells React when to re-sync. List every **reactive value** used inside: props, state and anything computed from them in the component body. After each render React compares every dependency with `Object.is`; if one changed, it runs the previous cleanup and then the effect again. `[]` means no reactive dependencies → run once after mount. No array → run after every render. Omitting a dependency causes a **stale closure**: the effect keeps seeing values from an old render.",
+        "The **cleanup** function you return undoes the effect: unsubscribe, clear the timer, abort the request. It runs before the effect re-runs with new values and when the component unmounts. In development **StrictMode** deliberately mounts, unmounts and re-mounts each component once, so every effect runs, cleans up and runs again – if that visibly breaks something (double subscriptions, two connections), your cleanup is missing.",
+        "```js\nuseEffect(() => {\n  const controller = new AbortController();\n  fetch(`/api/users/${id}`, { signal: controller.signal })\n    .then(r => r.json())\n    .then(setUser)\n    .catch(e => { if (e.name !== 'AbortError') setError(e); });\n  return () => controller.abort(); // id changed or unmounted → cancel\n}, [id]);\n```",
+        "Without that cleanup, a slow response for `id=1` can arrive after the response for `id=2` and overwrite it – a **race condition**. An `ignore` boolean flag set in the cleanup achieves the same when the API can't be aborted.",
+        "Misuse the interviewer is fishing for:\n- **Derived state**: `useEffect(() => setFullName(first + ' ' + last), [first, last])` adds an extra render with a stale value in between; just compute `const fullName = first + ' ' + last` during render (`useMemo` if expensive).\n- **Event logic**: \"send analytics when the user clicks Buy\" belongs in the `onClick` handler, not in an effect watching state.\n- **Data fetching** in real apps: prefer TanStack Query or framework loaders, which handle caching, deduplication and races for you."
       ]
     },
     pl: {
@@ -1066,6 +1696,14 @@ const FLASHCARDS = [
         "Fetch: ignoruj nieaktualne odpowiedzi (`AbortController` / flaga) – unikanie wyścigów",
         "Nie dla stanu pochodnego – licz w renderze; nie dla logiki zdarzeń – handlery",
         "StrictMode w dev uruchamia efekty dwa razy, żeby wykryć brak cleanupu"
+      ],
+      more: [
+        "`useEffect` uruchamia kod **po** tym, jak React zatwierdzi (commit) render na ekranie. Służy do **synchronizacji komponentu z systemem zewnętrznym** – czymś, czego React nie kontroluje: subskrypcją WebSocket, `setInterval`, API przeglądarki (`document.title`, `IntersectionObserver`), widżetem zewnętrznej biblioteki, zapytaniem sieciowym. Myśl o nim nie jak o metodzie cyklu życia, tylko jak o „utrzymuj tę zewnętrzną rzecz w zgodzie z tymi wartościami”.",
+        "**Tablica zależności** mówi Reactowi, kiedy ponownie zsynchronizować. Wpisz do niej każdą **reaktywną wartość** użytą w środku: propsy, stan i wszystko, co z nich wyliczasz w ciele komponentu. Po każdym renderze React porównuje zależności przez `Object.is`; jeśli któraś się zmieniła, wywołuje poprzedni cleanup, a potem efekt od nowa. `[]` = brak reaktywnych zależności → jedno uruchomienie po zamontowaniu. Brak tablicy → po każdym renderze. Pominięta zależność daje **nieaktualne domknięcie (stale closure)**: efekt widzi wartości ze starego renderu.",
+        "Zwracana funkcja **cleanup** odwraca efekt: wypisuje subskrypcję, czyści timer, przerywa zapytanie. Wykonuje się przed ponownym uruchomieniem efektu z nowymi wartościami oraz przy odmontowaniu. W trybie deweloperskim **StrictMode** celowo montuje, odmontowuje i ponownie montuje każdy komponent, więc każdy efekt uruchamia się, sprząta i uruchamia znowu – jeśli coś się przez to psuje (podwójne subskrypcje, dwa połączenia), brakuje cleanupu.",
+        "```js\nuseEffect(() => {\n  const controller = new AbortController();\n  fetch(`/api/users/${id}`, { signal: controller.signal })\n    .then(r => r.json())\n    .then(setUser)\n    .catch(e => { if (e.name !== 'AbortError') setError(e); });\n  return () => controller.abort(); // zmiana id lub odmontowanie → anuluj\n}, [id]);\n```",
+        "Bez tego cleanupu wolna odpowiedź dla `id=1` może przyjść po odpowiedzi dla `id=2` i ją nadpisać – to **wyścig (race condition)**. Gdy API nie da się przerwać, to samo daje flaga `ignore` ustawiana w cleanupie.",
+        "Typowe nadużycia, o które pyta rekruter:\n- **Stan pochodny**: `useEffect(() => setFullName(first + ' ' + last), [first, last])` dokłada dodatkowy render z nieaktualną wartością po drodze; wystarczy policzyć `const fullName = first + ' ' + last` w renderze (`useMemo`, jeśli to kosztowne).\n- **Logika zdarzeń**: „wyślij analitykę, gdy użytkownik kliknie Kup” należy do handlera `onClick`, a nie do efektu obserwującego stan.\n- **Pobieranie danych** w prawdziwych aplikacjach: lepiej TanStack Query albo loadery frameworka, które same obsługują cache, deduplikację i wyścigi."
       ]
     }
   },
@@ -1079,6 +1717,13 @@ const FLASHCARDS = [
         "`useCallback`: stable function reference (to keep a memoised child from re-rendering)",
         "Only after measuring (React Profiler) – memoisation has its own cost",
         "React Compiler can automate this in newer setups"
+      ],
+      more: [
+        "By default a parent's re-render re-renders all its children. **Memoisation** lets React skip work when inputs haven't changed. Three tools that are often confused:\n- `React.memo(Component)` wraps a **component**: React skips re-rendering it if every prop is **shallow-equal** (`Object.is` per prop) to the previous render.\n- `useMemo(() => compute(a, b), [a, b])` caches a **value** inside a component until a dependency changes.\n- `useCallback(fn, deps)` caches a **function** reference; it is literally `useMemo(() => fn, deps)`.",
+        "Why reference stability matters: in JS `{} !== {}` and `(() => {}) !== (() => {})`. Every render creates new objects and functions, so a `memo`-wrapped child that receives `onClick={() => ...}` or `style={{...}}` sees \"changed\" props every time and memo does nothing. `useCallback`/`useMemo` keep the same reference so the shallow compare succeeds. The same applies to values used as `useEffect` dependencies – a new object each render re-runs the effect each render.",
+        "```jsx\nconst Row = React.memo(function Row({ item, onSelect }) { /* ... */ });\n\nfunction List({ items, query }) {\n  const [selected, setSelected] = useState(null);\n  const visible = useMemo(\n    () => items.filter(i => i.name.includes(query)), [items, query]);\n  const onSelect = useCallback(id => setSelected(id), []);\n  return visible.map(i => <Row key={i.id} item={i} onSelect={onSelect} />);\n}\n```",
+        "Memoisation isn't free: React stores previous values and compares dependencies on every render, and the code gets noisier. `useCallback` without a memoised consumer (a `memo` child or an effect dependency) buys nothing. So measure first with the **React DevTools Profiler** – find components that render often *and* slowly – then memoise those. Often a structural fix is better: move state down, or pass expensive parts as `children` so they aren't re-created.",
+        "**React Compiler** (stable 1.0 since late 2025) analyses components at build time and inserts memoisation automatically, at a finer granularity than hand-written hooks. In projects that use it, manual `useMemo`/`useCallback` are mostly unnecessary – but you still need to understand them for existing codebases and for code the compiler skips (e.g. components that break the rules of React)."
       ]
     },
     pl: {
@@ -1089,6 +1734,13 @@ const FLASHCARDS = [
         "`useCallback`: stabilna referencja funkcji (żeby zmemoizowane dziecko się nie renderowało)",
         "Dopiero po pomiarze (React Profiler) – memoizacja też kosztuje",
         "React Compiler może to automatyzować w nowszych projektach"
+      ],
+      more: [
+        "Domyślnie rerender rodzica oznacza rerender wszystkich dzieci. **Memoizacja** pozwala Reactowi pominąć pracę, gdy dane wejściowe się nie zmieniły. Trzy często mylone narzędzia:\n- `React.memo(Component)` opakowuje **komponent**: React pomija jego rerender, jeśli każdy props jest **płytko równy** (`Object.is` dla każdego propsa) temu z poprzedniego renderu.\n- `useMemo(() => compute(a, b), [a, b])` zapamiętuje **wartość** wewnątrz komponentu, dopóki nie zmieni się zależność.\n- `useCallback(fn, deps)` zapamiętuje **referencję funkcji**; to dosłownie `useMemo(() => fn, deps)`.",
+        "Dlaczego stabilność referencji ma znaczenie: w JS `{} !== {}` i `(() => {}) !== (() => {})`. Każdy render tworzy nowe obiekty i funkcje, więc dziecko opakowane w `memo`, które dostaje `onClick={() => ...}` albo `style={{...}}`, za każdym razem widzi „zmienione” propsy i memo nic nie daje. `useCallback`/`useMemo` utrzymują tę samą referencję, więc płytkie porównanie przechodzi. To samo dotyczy wartości w zależnościach `useEffect` – nowy obiekt w każdym renderze oznacza ponowne uruchomienie efektu w każdym renderze.",
+        "```jsx\nconst Row = React.memo(function Row({ item, onSelect }) { /* ... */ });\n\nfunction List({ items, query }) {\n  const [selected, setSelected] = useState(null);\n  const visible = useMemo(\n    () => items.filter(i => i.name.includes(query)), [items, query]);\n  const onSelect = useCallback(id => setSelected(id), []);\n  return visible.map(i => <Row key={i.id} item={i} onSelect={onSelect} />);\n}\n```",
+        "Memoizacja nie jest darmowa: React przechowuje poprzednie wartości i porównuje zależności przy każdym renderze, a kod robi się mniej czytelny. `useCallback` bez zmemoizowanego odbiorcy (dziecka w `memo` albo zależności efektu) nic nie daje. Dlatego najpierw zmierz w **React DevTools Profiler** – znajdź komponenty, które renderują się często *i* wolno – i dopiero je memoizuj. Często lepsza jest zmiana struktury: przenieś stan niżej albo przekaż kosztowne części jako `children`, żeby nie były tworzone od nowa.",
+        "**React Compiler** (stabilna wersja 1.0 od końca 2025) analizuje komponenty w czasie budowania i sam wstawia memoizację, dokładniej niż ręcznie pisane hooki. W projektach, które go używają, ręczne `useMemo`/`useCallback` są w większości zbędne – ale nadal trzeba je rozumieć w istniejącym kodzie i tam, gdzie kompilator odpuszcza (np. komponenty łamiące zasady Reacta)."
       ]
     }
   },
@@ -1102,6 +1754,13 @@ const FLASHCARDS = [
         "Index as key breaks on reorder/insert/delete: state and inputs attach to wrong items",
         "Index is OK only for static lists that never change order",
         "Changing a `key` deliberately forces a remount (reset state)"
+      ],
+      more: [
+        "When a component renders a list, React has to match each item of the new render with an item from the previous render to decide what to update, move, create or delete. The **key** is that identity: a string or number unique among siblings. Without keys React matches children by position and warns in the console.",
+        "With a **stable unique ID** (usually the database id), React can see that item `id=42` moved from position 3 to position 0 and simply move its DOM node, keeping its component state: text typed into an input, an expanded/collapsed toggle, focus, a running animation.",
+        "The **array index** as key breaks as soon as items are reordered, or inserted/removed anywhere but the end. Example: a todo list with an uncontrolled `<input>` in each row. You delete the first todo. The item that was at index 1 now has key `0`, so React concludes that item `0` still exists with new props and reuses the first row's DOM and state – the text typed into the deleted row now sits next to a different todo, and it's the last row that disappears. Sorting and prepending cause the same mismatch, plus needless re-renders of every row.",
+        "An index is acceptable only for a static list: never reordered, filtered or inserted into, and with rows that hold no state. Also avoid `Math.random()` or `crypto.randomUUID()` called during render – a new key on every render remounts every row every time (lost state, poor performance). Generate IDs when the data is created, not when it's rendered.",
+        "Keys also work outside lists: changing a component's `key` makes React treat it as a different component, so it unmounts the old one and mounts a fresh one with reset state. Idiomatic example: `<ProfileForm key={userId} userId={userId} />` – switching users gives a clean form without a `useEffect` that manually resets every field."
       ]
     },
     pl: {
@@ -1112,6 +1771,13 @@ const FLASHCARDS = [
         "Indeks psuje się przy zmianie kolejności/wstawianiu/usuwaniu: stan i inputy trafiają do złych elementów",
         "Indeks OK tylko dla statycznych list",
         "Celowa zmiana `key` wymusza ponowne zamontowanie (reset stanu)"
+      ],
+      more: [
+        "Gdy komponent renderuje listę, React musi dopasować każdy element nowego renderu do elementu z poprzedniego, żeby zdecydować, co zaktualizować, przesunąć, utworzyć lub usunąć. **Klucz (`key`)** to właśnie ta tożsamość: string lub liczba unikalna wśród rodzeństwa. Bez kluczy React dopasowuje dzieci po pozycji i ostrzega w konsoli.",
+        "Mając **stabilne unikalne ID** (zwykle id z bazy), React widzi, że element `id=42` przesunął się z pozycji 3 na 0, i po prostu przenosi jego węzeł DOM, zachowując stan komponentu: tekst wpisany w input, rozwinięcie/zwinięcie, fokus, trwającą animację.",
+        "**Indeks tablicy** jako klucz psuje się, gdy tylko zmienia się kolejność albo elementy są wstawiane/usuwane gdziekolwiek poza końcem. Przykład: lista zadań z niekontrolowanym `<input>` w każdym wierszu. Usuwasz pierwsze zadanie. Element, który był pod indeksem 1, ma teraz klucz `0`, więc React uznaje, że element `0` nadal istnieje, tylko z nowymi propsami, i używa ponownie DOM i stanu pierwszego wiersza – tekst wpisany w usunięty wiersz ląduje obok innego zadania, a znika ostatni wiersz. Sortowanie i dodawanie na początek dają to samo pomieszanie plus zbędne rerendery wszystkich wierszy.",
+        "Indeks jest dopuszczalny tylko dla statycznej listy: nigdy nie sortowanej, nie filtrowanej, bez wstawiania, z wierszami bez stanu. Unikaj też `Math.random()` czy `crypto.randomUUID()` wywoływanych w renderze – nowy klucz przy każdym renderze oznacza ponowne montowanie wszystkich wierszy za każdym razem (utrata stanu, słaba wydajność). ID generuj przy tworzeniu danych, nie przy renderowaniu.",
+        "Klucze działają też poza listami: zmiana `key` komponentu sprawia, że React traktuje go jako inny komponent – odmontowuje stary i montuje nowy ze zresetowanym stanem. Idiomatyczny przykład: `<ProfileForm key={userId} userId={userId} />` – przełączenie użytkownika daje czysty formularz bez `useEffect`, który ręcznie resetuje każde pole."
       ]
     }
   },
@@ -1125,6 +1791,13 @@ const FLASHCARDS = [
         "Context: rarely-changing cross-cutting values (theme, auth, locale); every consumer re-renders on change",
         "Store (Zustand/Redux Toolkit): shared, frequently updated client state; selectors limit re-renders",
         "Server data → TanStack Query / RTK Query, not a global store"
+      ],
+      more: [
+        "Choosing where state lives answers two questions: who owns this data, and who needs to update when it changes? Pick the narrowest scope that works – state scoped too broadly causes unnecessary re-renders and tangled dependencies.",
+        "**Local state** is the default: `useState` for simple values, `useReducer` when updates follow several named actions or multiple fields change together. A modal's open flag, a form field, a hover state. When two siblings need the same data, **lift state up**: move it to their nearest common parent and pass it down as props, together with callbacks to change it. The pain this eventually causes is **prop drilling** – passing props through many layers that don't use them.",
+        "**Context** (`createContext` + a provider + `useContext`) removes prop drilling by making a value available to any descendant. But it's a dependency-injection mechanism, not a state manager: when the provider's value changes, **every** consumer re-renders, and there are no selectors to subscribe to just part of it. So it fits values needed widely but changed rarely: theme, locale, the logged-in user, feature flags. Pitfall: `value={{ user, setUser }}` creates a new object on every render, so all consumers re-render – memoise the value or split it into several contexts.",
+        "A **global store** (Zustand, Redux Toolkit, Jotai) lives outside the React tree. Components subscribe through **selectors** – `useCartStore(s => s.items.length)` – and re-render only when the selected slice changes. Use it for client state shared by distant parts of the app and updated often: a cart, editor state, a multi-step wizard, layout preferences. Zustand is minimal (a hook, no provider); Redux Toolkit adds conventions, time-travel devtools and middleware, which helps in large teams.",
+        "**Server state** – data fetched from an API – is a separate category: it's a cached copy of something the backend owns, it goes stale and needs refetching. Putting it in Redux means hand-writing loading flags, caching and invalidation. TanStack Query or RTK Query do that for you. Once server state moves there, most apps discover their remaining global client state is small."
       ]
     },
     pl: {
@@ -1135,6 +1808,13 @@ const FLASHCARDS = [
         "Context: rzadko zmieniane wartości przekrojowe (motyw, auth, język); każdy konsument rerenderuje się przy zmianie",
         "Store (Zustand/Redux Toolkit): współdzielony, często zmieniany stan kliencki; selektory ograniczają rerendery",
         "Dane z serwera → TanStack Query / RTK Query, nie globalny store"
+      ],
+      more: [
+        "Wybór miejsca dla stanu odpowiada na dwa pytania: kto jest właścicielem tych danych i kto musi się zaktualizować, gdy się zmienią? Wybieraj najwęższy zakres, który działa – zbyt szeroko umieszczony stan to zbędne rerendery i splątane zależności.",
+        "**Stan lokalny** to domyślny wybór: `useState` dla prostych wartości, `useReducer`, gdy aktualizacje to kilka nazwanych akcji albo kilka pól zmienia się razem. Flaga otwarcia modala, pole formularza, stan hover. Gdy tych samych danych potrzebuje dwoje rodzeństwa, **podnieś stan (lifting state up)** do najbliższego wspólnego rodzica i przekaż go w dół jako propsy razem z callbackami do zmiany. Z czasem boli **prop drilling** – przekazywanie propsów przez wiele warstw, które ich nie używają.",
+        "**Context** (`createContext` + provider + `useContext`) usuwa prop drilling, udostępniając wartość każdemu potomkowi. To jednak mechanizm wstrzykiwania zależności, a nie menedżer stanu: gdy zmienia się wartość providera, rerenderuje się **każdy** konsument i nie ma selektorów, żeby subskrybować tylko fragment. Pasuje więc do wartości potrzebnych szeroko, ale rzadko zmienianych: motyw, język, zalogowany użytkownik, feature flagi. Pułapka: `value={{ user, setUser }}` tworzy nowy obiekt przy każdym renderze, więc rerenderują się wszyscy konsumenci – zmemoizuj wartość albo podziel ją na kilka contextów.",
+        "**Globalny store** (Zustand, Redux Toolkit, Jotai) żyje poza drzewem Reacta. Komponenty subskrybują przez **selektory** – `useCartStore(s => s.items.length)` – i rerenderują się tylko wtedy, gdy zmieni się wybrany fragment. Nadaje się do stanu klienckiego współdzielonego przez odległe części aplikacji i często zmienianego: koszyk, stan edytora, wieloetapowy kreator, ustawienia layoutu. Zustand jest minimalistyczny (hook, bez providera); Redux Toolkit daje konwencje, devtools z time-travel i middleware, co pomaga w dużych zespołach.",
+        "**Stan serwerowy** – dane pobrane z API – to osobna kategoria: to kopia w cache czegoś, czego właścicielem jest backend, dezaktualizuje się i wymaga ponownego pobrania. Wrzucenie go do Reduxa oznacza ręczne pisanie flag ładowania, cache i invalidacji. TanStack Query lub RTK Query robią to za ciebie. Po przeniesieniu tam stanu serwerowego większość aplikacji odkrywa, że pozostały globalny stan kliencki jest niewielki."
       ]
     }
   },
@@ -1148,6 +1828,13 @@ const FLASHCARDS = [
         "Loading/error states, pagination, infinite queries out of the box",
         "Mutations + invalidation / optimistic updates",
         "Removes most hand-written `useEffect` fetching"
+      ],
+      more: [
+        "**Client state** is owned by the browser: which tab is open, what's typed in a form, a dark-mode toggle. It's synchronous and always correct. **Server state** is a snapshot of data the backend owns: it's fetched asynchronously, other users or processes can change it, several components may need the same data, and your copy starts going **stale** the moment it arrives. Handling it well needs caching, deduplication, refetching and invalidation – a lot of code if done by hand with `useEffect` + `useState`.",
+        "**TanStack Query** (formerly React Query) is a server-state cache. Each query is identified by a **query key**, an array like `['todos', { status: 'open' }]`. Components using the same key share one cache entry and one in-flight request (**deduplication**). Key knobs:\n- `staleTime`: how long data counts as fresh (default 0); fresh data is served without refetching.\n- `gcTime`: how long unused data stays in memory (default 5 min).\n- **Background refetch**: stale data is shown instantly while a refetch runs on mount, window focus or reconnect (stale-while-revalidate).\n- **Retries** with exponential backoff on failure (3 by default).",
+        "```tsx\nconst { data, isPending, isError } = useQuery({\n  queryKey: ['todos', status],\n  queryFn: () => api.getTodos(status),\n  staleTime: 30_000,\n});\n\nconst qc = useQueryClient();\nconst addTodo = useMutation({\n  mutationFn: api.createTodo,\n  onSuccess: () => qc.invalidateQueries({ queryKey: ['todos'] }),\n});\n```",
+        "**Mutations** change server data. After success you **invalidate** related keys (they get marked stale and refetched) or write the new data straight into the cache. An **optimistic update** changes the cache before the server answers – a like counter increments instantly – and rolls back in `onError` if the request fails. Built-in `isPending`/`isError` flags, `placeholderData` for smooth pagination and `useInfiniteQuery` for \"load more\" lists remove more boilerplate.",
+        "What it replaces: hand-written `useEffect` fetching, which usually lacks cancellation of stale responses, caching between screens, deduplication and refetch-on-focus. Interview nuance: TanStack Query isn't a general state manager – UI/client state stays in `useState` or Zustand. In the Next.js App Router much fetching moves into Server Components, but TanStack Query remains common for interactive client-side data."
       ]
     },
     pl: {
@@ -1158,6 +1845,13 @@ const FLASHCARDS = [
         "Stany ładowania/błędu, paginacja, infinite queries od ręki",
         "Mutacje + invalidacja / optimistic updates",
         "Eliminuje większość ręcznego fetchowania w `useEffect`"
+      ],
+      more: [
+        "**Stan kliencki** należy do przeglądarki: która zakładka jest otwarta, co wpisano w formularz, przełącznik trybu ciemnego. Jest synchroniczny i zawsze aktualny. **Stan serwerowy** to migawka danych, których właścicielem jest backend: pobierany asynchronicznie, mogą go zmieniać inni użytkownicy lub procesy, potrzebuje go kilka komponentów naraz, a twoja kopia zaczyna się **dezaktualizować** w chwili, gdy dotrze. Dobra obsługa wymaga cache, deduplikacji, ponownego pobierania i invalidacji – sporo kodu, jeśli pisać to ręcznie przez `useEffect` + `useState`.",
+        "**TanStack Query** (dawniej React Query) to cache stanu serwerowego. Każde zapytanie identyfikuje **klucz zapytania (query key)** – tablica typu `['todos', { status: 'open' }]`. Komponenty z tym samym kluczem współdzielą jeden wpis w cache i jedno trwające zapytanie (**deduplikacja**). Najważniejsze ustawienia:\n- `staleTime`: jak długo dane są świeże (domyślnie 0); świeże dane są serwowane bez ponownego pobrania.\n- `gcTime`: jak długo nieużywane dane zostają w pamięci (domyślnie 5 min).\n- **Odświeżanie w tle**: nieaktualne dane pokazywane są od razu, a w tle leci refetch przy montowaniu, powrocie fokusu do okna lub odzyskaniu sieci (stale-while-revalidate).\n- **Ponowienia** z wykładniczym backoffem przy błędzie (domyślnie 3).",
+        "```tsx\nconst { data, isPending, isError } = useQuery({\n  queryKey: ['todos', status],\n  queryFn: () => api.getTodos(status),\n  staleTime: 30_000,\n});\n\nconst qc = useQueryClient();\nconst addTodo = useMutation({\n  mutationFn: api.createTodo,\n  onSuccess: () => qc.invalidateQueries({ queryKey: ['todos'] }),\n});\n```",
+        "**Mutacje** zmieniają dane na serwerze. Po sukcesie **invalidujesz** powiązane klucze (zostają oznaczone jako nieaktualne i pobrane ponownie) albo wpisujesz nowe dane prosto do cache. **Optimistic update** zmienia cache, zanim serwer odpowie – licznik polubień rośnie natychmiast – i wycofuje zmianę w `onError`, jeśli zapytanie się nie powiedzie. Wbudowane flagi `isPending`/`isError`, `placeholderData` do płynnej paginacji i `useInfiniteQuery` do list „załaduj więcej” usuwają kolejny boilerplate.",
+        "Co zastępuje: ręczne fetchowanie w `useEffect`, któremu zwykle brakuje anulowania nieaktualnych odpowiedzi, cache między ekranami, deduplikacji i odświeżania po powrocie fokusu. Niuans na rozmowę: TanStack Query nie jest ogólnym menedżerem stanu – stan UI/kliencki zostaje w `useState` lub Zustand. W Next.js App Router dużo pobierania przechodzi do Server Components, ale TanStack Query wciąż jest popularny dla interaktywnych danych po stronie klienta."
       ]
     }
   },
@@ -1170,6 +1864,14 @@ const FLASHCARDS = [
         "Uncontrolled: DOM keeps the value, read via `ref` / `FormData` / `defaultValue`",
         "Controlled: instant validation, conditional UI; costs a re-render per keystroke",
         "Large forms: React Hook Form (uncontrolled under the hood) + Zod schema"
+      ],
+      more: [
+        "Form elements like `<input>` naturally keep their own value inside the DOM. React offers two ways to deal with that. In a **controlled** component the value is driven by React state: you pass `value` and update the state in `onChange`. React state is the **single source of truth** – the DOM always shows exactly what the state says. In an **uncontrolled** component the DOM keeps the value; you only set the initial `defaultValue` and read the current value when you need it, through a `ref` or from the form's `FormData` on submit.",
+        "```jsx\n// Controlled\nconst [email, setEmail] = useState('');\n<input value={email} onChange={e => setEmail(e.target.value)} />\n\n// Uncontrolled\n<form onSubmit={e => {\n  e.preventDefault();\n  const email = new FormData(e.currentTarget).get('email');\n}}>\n  <input name=\"email\" defaultValue=\"\" />\n</form>\n```",
+        "Controlled pros: because each change goes through state and triggers a render, you can validate on every keystroke, transform input (masks, uppercase), disable the submit button until the form is valid, or show fields conditionally. The cost is a re-render of the component (and its children) on every keystroke – in a large form kept in one parent's state this becomes visible typing lag.",
+        "Uncontrolled pros: less code and no re-renders while typing; it's also the only option for `<input type=\"file\">`, whose value is read-only. The downside is that reacting to changes live is harder. React 19 strengthens this path: `<form action={fn}>` passes `FormData` straight to your function, and `useActionState` tracks pending and error state.",
+        "Pitfalls: switching modes – `value={undefined}` on one render and a string on the next – triggers the \"changing an uncontrolled input to be controlled\" warning, so initialise with `''`, not `undefined`. And `value` without `onChange` produces a field the user can't type into.",
+        "For large forms, **React Hook Form** registers inputs as uncontrolled (via refs), so typing doesn't re-render the whole form, while still giving you validation, error messages and dirty/touched tracking. Combined with **Zod** (a TypeScript-first schema library) through `zodResolver`, one schema defines both the validation rules and the TypeScript type of the form data – and the same schema can validate the request on the backend."
       ]
     },
     pl: {
@@ -1179,6 +1881,14 @@ const FLASHCARDS = [
         "Niekontrolowane: wartość trzyma DOM, odczyt przez `ref` / `FormData` / `defaultValue`",
         "Kontrolowane: natychmiastowa walidacja, warunkowe UI; kosztem rerenderu przy każdym znaku",
         "Duże formularze: React Hook Form (pod spodem niekontrolowany) + schemat Zod"
+      ],
+      more: [
+        "Elementy formularza, takie jak `<input>`, naturalnie trzymają swoją wartość w DOM. React daje dwa sposoby, żeby sobie z tym radzić. W komponencie **kontrolowanym** wartość wynika ze stanu Reacta: przekazujesz `value` i aktualizujesz stan w `onChange`. Stan Reacta jest **jedynym źródłem prawdy** – DOM zawsze pokazuje dokładnie to, co jest w stanie. W komponencie **niekontrolowanym** wartość trzyma DOM; ustawiasz tylko początkowe `defaultValue` i odczytujesz bieżącą wartość, kiedy jej potrzebujesz – przez `ref` albo z `FormData` formularza przy wysyłce.",
+        "```jsx\n// Kontrolowany\nconst [email, setEmail] = useState('');\n<input value={email} onChange={e => setEmail(e.target.value)} />\n\n// Niekontrolowany\n<form onSubmit={e => {\n  e.preventDefault();\n  const email = new FormData(e.currentTarget).get('email');\n}}>\n  <input name=\"email\" defaultValue=\"\" />\n</form>\n```",
+        "Zalety kontrolowanych: skoro każda zmiana przechodzi przez stan i wywołuje render, możesz walidować przy każdym znaku, przekształcać wpis (maski, wielkie litery), blokować przycisk wysyłki do czasu poprawnego wypełnienia albo warunkowo pokazywać pola. Kosztem jest rerender komponentu (i jego dzieci) przy każdym naciśnięciu klawisza – w dużym formularzu trzymanym w stanie jednego rodzica widać to jako opóźnienie przy pisaniu.",
+        "Zalety niekontrolowanych: mniej kodu i brak rerenderów podczas pisania; to też jedyna opcja dla `<input type=\"file\">`, którego wartość jest tylko do odczytu. Minus: trudniej reagować na zmiany na bieżąco. React 19 wzmacnia to podejście: `<form action={fn}>` przekazuje `FormData` wprost do funkcji, a `useActionState` śledzi stan oczekiwania i błędów.",
+        "Pułapki: zmiana trybu – `value={undefined}` w jednym renderze i string w następnym – daje ostrzeżenie „changing an uncontrolled input to be controlled”, więc inicjalizuj `''`, a nie `undefined`. A `value` bez `onChange` daje pole, w którym użytkownik nie może pisać.",
+        "Przy dużych formularzach **React Hook Form** rejestruje inputy jako niekontrolowane (przez refy), więc pisanie nie rerenderuje całego formularza, a mimo to dostajesz walidację, komunikaty błędów i śledzenie dirty/touched. W połączeniu z **Zod** (biblioteką schematów pisaną z myślą o TypeScripcie) przez `zodResolver` jeden schemat definiuje zarówno reguły walidacji, jak i typ TypeScript danych formularza – a ten sam schemat może walidować żądanie na backendzie."
       ]
     }
   },
@@ -1191,6 +1901,13 @@ const FLASHCARDS = [
         "Class component with `getDerivedStateFromError` / `componentDidCatch` (or `react-error-boundary`)",
         "Do not catch: event handlers, async code, SSR, errors in the boundary itself",
         "Place around routes/widgets; report to Sentry in `componentDidCatch`"
+      ],
+      more: [
+        "By default, if any component throws while rendering, React unmounts the **whole** app tree – the user sees a blank page – because a half-broken UI is considered worse than none. An **error boundary** is a component that catches errors thrown while rendering its descendants (including their lifecycle methods and constructors) and renders a **fallback UI** instead. Think of it as a `try/catch` for a part of the component tree.",
+        "There is still no hook for this: a boundary must be a **class component** implementing one or both of:\n- `static getDerivedStateFromError(error)` – called during render; returns state that switches to the fallback.\n- `componentDidCatch(error, info)` – called at commit; for side effects such as logging. `info.componentStack` shows which component failed.\nIn practice most teams use the `react-error-boundary` package, which wraps this in an `<ErrorBoundary>` component with `FallbackComponent`, `onError` and a `resetErrorBoundary` function for a \"Try again\" button.",
+        "```jsx\n<ErrorBoundary\n  FallbackComponent={({ error, resetErrorBoundary }) => (\n    <div role=\"alert\">Chart failed. <button onClick={resetErrorBoundary}>Retry</button></div>\n  )}\n  onError={(error, info) => Sentry.captureException(error, { extra: info })}\n>\n  <RevenueChart />\n</ErrorBoundary>\n```",
+        "What boundaries **don't** catch, and why – they only see errors thrown while React itself is rendering:\n- **Event handlers** run outside rendering; use an ordinary `try/catch`.\n- **Async code** (`setTimeout`, promise callbacks, `fetch`) throws after rendering has finished. Workaround: catch it, store it in state and rethrow during render – `useErrorBoundary().showBoundary(error)` from react-error-boundary does exactly that, as does TanStack Query's `throwOnError`.\n- **Server-side rendering** errors.\n- Errors in the boundary itself – they bubble up to the next boundary above.",
+        "Placement is a design decision: one top-level boundary as a last resort, plus granular ones around routes and independent widgets, so a crashing chart doesn't take down the whole dashboard. Report errors to a monitoring tool such as Sentry from `componentDidCatch`/`onError`. React 19 also added root-level `onCaughtError` and `onUncaughtError` options on `createRoot` for global reporting."
       ]
     },
     pl: {
@@ -1200,6 +1917,13 @@ const FLASHCARDS = [
         "Komponent klasowy z `getDerivedStateFromError` / `componentDidCatch` (lub `react-error-boundary`)",
         "Nie łapią: handlerów zdarzeń, kodu asynchronicznego, SSR, błędów samej granicy",
         "Wokół tras/widżetów; raportowanie do Sentry w `componentDidCatch`"
+      ],
+      more: [
+        "Domyślnie, jeśli jakikolwiek komponent rzuci wyjątek w trakcie renderowania, React odmontowuje **całe** drzewo aplikacji – użytkownik widzi pustą stronę – bo częściowo zepsute UI uznaje się za gorsze niż żadne. **Error boundary** (granica błędu) to komponent, który łapie błędy rzucone podczas renderowania jego potomków (także w ich metodach cyklu życia i konstruktorach) i zamiast nich renderuje **UI zastępcze (fallback)**. To jakby `try/catch` dla fragmentu drzewa komponentów.",
+        "Nadal nie ma do tego hooka: granica musi być **komponentem klasowym** z jedną lub obiema metodami:\n- `static getDerivedStateFromError(error)` – wywoływana w fazie render; zwraca stan przełączający na fallback.\n- `componentDidCatch(error, info)` – wywoływana w fazie commit; do efektów ubocznych, np. logowania. `info.componentStack` pokazuje, który komponent zawiódł.\nW praktyce większość zespołów używa pakietu `react-error-boundary`, który opakowuje to w komponent `<ErrorBoundary>` z `FallbackComponent`, `onError` i funkcją `resetErrorBoundary` pod przycisk „Spróbuj ponownie”.",
+        "```jsx\n<ErrorBoundary\n  FallbackComponent={({ error, resetErrorBoundary }) => (\n    <div role=\"alert\">Chart failed. <button onClick={resetErrorBoundary}>Retry</button></div>\n  )}\n  onError={(error, info) => Sentry.captureException(error, { extra: info })}\n>\n  <RevenueChart />\n</ErrorBoundary>\n```",
+        "Czego granice **nie** łapią i dlaczego – widzą tylko błędy rzucone w trakcie renderowania przez Reacta:\n- **Handlery zdarzeń** działają poza renderem; użyj zwykłego `try/catch`.\n- **Kod asynchroniczny** (`setTimeout`, callbacki promise’ów, `fetch`) rzuca już po zakończeniu renderu. Obejście: złap błąd, zapisz w stanie i rzuć ponownie w renderze – dokładnie to robi `useErrorBoundary().showBoundary(error)` z react-error-boundary, a także opcja `throwOnError` w TanStack Query.\n- Błędy **renderowania po stronie serwera (SSR)**.\n- Błędy samej granicy – przechodzą do następnej granicy wyżej.",
+        "Rozmieszczenie to decyzja projektowa: jedna granica na samej górze jako ostatnia deska ratunku plus bardziej szczegółowe wokół tras i niezależnych widżetów, żeby wysypany wykres nie kładł całego dashboardu. Błędy raportuj do narzędzia monitorującego, np. Sentry, w `componentDidCatch`/`onError`. React 19 dodał też opcje `onCaughtError` i `onUncaughtError` w `createRoot` do globalnego raportowania."
       ]
     }
   },
@@ -1212,6 +1936,13 @@ const FLASHCARDS = [
         "Name starts with `use`; follows the rules of hooks",
         "Each call has its own independent state",
         "Small, clear return value; testable with `renderHook`"
+      ],
+      more: [
+        "A **custom hook** is a plain JavaScript function whose name starts with `use` and which calls other hooks. It's React's mechanism for sharing **stateful logic** between components – the job that mixins and higher-order components did awkwardly before hooks. Typical examples: `useDebounce(value, ms)`, `useMediaQuery('(max-width: 600px)')`, `useAuth()`, `useLocalStorage(key)`, `useOnlineStatus()`.",
+        "It shares **logic, not state**. Every component that calls `useDebounce` gets its **own independent state**, because hook state is stored per component instance – calling a custom hook is equivalent to pasting its body into the component. To share the same data between components you still need lifted state, context or a store; a hook can wrap those (e.g. `useAuth` reading an `AuthContext`). A hook returns data and functions, not JSX – if it returns markup, it should be a component.",
+        "```ts\nfunction useDebounce<T>(value: T, delay = 300): T {\n  const [debounced, setDebounced] = useState(value);\n  useEffect(() => {\n    const t = setTimeout(() => setDebounced(value), delay);\n    return () => clearTimeout(t);\n  }, [value, delay]);\n  return debounced;\n}\n// const q = useDebounce(searchText); → fetch only after the user stops typing\n```",
+        "The `use` prefix isn't cosmetic: it tells readers and `eslint-plugin-react-hooks` that the function calls hooks, so the rules of hooks are checked inside it and at every call site. Conversely, don't prefix a function with `use` if it calls no hooks – it's then just a utility function.",
+        "Signs of a good hook:\n- One clear purpose, named after what it provides (`useCart`, not `useStuff`).\n- A small return value: a single value, a tuple like `useState`'s `[value, setValue]` (easy to rename), or an object when there are many fields.\n- Returned functions have stable identity (`useCallback`), so consumers can safely use them in dependency arrays.\n- It cleans up everything it sets up (listeners, timers, subscriptions).\n- It's tested in isolation with `renderHook` from React Testing Library, wrapping updates in `act()`."
       ]
     },
     pl: {
@@ -1221,6 +1952,13 @@ const FLASHCARDS = [
         "Nazwa zaczyna się od `use`; przestrzega zasad hooków",
         "Każde wywołanie ma własny, niezależny stan",
         "Mała, czytelna wartość zwracana; testowalny przez `renderHook`"
+      ],
+      more: [
+        "**Własny hook (custom hook)** to zwykła funkcja JavaScript, której nazwa zaczyna się od `use` i która wywołuje inne hooki. To mechanizm Reacta do współdzielenia **logiki ze stanem** między komponentami – zadanie, które przed hookami niezgrabnie realizowały mixiny i komponenty wyższego rzędu (HOC). Typowe przykłady: `useDebounce(value, ms)`, `useMediaQuery('(max-width: 600px)')`, `useAuth()`, `useLocalStorage(key)`, `useOnlineStatus()`.",
+        "Hook współdzieli **logikę, a nie stan**. Każdy komponent wywołujący `useDebounce` dostaje **własny, niezależny stan**, bo stan hooków jest przechowywany per instancja komponentu – wywołanie własnego hooka jest równoważne wklejeniu jego ciała do komponentu. Żeby dzielić te same dane między komponentami, nadal potrzebujesz podniesionego stanu, contextu albo store’a; hook może je opakować (np. `useAuth` czytający `AuthContext`). Hook zwraca dane i funkcje, nie JSX – jeśli zwraca markup, powinien być komponentem.",
+        "```ts\nfunction useDebounce<T>(value: T, delay = 300): T {\n  const [debounced, setDebounced] = useState(value);\n  useEffect(() => {\n    const t = setTimeout(() => setDebounced(value), delay);\n    return () => clearTimeout(t);\n  }, [value, delay]);\n  return debounced;\n}\n// const q = useDebounce(searchText); → fetch dopiero, gdy użytkownik przestanie pisać\n```",
+        "Prefiks `use` nie jest kosmetyką: mówi czytelnikom i `eslint-plugin-react-hooks`, że funkcja wywołuje hooki, więc zasady hooków są sprawdzane w jej wnętrzu i w każdym miejscu wywołania. I odwrotnie: nie dawaj prefiksu `use` funkcji, która nie wywołuje hooków – to wtedy zwykła funkcja pomocnicza.",
+        "Cechy dobrego hooka:\n- Jeden jasny cel, nazwa mówi, co dostarcza (`useCart`, a nie `useStuff`).\n- Mała wartość zwracana: pojedyncza wartość, krotka jak w `useState` – `[value, setValue]` (łatwo zmienić nazwy) – albo obiekt, gdy pól jest dużo.\n- Zwracane funkcje mają stabilną tożsamość (`useCallback`), więc konsumenci mogą bezpiecznie wpisywać je do tablic zależności.\n- Sprząta wszystko, co założył (listenery, timery, subskrypcje).\n- Jest testowany w izolacji przez `renderHook` z React Testing Library, z aktualizacjami opakowanymi w `act()`."
       ]
     }
   },
@@ -1235,6 +1973,13 @@ const FLASHCARDS = [
         "`computed` ≈ `useMemo` (or just compute in render); `watch` ≈ `useEffect`",
         "`v-model` ≈ controlled input; slots ≈ `children`/render props; Pinia ≈ Zustand",
         "Concepts transfer: components, props down / events up, composables ≈ custom hooks"
+      ],
+      more: [
+        "Both are component-based, declarative UI libraries, so most architectural skills transfer. The deepest difference is the **reactivity model**. Vue wraps state in JavaScript **Proxies** (`ref`, `reactive`): when a template or `computed` reads a property, Vue records the dependency, and when the property is written Vue re-runs exactly the effects that depend on it – **fine-grained reactivity**. React tracks nothing: calling a state setter schedules a re-run of the whole component function (and, by default, its children), then the virtual DOM diff finds what changed. In React, \"reactivity\" means \"run the function again\".",
+        "That changes how you update state. In Vue you mutate: `todos.value.push(t)`. In React you must create a **new** object or array – `setTodos([...todos, t])` – because React detects changes by reference (`Object.is`). Mutating in place and calling `setTodos(todos)` does nothing: same reference, no re-render. Immer lets you write mutation-style code that produces immutable copies (Redux Toolkit uses it internally).",
+        "Templates vs JSX: Vue templates use directives (`v-if`, `v-for`, `v-bind`, `v-on`) compiled by Vue. React uses **JSX**, which is just JavaScript expressions: `{items.map(i => <Item key={i.id} />)}` instead of `v-for`, `cond ? <A /> : <B />` or `cond && <A />` instead of `v-if`. Also, the whole component body runs on every render, so plain local variables are recalculated each time – unlike Vue's `setup()`, which runs once per component instance.",
+        "Rough mapping:\n- `computed` ≈ just compute in the render body; `useMemo` if it's expensive.\n- `watch`/`watchEffect` ≈ `useEffect`, but dependencies are listed by hand and it runs after paint.\n- `v-model` ≈ controlled input: `value` + `onChange`.\n- Default slot ≈ `children`; named/scoped slots ≈ props that take JSX or render functions.\n- `emit('save')` ≈ a callback prop `onSave`.\n- `provide`/`inject` ≈ Context; Pinia ≈ Zustand; Nuxt ≈ Next.js.\n- Composables ≈ custom hooks – but hooks must follow the rules of hooks (fixed call order), composables don't.",
+        "The nuance worth mentioning in an interview: the typical mistakes Vue developers make in React are **stale closures** (a handler or effect captures values from the render it was created in), incomplete dependency arrays, and unnecessary re-renders – none of which exist in Vue's model. Naming these shows you understand the difference in mental model, not just the syntax."
       ]
     },
     pl: {
@@ -1246,6 +1991,13 @@ const FLASHCARDS = [
         "`computed` ≈ `useMemo` (lub liczenie w renderze); `watch` ≈ `useEffect`",
         "`v-model` ≈ kontrolowany input; sloty ≈ `children`/render props; Pinia ≈ Zustand",
         "Koncepcje się przenoszą: komponenty, props w dół / eventy w górę, composables ≈ własne hooki"
+      ],
+      more: [
+        "Oba to komponentowe, deklaratywne biblioteki UI, więc większość umiejętności architektonicznych się przenosi. Najgłębsza różnica to **model reaktywności**. Vue opakowuje stan w **Proxy** JavaScriptu (`ref`, `reactive`): gdy szablon albo `computed` czyta właściwość, Vue zapisuje zależność, a gdy właściwość jest zapisywana, uruchamia ponownie dokładnie te efekty, które od niej zależą – to **precyzyjna (fine-grained) reaktywność**. React niczego nie śledzi: wywołanie settera stanu planuje ponowne wykonanie całej funkcji komponentu (i domyślnie jego dzieci), a porównanie wirtualnego DOM ustala, co się zmieniło. W React „reaktywność” znaczy „uruchom funkcję jeszcze raz”.",
+        "To zmienia sposób aktualizacji stanu. W Vue mutujesz: `todos.value.push(t)`. W React musisz utworzyć **nowy** obiekt lub tablicę – `setTodos([...todos, t])` – bo React wykrywa zmiany po referencji (`Object.is`). Zmutowanie w miejscu i wywołanie `setTodos(todos)` nic nie da: ta sama referencja, brak rerenderu. Immer pozwala pisać kod w stylu mutacji, który produkuje niemutowalne kopie (Redux Toolkit używa go pod spodem).",
+        "Szablony vs JSX: szablony Vue używają dyrektyw (`v-if`, `v-for`, `v-bind`, `v-on`) kompilowanych przez Vue. React używa **JSX**, czyli zwykłych wyrażeń JavaScript: `{items.map(i => <Item key={i.id} />)}` zamiast `v-for`, `cond ? <A /> : <B />` lub `cond && <A />` zamiast `v-if`. Poza tym całe ciało komponentu wykonuje się przy każdym renderze, więc zwykłe zmienne lokalne są liczone od nowa – inaczej niż w `setup()` w Vue, które działa raz na instancję komponentu.",
+        "Przybliżone odpowiedniki:\n- `computed` ≈ po prostu licz w ciele renderu; `useMemo`, jeśli to kosztowne.\n- `watch`/`watchEffect` ≈ `useEffect`, ale zależności wypisujesz ręcznie i efekt działa po wyrysowaniu.\n- `v-model` ≈ kontrolowany input: `value` + `onChange`.\n- Domyślny slot ≈ `children`; sloty nazwane/scoped ≈ propsy przyjmujące JSX albo render functions.\n- `emit('save')` ≈ callback w propsie `onSave`.\n- `provide`/`inject` ≈ Context; Pinia ≈ Zustand; Nuxt ≈ Next.js.\n- Composables ≈ własne hooki – ale hooki muszą przestrzegać zasad hooków (stała kolejność wywołań), composables nie.",
+        "Niuans warty wspomnienia na rozmowie: typowe błędy programistów Vue w React to **nieaktualne domknięcia (stale closures)** – handler lub efekt łapie wartości z renderu, w którym powstał – niepełne tablice zależności i zbędne rerendery. Żaden z tych problemów nie istnieje w modelu Vue. Nazwanie ich pokazuje, że rozumiesz różnicę w modelu myślenia, a nie tylko w składni."
       ]
     }
   },
@@ -1280,6 +2032,13 @@ const FLASHCARDS = [
         "`useDeferredValue`: lagging copy of a value for expensive children",
         "`Suspense`: declarative loading fallback for lazy components and data (framework/Query support)",
         "`React.lazy` + `Suspense` → code splitting"
+      ],
+      more: [
+        "Before React 18, rendering was **synchronous**: once React started rendering an update, it ran to completion and blocked the main thread, so rendering a 5,000-row filtered list could freeze typing for hundreds of milliseconds. **Concurrent rendering** (enabled by `createRoot` in React 18+) makes rendering **interruptible**: React works in small units, yields to the browser regularly, and can pause, abandon or restart a render when a more urgent update arrives. It's not multithreading – still one JS thread – it's cooperative scheduling with **priorities**.",
+        "**Urgent** updates – typing, clicking, pressing – must show immediately. **Non-urgent** ones – rendering search results, switching tabs – may lag a little. `startTransition` / `useTransition` mark an update as a **transition** (low priority). If a new keystroke arrives while a transition is rendering, React throws away the outdated work and starts again, so the input never stutters. `useTransition` also returns `isPending` for a subtle loading hint.",
+        "```jsx\nconst [text, setText] = useState('');\nconst [query, setQuery] = useState('');\nconst [isPending, startTransition] = useTransition();\n\nfunction onChange(e) {\n  setText(e.target.value);                         // urgent: input updates now\n  startTransition(() => setQuery(e.target.value)); // non-urgent: big list later\n}\n// <input value={text} onChange={onChange} /> {isPending && <Spinner />}\n// <BigList query={query} />\n```",
+        "`useDeferredValue(value)` applies the same idea when you don't own the state setter (for example the value arrives as a prop): it returns a copy that **lags behind** – React first re-renders with the old value, then renders the new one in the background at low priority. Pass it to an expensive child wrapped in `memo` so the urgent render can skip it.",
+        "**Suspense** is a declarative way to show loading UI: `<Suspense fallback={<Spinner />}>` shows the fallback while any child **suspends**, i.e. isn't ready to render yet. What can suspend: components loaded with `React.lazy(() => import('./Chart'))` – **code splitting**, the chunk downloads only on first render – and data from Suspense-enabled sources: TanStack Query's `useSuspenseQuery`, Next.js Server Components, React 19's `use(promise)`. Plain `useEffect` fetching doesn't trigger Suspense. Combined with transitions, React keeps showing the current UI instead of flipping back to the fallback during navigation."
       ]
     },
     pl: {
@@ -1290,6 +2049,13 @@ const FLASHCARDS = [
         "`useDeferredValue`: opóźniona kopia wartości dla kosztownych dzieci",
         "`Suspense`: deklaratywny fallback ładowania dla leniwych komponentów i danych (wsparcie frameworka/Query)",
         "`React.lazy` + `Suspense` → code splitting"
+      ],
+      more: [
+        "Przed Reactem 18 renderowanie było **synchroniczne**: gdy React zaczął renderować aktualizację, szedł do końca i blokował główny wątek, więc renderowanie przefiltrowanej listy 5000 wierszy mogło zamrozić pisanie na setki milisekund. **Renderowanie współbieżne (concurrent rendering)**, włączane przez `createRoot` w React 18+, sprawia, że render można **przerwać**: React pracuje małymi porcjami, regularnie oddaje sterowanie przeglądarce i może wstrzymać, porzucić albo zacząć od nowa render, gdy przyjdzie pilniejsza aktualizacja. To nie wielowątkowość – nadal jest jeden wątek JS – tylko kooperacyjne planowanie z **priorytetami**.",
+        "Aktualizacje **pilne** – pisanie, kliknięcia, naciśnięcia – muszą być widoczne natychmiast. **Niepilne** – renderowanie wyników wyszukiwania, przełączanie zakładek – mogą się chwilę spóźnić. `startTransition` / `useTransition` oznaczają aktualizację jako **transition** (niski priorytet). Jeśli podczas renderowania transition przyjdzie nowe naciśnięcie klawisza, React wyrzuca nieaktualną pracę i zaczyna od nowa, więc input nigdy się nie zacina. `useTransition` zwraca też `isPending` do delikatnego wskaźnika ładowania.",
+        "```jsx\nconst [text, setText] = useState('');\nconst [query, setQuery] = useState('');\nconst [isPending, startTransition] = useTransition();\n\nfunction onChange(e) {\n  setText(e.target.value);                         // pilne: input od razu\n  startTransition(() => setQuery(e.target.value)); // niepilne: duża lista później\n}\n// <input value={text} onChange={onChange} /> {isPending && <Spinner />}\n// <BigList query={query} />\n```",
+        "`useDeferredValue(value)` to ten sam pomysł, gdy nie masz dostępu do settera stanu (np. wartość przychodzi w propsie): zwraca kopię, która **pozostaje w tyle** – React najpierw renderuje ze starą wartością, a nową renderuje w tle z niskim priorytetem. Przekaż ją do kosztownego dziecka opakowanego w `memo`, żeby pilny render mógł je pominąć.",
+        "**Suspense** to deklaratywny sposób na UI ładowania: `<Suspense fallback={<Spinner />}>` pokazuje fallback, dopóki któreś dziecko jest **zawieszone (suspends)**, czyli jeszcze nie jest gotowe do renderu. Co może zawiesić: komponenty ładowane przez `React.lazy(() => import('./Chart'))` – **code splitting**, chunk pobiera się dopiero przy pierwszym renderze – oraz dane ze źródeł wspierających Suspense: `useSuspenseQuery` z TanStack Query, Server Components w Next.js, `use(promise)` z Reacta 19. Zwykłe fetchowanie w `useEffect` nie uruchamia Suspense. W połączeniu z transitions React podczas nawigacji dalej pokazuje bieżące UI, zamiast wracać do fallbacku."
       ]
     }
   },
@@ -1304,6 +2070,13 @@ const FLASHCARDS = [
         "Next.js App Router: React Server Components – server-only components, less JS shipped",
         "Nuxt = same idea for Vue (SSR/SSG, file routing, server routes)",
         "Cost: server infra, hydration mismatches, caching complexity"
+      ],
+      more: [
+        "Where the HTML gets produced determines speed, SEO and cost:\n- **CSR (client-side rendering, SPA)**: the server sends a nearly empty HTML shell and a JS bundle; the browser downloads and runs the JS, fetches data, then renders. Hosting is just static files, but users stare at a blank screen or skeleton until JS runs, and crawlers and link previews may see little content.\n- **SSR (server-side rendering)**: for each request the server runs the components, fetches data and returns complete HTML. Content appears fast (good LCP) and crawlers get real HTML. Then comes **hydration**: the browser loads the same JS and React attaches event handlers to the existing HTML, making it interactive.\n- **SSG (static site generation)**: HTML is generated at build time and served from a CDN – fastest and cheapest, but only as fresh as the last build. **ISR (incremental static regeneration)** re-generates a page in the background after a time interval or on demand (e.g. when a CMS publishes).",
+        "Choose per page: marketing pages, docs, blogs → SSG/ISR; product pages and frequently changing or personalised public content → SSR; logged-in dashboards where SEO doesn't matter → CSR is fine. **Next.js** (React) and **Nuxt** (Vue) are meta-frameworks that let you mix these strategies per route, and add file-based routing, server/API routes, image optimisation and bundling.",
+        "The Next.js **App Router** is built on **React Server Components (RSC)**. Components are server components by default: they run only on the server (or at build time), can `await` data straight from a database or API, and send their rendered result – not their code – to the browser, so their dependencies (ORM, Markdown parser) never enter the JS bundle. Interactive parts are marked `'use client'` and hydrate as usual. RSC is not the same as SSR: SSR also renders client components to HTML; RSC decides which code ever ships to the browser.",
+        "```tsx\n// app/products/[id]/page.tsx – a Server Component (the default)\nexport default async function Page({ params }: { params: Promise<{ id: string }> }) {\n  const { id } = await params;\n  const product = await db.product.findUnique({ where: { id } });\n  return <><h1>{product.name}</h1><AddToCart id={id} /></>;\n}\n// AddToCart.tsx starts with 'use client' – it has state and onClick\n```",
+        "Costs: you run a Node server (or serverless/edge functions) instead of static hosting. **Hydration mismatches** happen when server and client render different output – `Date.now()`, `Math.random()`, `typeof window` checks, locale-dependent formatting – causing warnings and UI flicker. And caching becomes multi-layered (CDN, framework data cache, revalidation rules), a frequent source of \"why is my data stale?\" bugs."
       ]
     },
     pl: {
@@ -1315,6 +2088,13 @@ const FLASHCARDS = [
         "Next.js App Router: React Server Components – komponenty tylko na serwerze, mniej JS",
         "Nuxt = to samo dla Vue (SSR/SSG, routing plikowy, trasy serwerowe)",
         "Koszt: infrastruktura serwera, niezgodności hydracji, złożoność cache"
+      ],
+      more: [
+        "To, gdzie powstaje HTML, decyduje o szybkości, SEO i kosztach:\n- **CSR (renderowanie po stronie klienta, SPA)**: serwer wysyła prawie pusty szkielet HTML i bundle JS; przeglądarka pobiera i wykonuje JS, pobiera dane, a potem renderuje. Hosting to tylko pliki statyczne, ale użytkownik patrzy na pusty ekran lub szkielet, dopóki JS się nie wykona, a crawlery i podglądy linków mogą widzieć niewiele treści.\n- **SSR (renderowanie po stronie serwera)**: przy każdym żądaniu serwer uruchamia komponenty, pobiera dane i zwraca kompletny HTML. Treść pojawia się szybko (dobre LCP), crawlery dostają prawdziwy HTML. Potem następuje **hydracja**: przeglądarka ładuje ten sam JS, a React podpina handlery zdarzeń do istniejącego HTML, czyniąc go interaktywnym.\n- **SSG (generowanie statyczne)**: HTML powstaje przy buildzie i jest serwowany z CDN – najszybciej i najtaniej, ale tylko tak świeży jak ostatni build. **ISR (incremental static regeneration)** regeneruje stronę w tle po upływie czasu lub na żądanie (np. po publikacji w CMS).",
+        "Wybór per strona: strony marketingowe, dokumentacja, blog → SSG/ISR; strony produktów i często zmieniane lub personalizowane treści publiczne → SSR; dashboardy za logowaniem, gdzie SEO nie ma znaczenia → CSR wystarczy. **Next.js** (React) i **Nuxt** (Vue) to meta-frameworki, które pozwalają mieszać te strategie per trasa i dokładają routing plikowy, trasy serwerowe/API, optymalizację obrazów i bundlowanie.",
+        "**App Router** w Next.js opiera się na **React Server Components (RSC)**. Komponenty są domyślnie serwerowe: działają tylko na serwerze (lub przy buildzie), mogą robić `await` bezpośrednio na bazie czy API i wysyłają do przeglądarki wyrenderowany wynik – nie swój kod – więc ich zależności (ORM, parser Markdown) nigdy nie trafiają do bundla JS. Interaktywne części oznacza się `'use client'` i hydrują się normalnie. RSC to nie to samo co SSR: SSR renderuje do HTML także komponenty klienckie; RSC decyduje, jaki kod w ogóle trafi do przeglądarki.",
+        "```tsx\n// app/products/[id]/page.tsx – Server Component (domyślnie)\nexport default async function Page({ params }: { params: Promise<{ id: string }> }) {\n  const { id } = await params;\n  const product = await db.product.findUnique({ where: { id } });\n  return <><h1>{product.name}</h1><AddToCart id={id} /></>;\n}\n// AddToCart.tsx zaczyna się od 'use client' – ma stan i onClick\n```",
+        "Koszty: utrzymujesz serwer Node (lub funkcje serverless/edge) zamiast statycznego hostingu. **Niezgodności hydracji (hydration mismatch)** pojawiają się, gdy serwer i klient renderują co innego – `Date.now()`, `Math.random()`, sprawdzanie `typeof window`, formatowanie zależne od locale – co daje ostrzeżenia i migotanie UI. A cache staje się wielowarstwowy (CDN, cache danych frameworka, reguły rewalidacji), co jest częstym źródłem błędów typu „czemu dane są nieaktualne?”."
       ]
     }
   },
@@ -1328,6 +2108,14 @@ const FLASHCARDS = [
         "New architecture: JSI (direct JS↔C++ calls), Fabric renderer, TurboModules (lazy native modules)",
         "Platform code: `Platform.OS`, `.ios.tsx` / `.android.tsx` files",
         "TV: `react-native-tvos`, focus-based navigation on Android TV / Apple TV"
+      ],
+      more: [
+        "React Native lets you build mobile apps with React, but the output is **real native UI**: `<View>` becomes an Android `View` or an iOS `UIView`, `<Text>` a native text view. There's no HTML and no WebView – that's the difference from Cordova/Ionic. Your JS (components and business logic) runs in a JavaScript engine embedded in the app; the default is **Hermes**, built by Meta for mobile, which compiles JS to bytecode at build time for faster startup and lower memory use.",
+        "React itself works as on the web – render, reconciliation, hooks – but instead of `react-dom` a native **renderer** turns the committed tree into native views. Layout is computed by **Yoga**, a C++ Flexbox engine, which is why styling is a Flexbox-based subset of CSS written as JS objects (`StyleSheet.create`).",
+        "**Old architecture – the Bridge**: JS and native code lived in separate worlds and talked by serialising messages to JSON and sending them asynchronously in batches. Every UI update and native module call paid the serialisation cost and could never be synchronous. Heavy traffic (fast scrolling, gestures, animations) clogged the bridge and dropped frames, and all native modules were initialised at startup, slowing launch.",
+        "**New Architecture** (default since RN 0.76 in 2024; since 0.82 the only option):\n- **JSI (JavaScript Interface)**: a C++ API that lets JS hold references to C++ objects and call their methods directly and synchronously – no JSON.\n- **Fabric**: the new renderer, core written in C++ and shared across platforms; supports synchronous layout measurement and React's concurrent features.\n- **TurboModules**: native modules accessed via JSI and loaded lazily on first use, with type-safe bindings generated by **Codegen** from TypeScript specs.",
+        "Platform-specific code: `Platform.OS === 'ios'` or `Platform.select({ ios: ..., android: ... })` for small tweaks. For bigger differences create `Player.ios.tsx` and `Player.android.tsx`; `import Player from './Player'` and the Metro bundler picks the right file for each platform build.",
+        "TV: **react-native-tvos** is a community-maintained fork kept in step with React Native that adds Apple TV (tvOS) and Android TV support (Expo can build TV apps with it too). There's no touchscreen – users navigate with a remote's D-pad – so the UI is **focus-based**: the platform moves focus between focusable elements, and you handle focused styling (`onFocus`/`onBlur`), set the initial focus (`hasTVPreferredFocus`), and listen to remote buttons with `useTVEventHandler`."
       ]
     },
     pl: {
@@ -1338,6 +2126,14 @@ const FLASHCARDS = [
         "Nowa architektura: JSI (bezpośrednie wywołania JS↔C++), renderer Fabric, TurboModules (leniwe moduły natywne)",
         "Kod per platforma: `Platform.OS`, pliki `.ios.tsx` / `.android.tsx`",
         "TV: `react-native-tvos`, nawigacja fokusem na Android TV / Apple TV"
+      ],
+      more: [
+        "React Native pozwala budować aplikacje mobilne w React, ale wynikiem jest **prawdziwe natywne UI**: `<View>` staje się androidowym `View` lub iOS-owym `UIView`, `<Text>` natywnym widokiem tekstu. Nie ma HTML ani WebView – to różnica względem Cordovy/Ionica. Twój JS (komponenty i logika biznesowa) działa w silniku JavaScript osadzonym w aplikacji; domyślnie to **Hermes**, zbudowany przez Metę z myślą o urządzeniach mobilnych, który kompiluje JS do bajtkodu już przy buildzie – szybszy start i mniejsze zużycie pamięci.",
+        "Sam React działa jak w przeglądarce – render, rekoncyliacja, hooki – ale zamiast `react-dom` natywny **renderer** zamienia zatwierdzone drzewo na natywne widoki. Layout liczy **Yoga**, silnik Flexboxa w C++, dlatego stylowanie to oparty na Flexboxie podzbiór CSS zapisywany jako obiekty JS (`StyleSheet.create`).",
+        "**Stara architektura – most (Bridge)**: JS i kod natywny żyły w osobnych światach i komunikowały się, serializując wiadomości do JSON i wysyłając je asynchronicznie w paczkach. Każda aktualizacja UI i każde wywołanie modułu natywnego płaciło koszt serializacji i nigdy nie mogło być synchroniczne. Duży ruch (szybkie przewijanie, gesty, animacje) zapychał most i gubił klatki, a wszystkie moduły natywne inicjalizowały się przy starcie, spowalniając uruchomienie.",
+        "**Nowa architektura** (domyślna od RN 0.76 w 2024; od 0.82 jedyna opcja):\n- **JSI (JavaScript Interface)**: API w C++, dzięki któremu JS trzyma referencje do obiektów C++ i wywołuje ich metody bezpośrednio i synchronicznie – bez JSON.\n- **Fabric**: nowy renderer z rdzeniem w C++ wspólnym dla platform; obsługuje synchroniczny pomiar layoutu i funkcje współbieżne Reacta.\n- **TurboModules**: moduły natywne dostępne przez JSI i ładowane leniwie przy pierwszym użyciu, z typowanymi bindingami generowanymi przez **Codegen** ze specyfikacji w TypeScripcie.",
+        "Kod per platforma: `Platform.OS === 'ios'` albo `Platform.select({ ios: ..., android: ... })` do drobnych poprawek. Przy większych różnicach tworzysz `Player.ios.tsx` i `Player.android.tsx`; piszesz `import Player from './Player'`, a bundler Metro wybiera właściwy plik przy buildzie dla danej platformy.",
+        "TV: **react-native-tvos** to utrzymywany przez społeczność fork, aktualizowany razem z React Native, który dodaje obsługę Apple TV (tvOS) i Android TV (Expo też potrafi z nim budować aplikacje TV). Nie ma ekranu dotykowego – użytkownik nawiguje krzyżakiem pilota – więc UI opiera się na **fokusie**: platforma przenosi fokus między elementami, a ty obsługujesz styl elementu z fokusem (`onFocus`/`onBlur`), ustawiasz początkowy fokus (`hasTVPreferredFocus`) i nasłuchujesz przycisków pilota przez `useTVEventHandler`."
       ]
     }
   },
@@ -1352,6 +2148,14 @@ const FLASHCARDS = [
         "Big bundle → code splitting (`lazy`), tree-shaking, analyse with bundle analyser",
         "Slow data → caching (TanStack Query), pagination, prefetching",
         "Expensive work → `useMemo`, `useTransition`, web worker"
+      ],
+      more: [
+        "Rule one: **measure before fixing**. \"Slow\" can mean slow loading, janky interactions or slow data, and each has different fixes. Tools:\n- **React DevTools Profiler**: records commits and shows which components rendered, for how long, and why (\"props changed\", \"parent rendered\", \"hook changed\"). \"Highlight updates\" shows re-renders live.\n- **Chrome DevTools Performance** panel: main-thread flame chart, **long tasks** (over 50 ms), layout and paint, network waterfall.\n- **Core Web Vitals** from real users: **LCP** (Largest Contentful Paint – loading, good ≤ 2.5 s), **INP** (Interaction to Next Paint – responsiveness, good ≤ 200 ms; replaced FID in 2024), **CLS** (Cumulative Layout Shift – visual stability, good ≤ 0.1). Lighthouse locally, the `web-vitals` library / RUM in production.",
+        "**Too many re-renders** – e.g. a search box's state lives at the top of the page, so every keystroke re-renders everything. Fixes, cheapest first: **move state down** into the component that uses it; pass expensive subtrees as `children` so they aren't re-created; **split contexts** so a frequently changing value has its own; use store **selectors** (Zustand/Redux) so components subscribe only to what they read; then `React.memo` with stable props – which React Compiler can automate.",
+        "**Long lists**: 10,000 rows mean 10,000 sets of DOM nodes. **Virtualisation** renders only rows visible in the viewport plus a small buffer and recycles them while scrolling – `react-window`, TanStack Virtual. Pagination or infinite scroll are alternatives.",
+        "**Big bundle** (slow LCP, long parse/compile on mid-range phones): **code splitting** with `React.lazy(() => import(...))` + `Suspense` or per-route splitting, so users download only the current page's code; **tree-shaking** drops unused exports (requires ES modules – e.g. `lodash-es`, not the whole `lodash`); inspect the bundle with `rollup-plugin-visualizer`, `webpack-bundle-analyzer` or `@next/bundle-analyzer` and replace heavy dependencies.",
+        "**Slow data**: request waterfalls (a child starts fetching only after its parent rendered) and refetching the same data on every screen. Fix with TanStack Query caching and deduplication, server-side pagination, **prefetching** on hover or in route loaders, and firing independent requests in parallel.",
+        "**Expensive computation on the main thread** (big sorts, parsing, charting): `useMemo` so it doesn't recompute on unrelated renders; `useTransition`/`useDeferredValue` so typing stays responsive while heavy rendering runs at low priority; move pure CPU work to a **Web Worker** (a background thread) when it's genuinely heavy. Then measure again to confirm the fix worked."
       ]
     },
     pl: {
@@ -1363,6 +2167,14 @@ const FLASHCARDS = [
         "Duży bundle → code splitting (`lazy`), tree-shaking, analiza bundle analyzerem",
         "Wolne dane → cache (TanStack Query), paginacja, prefetch",
         "Kosztowne obliczenia → `useMemo`, `useTransition`, web worker"
+      ],
+      more: [
+        "Zasada numer jeden: **najpierw pomiar, potem poprawki**. „Wolno” może znaczyć wolne ładowanie, przycinające interakcje albo wolne dane – każde z nich naprawia się inaczej. Narzędzia:\n- **React DevTools Profiler**: nagrywa commity i pokazuje, które komponenty się renderowały, jak długo i dlaczego („props changed”, „parent rendered”, „hook changed”). „Highlight updates” pokazuje rerendery na żywo.\n- Panel **Performance w Chrome DevTools**: flame chart głównego wątku, **long tasks** (ponad 50 ms), layout i paint, wodospad sieci.\n- **Core Web Vitals** od prawdziwych użytkowników: **LCP** (Largest Contentful Paint – ładowanie, dobrze ≤ 2,5 s), **INP** (Interaction to Next Paint – responsywność, dobrze ≤ 200 ms; w 2024 zastąpił FID), **CLS** (Cumulative Layout Shift – stabilność wizualna, dobrze ≤ 0,1). Lokalnie Lighthouse, na produkcji biblioteka `web-vitals` / RUM.",
+        "**Za dużo rerenderów** – np. stan pola wyszukiwania siedzi na samej górze strony, więc każdy znak rerenderuje wszystko. Poprawki od najtańszych: **przenieś stan niżej**, do komponentu, który go używa; przekaż kosztowne poddrzewa jako `children`, żeby nie były tworzone od nowa; **podziel context**, żeby często zmieniana wartość miała własny; użyj **selektorów** store’a (Zustand/Redux), żeby komponenty subskrybowały tylko to, co czytają; dopiero potem `React.memo` ze stabilnymi propsami – co może zautomatyzować React Compiler.",
+        "**Długie listy**: 10 000 wierszy to 10 000 zestawów węzłów DOM. **Wirtualizacja** renderuje tylko wiersze widoczne w oknie plus mały bufor i przepina je przy przewijaniu – `react-window`, TanStack Virtual. Alternatywy to paginacja albo infinite scroll.",
+        "**Duży bundle** (wolne LCP, długie parsowanie i kompilacja na przeciętnych telefonach): **code splitting** przez `React.lazy(() => import(...))` + `Suspense` albo podział per trasa, żeby użytkownik pobierał tylko kod bieżącej strony; **tree-shaking** usuwa nieużywane eksporty (wymaga modułów ES – np. `lodash-es` zamiast całego `lodash`); zawartość bundla sprawdzisz przez `rollup-plugin-visualizer`, `webpack-bundle-analyzer` lub `@next/bundle-analyzer` i wymienisz ciężkie zależności.",
+        "**Wolne dane**: wodospady zapytań (dziecko zaczyna pobierać dopiero po wyrenderowaniu rodzica) i pobieranie tych samych danych na każdym ekranie. Pomaga cache i deduplikacja w TanStack Query, paginacja po stronie serwera, **prefetch** przy najechaniu kursorem lub w loaderach tras oraz równoległe wysyłanie niezależnych zapytań.",
+        "**Kosztowne obliczenia w głównym wątku** (duże sortowania, parsowanie, wykresy): `useMemo`, żeby nie liczyć od nowa przy niezwiązanych renderach; `useTransition`/`useDeferredValue`, żeby pisanie pozostało płynne, gdy ciężkie renderowanie idzie z niskim priorytetem; czystą pracę obliczeniową przenieś do **Web Workera** (wątku w tle), gdy jest naprawdę ciężka. Potem zmierz ponownie, żeby potwierdzić efekt."
       ]
     }
   },
@@ -1377,6 +2189,14 @@ const FLASHCARDS = [
         "Stateless: every request carries its own auth/context",
         "Meaningful status codes; consistent error format (e.g. RFC 9457 Problem Details)",
         "Cacheable responses; uniform interface (HATEOAS rarely used in practice)"
+      ],
+      more: [
+        "**REST** (Representational State Transfer) is an architectural style described by Roy Fielding in 2000 — not a protocol or a standard. An API is called RESTful when it models the domain as **resources** (things with an identity, addressed by a URL) and lets clients work with their **representations** (usually JSON) through the standard verbs of HTTP. The idea is to reuse what HTTP already provides — methods, status codes, caching, proxies — instead of inventing a custom RPC protocol on top of it.",
+        "**Resources as nouns.** The URL names a thing; the method says what to do with it. `GET /orders/123` reads an order, `DELETE /orders/123` removes it, `POST /orders` creates one. RPC-style URLs like `/getOrder?id=123` or `/deleteOrder` put the verb in the path, so every endpoint becomes a one-off that caches, tools and other developers cannot reason about generically. Collections are plural (`/orders`), items are addressed by id, and actions that don't map cleanly onto CRUD are often modelled as sub-resources (`POST /orders/123/cancellation`).",
+        "**Statelessness** means the server keeps no conversational session between requests: every request carries everything needed to process it — typically a token in the `Authorization` header plus ids and parameters. Any instance behind a load balancer can then serve any request, which is what makes horizontal scaling easy. The data itself is of course stored; statelessness is about the *client session* not living in server memory.",
+        "**Status codes and a consistent error format.** Clients, proxies, retry logic and monitoring all understand HTTP status codes, so a failure should never be `200` with `{\"success\": false}`. Pair the right code with one error body shape across the whole API. **RFC 9457 Problem Details** (successor of RFC 7807) standardises it, with media type `application/problem+json`:",
+        "```json\n{\n  \"type\": \"https://api.example.com/errors/insufficient-funds\",\n  \"title\": \"Insufficient funds\",\n  \"status\": 422,\n  \"detail\": \"Balance is 30.00, order total is 50.00\",\n  \"instance\": \"/orders/123\"\n}\n```",
+        "**Cacheable** means responses declare whether and for how long they may be reused (`Cache-Control`, `ETag`), so browsers and CDNs can answer repeated GETs without touching your servers. **Uniform interface** is the constraint that ties everything together: the same small set of methods and conventions works for every resource. Its strictest part, **HATEOAS** (Hypermedia As The Engine Of Application State — responses contain links telling the client what it can do next), is rarely implemented. Most real-world \"REST\" APIs sit at Richardson maturity level 2: resources + HTTP verbs + status codes. Saying that honestly in an interview scores better than claiming purity."
       ]
     },
     pl: {
@@ -1387,6 +2207,14 @@ const FLASHCARDS = [
         "Bezstanowość: każde żądanie niesie własną autoryzację/kontekst",
         "Znaczące kody statusu; spójny format błędów (np. RFC 9457 Problem Details)",
         "Odpowiedzi cache'owalne; jednolity interfejs (HATEOAS rzadko w praktyce)"
+      ],
+      more: [
+        "**REST** (Representational State Transfer) to styl architektoniczny opisany przez Roya Fieldinga w 2000 roku — nie protokół ani standard. API nazywamy RESTful, gdy modeluje dziedzinę jako **zasoby** (byty z tożsamością, adresowane URL-em), a klient operuje na ich **reprezentacjach** (zwykle JSON) za pomocą standardowych metod HTTP. Chodzi o to, żeby wykorzystać to, co HTTP już daje — metody, kody statusu, cache, proxy — zamiast budować na nim własny protokół RPC.",
+        "**Zasoby jako rzeczowniki.** URL nazywa rzecz, a metoda mówi, co z nią zrobić. `GET /orders/123` odczytuje zamówienie, `DELETE /orders/123` je usuwa, `POST /orders` tworzy nowe. URL-e w stylu RPC, jak `/getOrder?id=123` czy `/deleteOrder`, wkładają czasownik do ścieżki i każdy endpoint staje się wyjątkiem, którego cache, narzędzia ani inni programiści nie zrozumieją w ogólny sposób. Kolekcje mają liczbę mnogą (`/orders`), elementy adresujemy po id, a akcje, które nie pasują do CRUD, często modeluje się jako podzasoby (`POST /orders/123/cancellation`).",
+        "**Bezstanowość** oznacza, że serwer nie trzyma sesji rozmowy między żądaniami: każde żądanie niesie wszystko, co potrzebne do jego obsługi — zwykle token w nagłówku `Authorization` plus identyfikatory i parametry. Dzięki temu dowolna instancja za load balancerem może obsłużyć dowolne żądanie, co bardzo ułatwia skalowanie poziome. Same dane oczywiście są zapisane; bezstanowość dotyczy tego, że *sesja klienta* nie żyje w pamięci serwera.",
+        "**Kody statusu i spójny format błędów.** Klienci, proxy, mechanizmy ponowień i monitoring rozumieją kody HTTP, więc błąd nigdy nie powinien być odpowiedzią `200` z `{\"success\": false}`. Właściwy kod łączymy z jednym kształtem ciała błędu w całym API. Standaryzuje go **RFC 9457 Problem Details** (następca RFC 7807), z typem `application/problem+json`:",
+        "```json\n{\n  \"type\": \"https://api.example.com/errors/insufficient-funds\",\n  \"title\": \"Insufficient funds\",\n  \"status\": 422,\n  \"detail\": \"Balance is 30.00, order total is 50.00\",\n  \"instance\": \"/orders/123\"\n}\n```",
+        "**Cache'owalność** oznacza, że odpowiedzi deklarują, czy i jak długo można je ponownie użyć (`Cache-Control`, `ETag`), więc przeglądarki i CDN-y obsłużą powtarzane GET-y bez udziału Twoich serwerów. **Jednolity interfejs** spina całość: ten sam mały zestaw metod i konwencji działa dla każdego zasobu. Jego najbardziej rygorystyczna część, **HATEOAS** (hipermedia jako silnik stanu aplikacji — odpowiedź zawiera linki mówiące klientowi, co może zrobić dalej), jest w praktyce rzadko wdrażana. Większość realnych API \"REST\" to poziom 2 modelu dojrzałości Richardsona: zasoby + metody HTTP + kody statusu. Uczciwe przyznanie tego na rozmowie wypada lepiej niż udawanie purysty."
       ]
     }
   },
@@ -1401,6 +2229,13 @@ const FLASHCARDS = [
         "401 = not authenticated, 403 = authenticated but not allowed",
         "429 Too Many Requests (+ `Retry-After`)",
         "500 bug, 502 bad upstream, 503 unavailable/overloaded, 504 upstream timeout"
+      ],
+      more: [
+        "An HTTP status code is a three-digit number that tells the client — and everything between it and the server (proxies, CDNs, retry libraries, monitoring) — how the request went, before anyone parses the body. The first digit is the class: **2xx** success, **3xx** redirect or \"use your cached copy\", **4xx** the client did something wrong (retrying unchanged won't help), **5xx** the server or something behind it failed (a retry may succeed). Choosing correctly matters because generic tooling acts on these classes: retry logic retries 5xx and 429 but not other 4xx, and alerts fire on 5xx rates.",
+        "- `200 OK` — generic success with a body.\n- `201 Created` — a new resource exists; add a `Location` header with its URL (`Location: /orders/123`) and usually return the created representation.\n- `202 Accepted` — accepted but processed asynchronously (report generation, video transcoding); return a job id or a status URL the client can poll.\n- `204 No Content` — success with nothing to return, typical for DELETE.\n- `304 Not Modified` — answer to a conditional GET: the client sent `If-None-Match` with an **ETag** (a version fingerprint of the resource), it still matches, so the client reuses its cached copy and no body is sent.",
+        "**400 vs 422.** `400 Bad Request` means the request can't even be understood: malformed JSON, wrong types, a missing required parameter. `422 Unprocessable Content` means it parsed fine but breaks validation or business rules (end date before start date, invalid email) — the natural place for per-field errors. Some teams use 400 for both; consistency matters more than the choice. `404 Not Found` — the resource doesn't exist (or you hide its existence from this caller). `409 Conflict` — the request clashes with the current state: a duplicate unique value, an invalid state transition, or an optimistic-locking version mismatch.",
+        "**401 vs 403** is a classic probe. `401 Unauthorized` is badly named: it really means **not authenticated** — no credentials, or an invalid/expired token; the client should log in or refresh the token (the response should carry `WWW-Authenticate`). `403 Forbidden` means the server knows who you are, but you lack permission — logging in again won't help. `429 Too Many Requests` means a rate limit was hit; `Retry-After` tells the client how many seconds (or until which date) to wait.",
+        "- `500 Internal Server Error` — an unhandled exception: a bug on your side.\n- `502 Bad Gateway` — a proxy or gateway received an invalid response from the **upstream** (the service it forwards to), e.g. the app crashed mid-response.\n- `503 Service Unavailable` — temporarily unable to serve: overloaded, in maintenance, shedding load; may include `Retry-After`.\n- `504 Gateway Timeout` — the proxy gave up waiting for the upstream."
       ]
     },
     pl: {
@@ -1412,6 +2247,13 @@ const FLASHCARDS = [
         "401 = brak uwierzytelnienia, 403 = uwierzytelniony, ale bez uprawnień",
         "429 Too Many Requests (+ `Retry-After`)",
         "500 błąd, 502 zły upstream, 503 niedostępny/przeciążony, 504 timeout upstreamu"
+      ],
+      more: [
+        "Kod statusu HTTP to trzycyfrowa liczba, która mówi klientowi — i wszystkiemu, co stoi między nim a serwerem (proxy, CDN, biblioteki ponowień, monitoring) — jak poszło żądanie, zanim ktokolwiek sparsuje body. Pierwsza cyfra to klasa: **2xx** sukces, **3xx** przekierowanie albo \"użyj swojej kopii z cache\", **4xx** błąd po stronie klienta (ponowienie bez zmian nic nie da), **5xx** zawiódł serwer lub coś za nim (ponowienie może się udać). Poprawny wybór ma znaczenie, bo ogólne narzędzia działają na tych klasach: mechanizmy ponowień powtarzają 5xx i 429, ale nie inne 4xx, a alerty patrzą na odsetek 5xx.",
+        "- `200 OK` — ogólny sukces z treścią.\n- `201 Created` — powstał nowy zasób; dodajemy nagłówek `Location` z jego adresem (`Location: /orders/123`) i zwykle zwracamy utworzoną reprezentację.\n- `202 Accepted` — przyjęte, ale przetwarzane asynchronicznie (generowanie raportu, transkodowanie wideo); zwracamy id zadania albo URL statusu do odpytywania.\n- `204 No Content` — sukces bez treści, typowo dla DELETE.\n- `304 Not Modified` — odpowiedź na warunkowy GET: klient wysłał `If-None-Match` z **ETagiem** (odciskiem wersji zasobu), ten nadal pasuje, więc klient używa kopii z cache, a serwer nie wysyła body.",
+        "**400 vs 422.** `400 Bad Request` oznacza, że żądania nie da się nawet zrozumieć: zepsuty JSON, złe typy, brak wymaganego parametru. `422 Unprocessable Content` — żądanie sparsowało się poprawnie, ale łamie reguły walidacji lub biznesowe (data końca przed datą początku, błędny e-mail); to naturalne miejsce na błędy per pole. Część zespołów używa 400 do obu przypadków — ważniejsza jest spójność niż sam wybór. `404 Not Found` — zasób nie istnieje (albo ukrywamy jego istnienie przed tym wywołującym). `409 Conflict` — żądanie koliduje z bieżącym stanem: duplikat unikalnej wartości, niedozwolone przejście stanu, niezgodność wersji przy optimistic locking.",
+        "**401 vs 403** to klasyczne pytanie kontrolne. Nazwa `401 Unauthorized` jest myląca: faktycznie znaczy **brak uwierzytelnienia** — brak danych logowania albo nieważny/wygasły token; klient powinien się zalogować lub odświeżyć token (odpowiedź powinna mieć `WWW-Authenticate`). `403 Forbidden` znaczy, że serwer wie, kim jesteś, ale nie masz uprawnień — ponowne logowanie nic nie zmieni. `429 Too Many Requests` oznacza przekroczony limit; `Retry-After` mówi, ile sekund (lub do kiedy) czekać.",
+        "- `500 Internal Server Error` — nieobsłużony wyjątek, czyli błąd w naszym kodzie.\n- `502 Bad Gateway` — proxy/gateway dostało nieprawidłową odpowiedź od **upstreamu** (usługi, do której przekazuje ruch), np. aplikacja padła w trakcie odpowiedzi.\n- `503 Service Unavailable` — chwilowo nie można obsłużyć: przeciążenie, prace serwisowe, zrzucanie ruchu; może zawierać `Retry-After`.\n- `504 Gateway Timeout` — proxy nie doczekało się odpowiedzi upstreamu."
       ]
     }
   },
@@ -1426,6 +2268,14 @@ const FLASHCARDS = [
         "Idempotent: GET, PUT, DELETE, HEAD, OPTIONS – repeating gives the same state",
         "POST: neither → needs idempotency keys for safe retries",
         "Document null vs omitted field semantics for PATCH"
+      ],
+      more: [
+        "The HTTP spec (RFC 9110) defines two properties of methods. A method is **safe** if it is read-only from the client's point of view: calling it must not change server state (logging and metrics don't count). A method is **idempotent** if sending the same request once or ten times leaves the server in the same state. Idempotency is what makes **retries** safe: when a timeout hides whether the request arrived, an idempotent request can simply be sent again.",
+        "- Safe and idempotent: `GET`, `HEAD`, `OPTIONS`.\n- Idempotent but not safe: `PUT`, `DELETE` — they change state, but repeating them changes nothing further (a second DELETE may return 404, yet the resource is still just deleted; idempotency is about state, not the response).\n- Neither: `POST` — two identical `POST /payments` create two payments.\n- `PATCH` — not guaranteed idempotent; it depends on the patch format.",
+        "**PUT** replaces the whole resource at a URI the client already knows with the representation in the body. Fields you leave out are gone (or reset to defaults) — which is exactly why it is idempotent: the final state is fully described by the request. PUT can also create a resource when the client picks the identifier (`PUT /users/42/avatar`).",
+        "**PATCH** sends only the changes, in one of two standard formats. **JSON Merge Patch** (RFC 7386, `application/merge-patch+json`) is a partial document: listed fields are set, a field set to `null` is removed, omitted fields stay untouched. **JSON Patch** (RFC 6902, `application/json-patch+json`) is a list of operations — `add`, `remove`, `replace`, `move`, `test`. Setting values is naturally idempotent, but an operation like appending to an array (`{\"op\": \"add\", \"path\": \"/items/-\"}`) or a custom \"increment\" is not — hence \"not guaranteed\".",
+        "```js\n// Stored:  { name: \"Ann\", phone: \"123\", nickname: \"A\" }\n// PATCH /users/1  (Content-Type: application/merge-patch+json)\nconst body = { name: \"Anna\", phone: null };\n// Result:  { name: \"Anna\", nickname: \"A\" }\n// name changed, phone removed (null), nickname untouched (omitted)\n```",
+        "The **null vs omitted** distinction causes real bugs: does `{\"phone\": null}` mean \"clear the phone\" or \"I didn't send it\"? In JS/TS, `undefined` and `null` are easily conflated during validation or mapping, silently wiping data. Document the semantics in the contract and test them. Finally, since POST is neither safe nor idempotent, operations like payments need an **idempotency key** so the client can retry without the work happening twice."
       ]
     },
     pl: {
@@ -1437,6 +2287,14 @@ const FLASHCARDS = [
         "Idempotentne: GET, PUT, DELETE, HEAD, OPTIONS – powtórzenie daje ten sam stan",
         "POST: ani jedno, ani drugie → klucze idempotencji dla bezpiecznych ponowień",
         "Udokumentować różnicę null vs brak pola w PATCH"
+      ],
+      more: [
+        "Specyfikacja HTTP (RFC 9110) definiuje dwie cechy metod. Metoda jest **bezpieczna** (safe), jeśli z punktu widzenia klienta tylko czyta: jej wywołanie nie zmienia stanu serwera (logi i metryki się nie liczą). Metoda jest **idempotentna**, jeśli wysłanie tego samego żądania raz lub dziesięć razy zostawia serwer w tym samym stanie. To idempotentność czyni **ponowienia** bezpiecznymi: gdy timeout ukrywa, czy żądanie doszło, idempotentne żądanie można po prostu wysłać jeszcze raz.",
+        "- Bezpieczne i idempotentne: `GET`, `HEAD`, `OPTIONS`.\n- Idempotentne, ale niebezpieczne: `PUT`, `DELETE` — zmieniają stan, ale powtórzenie niczego dalej nie zmienia (drugi DELETE może zwrócić 404, a zasób dalej jest po prostu usunięty; idempotentność dotyczy stanu, nie odpowiedzi).\n- Ani jedno, ani drugie: `POST` — dwa identyczne `POST /payments` tworzą dwie płatności.\n- `PATCH` — idempotentność niegwarantowana; zależy od formatu łatki.",
+        "**PUT** zastępuje cały zasób pod znanym klientowi URI reprezentacją z body. Pola, których nie wyślesz, znikają (albo wracają do wartości domyślnych) — i właśnie dlatego PUT jest idempotentny: stan końcowy jest w całości opisany przez żądanie. PUT może też tworzyć zasób, gdy to klient wybiera identyfikator (`PUT /users/42/avatar`).",
+        "**PATCH** wysyła tylko zmiany, w jednym z dwóch standardowych formatów. **JSON Merge Patch** (RFC 7386, `application/merge-patch+json`) to częściowy dokument: podane pola są ustawiane, pole z `null` jest usuwane, pominięte pola zostają bez zmian. **JSON Patch** (RFC 6902, `application/json-patch+json`) to lista operacji — `add`, `remove`, `replace`, `move`, `test`. Ustawianie wartości jest naturalnie idempotentne, ale dopisanie do tablicy (`{\"op\": \"add\", \"path\": \"/items/-\"}`) czy własna operacja \"zwiększ licznik\" już nie — stąd \"niegwarantowana\".",
+        "```js\n// Zapisane:  { name: \"Ann\", phone: \"123\", nickname: \"A\" }\n// PATCH /users/1  (Content-Type: application/merge-patch+json)\nconst body = { name: \"Anna\", phone: null };\n// Wynik:  { name: \"Anna\", nickname: \"A\" }\n// name zmienione, phone usunięte (null), nickname bez zmian (pominięte)\n```",
+        "Różnica **null vs brak pola** powoduje realne bugi: czy `{\"phone\": null}` znaczy \"wyczyść telefon\", czy \"nie wysłałem tego pola\"? W JS/TS `undefined` i `null` łatwo pomylić przy walidacji lub mapowaniu i po cichu skasować dane. Trzeba opisać tę semantykę w kontrakcie i ją przetestować. A skoro POST nie jest ani bezpieczny, ani idempotentny, operacje typu płatność potrzebują **klucza idempotencji**, żeby klient mógł ponowić żądanie bez podwójnego wykonania."
       ]
     }
   },
@@ -1450,6 +2308,14 @@ const FLASHCARDS = [
         "Same key again → return stored response, do not re-execute",
         "Same key, different body → 422/409",
         "Concurrent duplicates: unique constraint or lock on the key"
+      ],
+      more: [
+        "The scenario: a client sends `POST /payments`, the server charges the card, but the response is lost — a timeout, a dropped mobile connection, a proxy reset. The client can't know whether the payment happened. Not retrying may leave the order stuck; retrying a plain POST may charge the customer twice. POST is not idempotent, so we make this specific operation idempotent with an **idempotency key** — the pattern popularised by Stripe and being standardised by the IETF as the `Idempotency-Key` header.",
+        "The client generates a unique key — typically a UUID — once per **logical operation** (this checkout attempt), not per HTTP request, and sends the same key with every retry. The server keeps a record under that key (scoped to the account, so tenants can't collide) containing a **hash of the request** (method, path, body), the processing status and the final response (status code + body). The record lives in Redis or a database table with a **TTL** (time to live), e.g. 24 hours — long enough to cover any realistic retry.",
+        "- New key → claim it as `in_progress`, execute the operation, store the response, return it.\n- Known key, same request hash, completed → return the stored response as-is; do not charge again.\n- Known key, different hash → the client reused a key for a different request: reject with `422` (or `409`).\n- Known key, still `in_progress` → another copy is running right now: return `409` (with `Retry-After`) instead of executing in parallel.",
+        "The hard part is **concurrent duplicates**: two retries hit two instances in the same millisecond. \"Check if the key exists, then insert\" in application code has a race window where both pass the check. The claim must be atomic: a **unique constraint** on the key column (the second `INSERT` fails), or Redis `SET ... NX`, which only sets a missing key. Ideally the idempotency record is written in the same DB transaction as the business change, so you never end up with a charge but no record, or the reverse.",
+        "```ts\n// Atomic claim: only the first request with this key wins\nconst claimed = await redis.set(`idem:${accountId}:${key}`,\n  JSON.stringify({ status: \"in_progress\", hash }),\n  { NX: true, PX: 24 * 3600 * 1000 });\nif (!claimed) return replayStoredOrConflict(accountId, key, hash);\n```",
+        "Pitfalls interviewers look for: generating the key on the server (useless — the retry gets a new one); generating a fresh key on every retry; not deciding what to do with failures (validation errors are usually stored and replayed, while transient 5xx errors release the key so the retry can run again); and forgetting downstream calls — pass a key on to the payment provider too (Stripe accepts its own `Idempotency-Key`), or a crash between your DB and their API can still double-charge."
       ]
     },
     pl: {
@@ -1460,6 +2326,14 @@ const FLASHCARDS = [
         "Ten sam klucz ponownie → zwracamy zapisaną odpowiedź, bez ponownego wykonania",
         "Ten sam klucz, inne body → 422/409",
         "Równoległe duplikaty: unikalne ograniczenie lub blokada na kluczu"
+      ],
+      more: [
+        "Scenariusz: klient wysyła `POST /payments`, serwer obciąża kartę, ale odpowiedź ginie — timeout, zerwane połączenie mobilne, reset na proxy. Klient nie wie, czy płatność przeszła. Jeśli nie ponowi, zamówienie może utknąć; jeśli ponowi zwykły POST, klient może zapłacić dwa razy. POST nie jest idempotentny, więc tę konkretną operację czynimy idempotentną za pomocą **klucza idempotencji** — wzorca spopularyzowanego przez Stripe'a, a obecnie standaryzowanego przez IETF jako nagłówek `Idempotency-Key`.",
+        "Klient generuje unikalny klucz — zwykle UUID — raz na **logiczną operację** (tę konkretną próbę zapłaty), a nie na każde żądanie HTTP, i wysyła ten sam klucz przy każdym ponowieniu. Serwer trzyma pod tym kluczem rekord (w zakresie konta, żeby klucze różnych klientów się nie zderzały) z **hashem żądania** (metoda, ścieżka, body), statusem przetwarzania i finalną odpowiedzią (kod + body). Rekord leży w Redisie albo w tabeli w bazie z **TTL** (czasem życia), np. 24 godziny — wystarczająco długo na każde realne ponowienie.",
+        "- Nowy klucz → zajmujemy go jako `in_progress`, wykonujemy operację, zapisujemy odpowiedź, zwracamy ją.\n- Znany klucz, ten sam hash, zakończone → zwracamy zapisaną odpowiedź bez zmian; nie obciążamy ponownie.\n- Znany klucz, inny hash → klient użył klucza do innego żądania: odrzucamy z `422` (lub `409`).\n- Znany klucz, wciąż `in_progress` → druga kopia właśnie się wykonuje: zwracamy `409` (z `Retry-After`), zamiast wykonywać równolegle.",
+        "Najtrudniejsze są **równoległe duplikaty**: dwa ponowienia trafiają na dwie instancje w tej samej milisekundzie. \"Sprawdź, czy klucz istnieje, potem wstaw\" w kodzie aplikacji ma okno wyścigu (race condition), w którym oba żądania przechodzą sprawdzenie. Zajęcie klucza musi być atomowe: **unikalne ograniczenie** (unique constraint) na kolumnie klucza (drugi `INSERT` się wywali) albo Redisowe `SET ... NX`, które ustawia tylko nieistniejący klucz. Najlepiej zapisywać rekord idempotencji w tej samej transakcji co zmianę biznesową, żeby nigdy nie mieć obciążenia bez rekordu ani odwrotnie.",
+        "```ts\n// Atomowe zajęcie klucza: wygrywa tylko pierwsze żądanie\nconst claimed = await redis.set(`idem:${accountId}:${key}`,\n  JSON.stringify({ status: \"in_progress\", hash }),\n  { NX: true, PX: 24 * 3600 * 1000 });\nif (!claimed) return replayStoredOrConflict(accountId, key, hash);\n```",
+        "Pułapki, o które pyta rekruter: generowanie klucza na serwerze (bez sensu — ponowienie dostanie nowy); nowy klucz przy każdym ponowieniu; brak decyzji, co z błędami (błędy walidacji zwykle zapisujemy i odtwarzamy, a przejściowe 5xx zwalniają klucz, żeby ponowienie mogło się wykonać); oraz zapominanie o wywołaniach dalej w łańcuchu — klucz trzeba przekazać także do operatora płatności (Stripe przyjmuje własny `Idempotency-Key`), inaczej awaria między naszą bazą a jego API nadal może skończyć się podwójnym obciążeniem."
       ]
     }
   },
@@ -1473,6 +2347,14 @@ const FLASHCARDS = [
         "Cursor (`?after=<opaque>`): `WHERE (created_at, id) < (...) ORDER BY ... LIMIT n` – uses an index",
         "Cursor pros: stable, fast at any depth; cons: no jump to page N",
         "High-traffic feeds / infinite scroll → cursor"
+      ],
+      more: [
+        "Every list endpoint needs **pagination**: returning two million rows at once would overwhelm the database, the network and the client. The two main approaches differ in how the client says \"continue from here\".",
+        "**Offset pagination** uses `?limit=20&offset=40` (\"skip 40, give me 20\"), mapping directly to SQL `LIMIT 20 OFFSET 40`. It's trivial to build, and the UI can show \"page 3 of 50\" and jump to any page. The costs: the database still has to read and throw away every skipped row, so `OFFSET 1000000` is slow even with an index — cost grows linearly with depth. And it's unstable under writes: if a new row is inserted at the top while the user moves from page 1 to page 2, everything shifts by one and the user sees a duplicate; a deletion makes an item get skipped.",
+        "**Cursor (keyset) pagination** says \"give me the next 20 after this item\" instead. The cursor encodes the sort-key values of the last row seen, and the server turns it into a `WHERE` condition that an index can seek to directly:",
+        "```sql\n-- index on (created_at DESC, id DESC)\nSELECT * FROM posts\nWHERE (created_at, id) < ($1, $2)   -- values from the last row seen\nORDER BY created_at DESC, id DESC\nLIMIT 21;                           -- n + 1 rows tells us if a next page exists\n```",
+        "Why `(created_at, id)` rather than just `created_at`? The sort key must be **unique**, otherwise rows sharing a timestamp can be skipped or repeated at page boundaries; the primary key as tie-breaker makes the order total. Row-value comparison works in PostgreSQL and MySQL; otherwise expand it to `created_at < $1 OR (created_at = $1 AND id < $2)`. The cursor is **opaque** to the client — typically base64-encoded JSON — so you can change what's inside later; responses return a `nextCursor` (null on the last page).",
+        "Cursor pagination is fast at any depth (an index seek, not a scan) and stable while data changes, but you can't jump to \"page 37\", and a total count needs a separate, often expensive `COUNT(*)`. Rule of thumb: admin tables with page numbers over modest data → offset is fine; high-traffic feeds, infinite scroll, sync and export APIs → cursor. GraphQL's Relay connection spec (`first`, `after`, `pageInfo.endCursor`) is cursor pagination as well."
       ]
     },
     pl: {
@@ -1483,6 +2365,14 @@ const FLASHCARDS = [
         "Kursor (`?after=<opaque>`): `WHERE (created_at, id) < (...) ORDER BY ... LIMIT n` – korzysta z indeksu",
         "Zalety kursora: stabilny, szybki na każdej głębokości; wada: brak skoku do strony N",
         "Feedy o dużym ruchu / infinite scroll → kursor"
+      ],
+      more: [
+        "Każdy endpoint zwracający listę potrzebuje **paginacji**: zwrócenie dwóch milionów wierszy naraz zadławiłoby bazę, sieć i klienta. Dwa główne podejścia różnią się tym, jak klient mówi \"kontynuuj stąd\".",
+        "**Paginacja offsetowa** to `?limit=20&offset=40` (\"pomiń 40, daj 20\"), co przekłada się wprost na SQL `LIMIT 20 OFFSET 40`. Jest banalna w implementacji, a UI może pokazać \"strona 3 z 50\" i skoczyć na dowolną stronę. Koszty: baza i tak musi odczytać i odrzucić wszystkie pominięte wiersze, więc `OFFSET 1000000` jest wolne nawet z indeksem — koszt rośnie liniowo z głębokością. Do tego jest niestabilna przy zapisach: jeśli na górze listy pojawi się nowy wiersz, gdy użytkownik przechodzi ze strony 1 na 2, wszystko przesuwa się o jeden i użytkownik widzi duplikat; usunięcie wiersza powoduje pominięcie elementu.",
+        "**Paginacja kursorowa (keyset)** mówi zamiast tego \"daj 20 kolejnych po tym elemencie\". Kursor koduje wartości klucza sortowania ostatniego widzianego wiersza, a serwer zamienia go na warunek `WHERE`, do którego indeks może skoczyć bezpośrednio:",
+        "```sql\n-- indeks na (created_at DESC, id DESC)\nSELECT * FROM posts\nWHERE (created_at, id) < ($1, $2)   -- wartości z ostatniego widzianego wiersza\nORDER BY created_at DESC, id DESC\nLIMIT 21;                           -- n + 1 wierszy mówi, czy jest następna strona\n```",
+        "Dlaczego `(created_at, id)`, a nie samo `created_at`? Klucz sortowania musi być **unikalny**, inaczej wiersze z tym samym znacznikiem czasu mogą zostać pominięte lub powtórzone na granicy stron; klucz główny jako rozstrzygacz daje pełny porządek. Porównanie krotek działa w PostgreSQL i MySQL; gdzie indziej rozpisujemy je jako `created_at < $1 OR (created_at = $1 AND id < $2)`. Kursor jest dla klienta **nieprzezroczysty** (opaque) — zwykle to JSON zakodowany w base64 — więc później można zmienić jego zawartość; odpowiedź zwraca `nextCursor` (null na ostatniej stronie).",
+        "Kursor jest szybki na każdej głębokości (skok po indeksie zamiast skanu) i stabilny przy zmianach danych, ale nie da się skoczyć na \"stronę 37\", a łączna liczba wyników wymaga osobnego, często kosztownego `COUNT(*)`. Reguła kciuka: tabele w panelu admina z numerami stron przy umiarkowanej ilości danych → offset wystarczy; feedy o dużym ruchu, infinite scroll, API do synchronizacji i eksportu → kursor. Specyfikacja połączeń Relay w GraphQL (`first`, `after`, `pageInfo.endCursor`) to również paginacja kursorowa."
       ]
     }
   },
@@ -1496,6 +2386,13 @@ const FLASHCARDS = [
         "Versioning: URL (`/v2`) – most common; or header / media type",
         "Deprecation: `Deprecation`/`Sunset` headers, usage metrics, migration period",
         "Clients should ignore unknown fields (tolerant reader)"
+      ],
+      more: [
+        "Once an API is public — or consumed by mobile apps you can't force-update — you no longer control when clients change. Evolving it safely starts with knowing which changes are safe. A **non-breaking (additive)** change is one every existing client keeps working with: a new endpoint, a new optional parameter or request field, a new field in a response. A **breaking** change invalidates an assumption some client already relies on:",
+        "- Removing or renaming a field or endpoint.\n- Changing a field's type or format (`id` number → string, a different date format).\n- Making an optional input required, or adding a new required input.\n- Tightening validation, changing defaults, behaviour or error codes.\n- Adding an enum value that clients handle with an exhaustive switch — a subtle one.",
+        "Additive changes are only safe if clients follow the **tolerant reader** principle: ignore fields you don't recognise and don't fail on extra data. A client that validates responses with a strict schema (e.g. Zod `.strict()`) turns every new response field into an outage. On the server side, the mirror image applies: accept new inputs, but never start requiring them.",
+        "When a breaking change is unavoidable, you publish a new version and run both side by side. Options: **URL versioning** (`/v1/orders`, `/v2/orders`) — the most common: visible, easy to route, log and cache; **header versioning** (e.g. `Api-Version: 2025-06-01`, the date-based style Stripe uses); or **media type versioning** (`Accept: application/vnd.acme.v2+json`) — the REST purist's option, but awkward to test in a browser. Version the API as a whole and bump major versions rarely: every live version is code you must maintain.",
+        "Retiring an old version is a process, not a date. Announce it, then mark responses with the `Deprecation` header (RFC 9745: the version is deprecated) and `Sunset` (RFC 8594: the date after which it may stop working), plus a `Link` to migration docs. Meanwhile collect **usage metrics** per version and per client or API key, so you know exactly who still calls it and can contact them. Switch it off only after the **migration period** ends and traffic is close to zero."
       ]
     },
     pl: {
@@ -1506,6 +2403,13 @@ const FLASHCARDS = [
         "Wersjonowanie: URL (`/v2`) – najczęściej; albo nagłówek / media type",
         "Wycofywanie: nagłówki `Deprecation`/`Sunset`, metryki użycia, okres migracji",
         "Klienci powinni ignorować nieznane pola (tolerant reader)"
+      ],
+      more: [
+        "Gdy API jest publiczne — albo korzystają z niego aplikacje mobilne, których nie wymusisz do aktualizacji — nie kontrolujesz już, kiedy klienci się zmienią. Bezpieczne rozwijanie zaczyna się od wiedzy, które zmiany są bezpieczne. Zmiana **niepsująca (addytywna)** to taka, z którą każdy istniejący klient dalej działa: nowy endpoint, nowy opcjonalny parametr lub pole wejściowe, nowe pole w odpowiedzi. Zmiana **psująca** (breaking) łamie założenie, na którym jakiś klient już polega:",
+        "- Usunięcie albo zmiana nazwy pola lub endpointu.\n- Zmiana typu lub formatu pola (`id` z liczby na string, inny format daty).\n- Uczynienie opcjonalnego wejścia wymaganym albo dodanie nowego wymaganego wejścia.\n- Zaostrzenie walidacji, zmiana wartości domyślnych, zachowania lub kodów błędów.\n- Dodanie wartości do enuma, który klienci obsługują wyczerpującym switchem — subtelny przypadek.",
+        "Zmiany addytywne są bezpieczne tylko wtedy, gdy klienci stosują zasadę **tolerant reader**: ignoruj nieznane pola i nie wywracaj się na dodatkowych danych. Klient, który waliduje odpowiedzi ścisłym schematem (np. Zod `.strict()`), zamienia każde nowe pole w awarię. Po stronie serwera działa to w lustrzanym odbiciu: przyjmuj nowe dane wejściowe, ale nigdy nie zaczynaj ich wymagać.",
+        "Gdy zmiana psująca jest nieunikniona, publikujemy nową wersję i utrzymujemy obie równolegle. Opcje: **wersja w URL** (`/v1/orders`, `/v2/orders`) — najpopularniejsza: widoczna, łatwa do routingu, logowania i cache'owania; **wersja w nagłówku** (np. `Api-Version: 2025-06-01`, styl datowany znany ze Stripe'a); albo **wersja w media type** (`Accept: application/vnd.acme.v2+json`) — wybór purystów REST, ale niewygodny do testowania w przeglądarce. Wersjonujemy API jako całość i rzadko podbijamy wersję główną: każda żywa wersja to kod do utrzymania.",
+        "Wycofanie starej wersji to proces, a nie data. Ogłaszamy je, potem oznaczamy odpowiedzi nagłówkiem `Deprecation` (RFC 9745: wersja jest przestarzała) i `Sunset` (RFC 8594: data, po której może przestać działać), plus `Link` do dokumentacji migracji. W międzyczasie zbieramy **metryki użycia** per wersja i per klient lub API key, żeby wiedzieć dokładnie, kto jeszcze woła starą wersję, i móc się z nim skontaktować. Wyłączamy ją dopiero po zakończeniu **okresu migracji**, gdy ruch jest bliski zeru."
       ]
     }
   },
@@ -1520,6 +2424,13 @@ const FLASHCARDS = [
         "`PATCH /inspection-orders/{id}` – partial update; state transitions validated (409 on invalid)",
         "Nested when owned: `GET /buildings/{id}/inspection-orders`",
         "Validation → 422 with field errors; authZ per building owner; OpenAPI docs"
+      ],
+      more: [
+        "This is a design exercise: the interviewer wants to see you apply REST conventions consistently and think about validation, lifecycle, authorisation and documentation — not just list URLs. Start by naming the resource. An **inspection order** is a noun, so it gets a plural, kebab-case collection `/inspection-orders`, and each order lives at `/inspection-orders/{id}`.",
+        "- `POST /inspection-orders` — create. The server assigns the id and returns `201 Created`, a `Location: /inspection-orders/{id}` header pointing at the new resource, and the created body (so the client sees defaults and computed fields).\n- `GET /inspection-orders` — list, with filters as query parameters (`?buildingId=...&status=scheduled`) and cursor pagination (`&cursor=...&limit=50`), returning `{ items, nextCursor }`.\n- `GET /inspection-orders/{id}` — `200` with the order, `404` if it doesn't exist (or the caller isn't allowed to know it exists).\n- `PATCH /inspection-orders/{id}` — partial update (e.g. reschedule, change inspector) without resending the whole object.",
+        "An order has a lifecycle, e.g. `draft → scheduled → in_progress → completed`, or `cancelled`. Model it as a **state machine** on the server: a PATCH setting `status: \"completed\"` on a draft is well-formed but invalid in the current state, so answer `409 Conflict` with a Problem Details body explaining the allowed transitions. For transitions with side effects (notifications, billing), explicit action sub-resources such as `POST /inspection-orders/{id}/cancellation` are often clearer. If two dispatchers may edit the same order, add optimistic concurrency with `ETag` + `If-Match` (`412 Precondition Failed` on mismatch).",
+        "**Nesting** expresses ownership: `GET /buildings/{id}/inspection-orders` reads naturally when every order belongs to exactly one building. Keep nesting to one level — paths like `/clients/1/buildings/2/inspection-orders/3` are brittle — and keep the flat `/inspection-orders/{id}` as the canonical address of an order. The nested route and the `?buildingId=` filter can coexist.",
+        "Validation failures return `422` with field-level errors so the UI can highlight inputs (`errors: [{ field: \"scheduledAt\", message: \"must be in the future\" }]`). **Authorisation** is checked per resource, not only per endpoint: a user may see and edit orders only for buildings they own or manage, so the list query is filtered by accessible buildings and single-item access checks ownership — otherwise you have an **IDOR** (Insecure Direct Object Reference: guessing another id gives access). Finally, describe it all in an **OpenAPI** spec, so the contract can be reviewed and the frontend can generate typed clients."
       ]
     },
     pl: {
@@ -1531,6 +2442,13 @@ const FLASHCARDS = [
         "`PATCH /inspection-orders/{id}` – częściowa zmiana; walidacja przejść stanu (409 przy błędnym)",
         "Zagnieżdżenie przy własności: `GET /buildings/{id}/inspection-orders`",
         "Walidacja → 422 z błędami pól; autoryzacja wg właściciela budynku; dokumentacja OpenAPI"
+      ],
+      more: [
+        "To zadanie projektowe: rekruter chce zobaczyć, że konsekwentnie stosujesz konwencje REST i myślisz o walidacji, cyklu życia, autoryzacji i dokumentacji — a nie tylko wypisujesz URL-e. Zacznij od nazwania zasobu. **Zlecenie inspekcji** to rzeczownik, więc dostaje kolekcję w liczbie mnogiej, w kebab-case: `/inspection-orders`, a pojedyncze zlecenie żyje pod `/inspection-orders/{id}`.",
+        "- `POST /inspection-orders` — tworzenie. Serwer nadaje id i zwraca `201 Created`, nagłówek `Location: /inspection-orders/{id}` wskazujący nowy zasób oraz utworzone body (klient widzi wartości domyślne i pola wyliczone).\n- `GET /inspection-orders` — lista, z filtrami jako parametry zapytania (`?buildingId=...&status=scheduled`) i paginacją kursorową (`&cursor=...&limit=50`), zwraca `{ items, nextCursor }`.\n- `GET /inspection-orders/{id}` — `200` ze zleceniem, `404`, gdy nie istnieje (albo wywołujący nie powinien wiedzieć, że istnieje).\n- `PATCH /inspection-orders/{id}` — częściowa zmiana (np. nowy termin, inny inspektor) bez odsyłania całego obiektu.",
+        "Zlecenie ma cykl życia, np. `draft → scheduled → in_progress → completed` albo `cancelled`. Modelujemy go na serwerze jako **maszynę stanów**: PATCH ustawiający `status: \"completed\"` na szkicu jest poprawny składniowo, ale niedozwolony w bieżącym stanie, więc odpowiadamy `409 Conflict` z ciałem Problem Details opisującym dozwolone przejścia. Dla przejść z efektami ubocznymi (powiadomienia, rozliczenia) często czytelniejsze są jawne podzasoby-akcje, np. `POST /inspection-orders/{id}/cancellation`. Jeśli dwóch dyspozytorów może edytować to samo zlecenie, dodajemy optimistic concurrency przez `ETag` + `If-Match` (`412 Precondition Failed` przy niezgodności).",
+        "**Zagnieżdżenie** wyraża własność: `GET /buildings/{id}/inspection-orders` czyta się naturalnie, gdy każde zlecenie należy do dokładnie jednego budynku. Trzymamy się jednego poziomu — ścieżki typu `/clients/1/buildings/2/inspection-orders/3` są kruche — a płaskie `/inspection-orders/{id}` zostaje kanonicznym adresem zlecenia. Trasa zagnieżdżona i filtr `?buildingId=` mogą współistnieć.",
+        "Błędy walidacji zwracają `422` z błędami per pole, żeby UI mogło podświetlić pola formularza (`errors: [{ field: \"scheduledAt\", message: \"must be in the future\" }]`). **Autoryzację** sprawdzamy per zasób, nie tylko per endpoint: użytkownik widzi i edytuje wyłącznie zlecenia budynków, których jest właścicielem lub zarządcą, więc zapytanie listy filtrujemy po dostępnych budynkach, a dostęp do pojedynczego zlecenia sprawdza własność — inaczej mamy **IDOR** (Insecure Direct Object Reference: zgadnięcie cudzego id daje dostęp). Na koniec opisujemy wszystko w specyfikacji **OpenAPI**, żeby kontrakt dało się przejrzeć, a frontend mógł wygenerować typowanego klienta."
       ]
     }
   },
@@ -1545,6 +2463,14 @@ const FLASHCARDS = [
         "`Vary` header: cache key depends on e.g. `Accept-Encoding`, `Authorization`",
         "Static assets: content-hashed filenames + long `max-age, immutable`",
         "Never cache personalised responses in shared caches"
+      ],
+      more: [
+        "HTTP caching lets a response be reused instead of fetched again — by the browser (a **private cache**, serving one user) or by a CDN or reverse proxy (a **shared cache**, serving many users). The server controls it with response headers, and two mechanisms work together: **freshness** (how long a stored copy may be used without asking the server at all) and **validation** (once stale, cheaply asking \"has it changed?\").",
+        "- `max-age=60` — fresh for 60 seconds in any cache.\n- `s-maxage=300` — overrides `max-age` for shared caches only (the CDN keeps it 5 minutes, the browser 1 minute).\n- `no-cache` — a misleading name: the response *may* be stored, but must be revalidated with the server before every use.\n- `no-store` — never store it anywhere (banking pages, sensitive data).\n- `private` — only the browser may cache it; `public` — shared caches may too, even for requests with credentials.\n- `immutable` — the content at this URL will never change, so don't even revalidate on reload.",
+        "**Validation with ETags**: the server sends `ETag: \"a1b2\"`, a fingerprint of this version (a content hash or a row version). When the copy goes stale, the client asks conditionally with `If-None-Match: \"a1b2\"`. If nothing changed, the server answers `304 Not Modified` without a body — saving bandwidth and serialisation, although it still does the lookup. The older, coarser alternative is `Last-Modified` + `If-Modified-Since`, with one-second resolution. ETags also enable optimistic locking on writes via `If-Match`.",
+        "```http\nGET /products/7              →  200 OK\n                                 Cache-Control: max-age=60\n                                 ETag: \"a1b2\"\n# 60 s later the copy is stale, so the browser revalidates:\nGET /products/7\nIf-None-Match: \"a1b2\"        →  304 Not Modified\n```",
+        "A cache stores responses under a **cache key** — by default the method and URL. If the response varies by some request header, say so with **`Vary`**: `Vary: Accept-Encoding` keeps gzip and brotli versions apart, `Vary: Accept-Language` separates languages. Forgetting it can serve compressed bytes to a client that can't decode them, or one user's language to another. `Vary: Authorization` or `Cookie` technically splits the cache per user, but in practice such responses should simply be marked `private`.",
+        "For **static assets** the standard pattern is **content-hashed filenames** (`app.3f9c1a.js`, produced by Vite or webpack): the URL changes whenever the content does, so you can set `Cache-Control: public, max-age=31536000, immutable` and never worry about staleness — only `index.html` stays short-lived or `no-cache`. The golden rule for APIs: never let a **shared cache** store a personalised response. A CDN serving one user's account page to another is a real, recurring incident; use `private` or `no-store` for anything user-specific."
       ]
     },
     pl: {
@@ -1556,6 +2482,14 @@ const FLASHCARDS = [
         "Nagłówek `Vary`: klucz cache zależy np. od `Accept-Encoding`, `Authorization`",
         "Statyczne pliki: nazwy z hashem treści + długie `max-age, immutable`",
         "Nigdy nie cache'uj spersonalizowanych odpowiedzi we współdzielonych cache"
+      ],
+      more: [
+        "Cache HTTP pozwala użyć odpowiedzi ponownie zamiast pobierać ją jeszcze raz — w przeglądarce (**cache prywatny**, dla jednego użytkownika) albo w CDN-ie czy reverse proxy (**cache współdzielony**, dla wielu użytkowników). Steruje nim serwer nagłówkami odpowiedzi, a współpracują dwa mechanizmy: **świeżość** (jak długo zapisaną kopię można używać bez pytania serwera) i **walidacja** (gdy kopia jest już nieświeża — tanie pytanie \"czy coś się zmieniło?\").",
+        "- `max-age=60` — świeże przez 60 sekund w dowolnym cache.\n- `s-maxage=300` — nadpisuje `max-age` tylko dla cache współdzielonych (CDN trzyma 5 minut, przeglądarka 1 minutę).\n- `no-cache` — myląca nazwa: odpowiedź *wolno* zapisać, ale przed każdym użyciem trzeba ją zrewalidować z serwerem.\n- `no-store` — nigdzie nie zapisywać (strony bankowe, dane wrażliwe).\n- `private` — cache'ować może tylko przeglądarka; `public` — także cache współdzielone, nawet przy żądaniach z danymi uwierzytelniającymi.\n- `immutable` — treść pod tym URL-em nigdy się nie zmieni, więc nie rewaliduj nawet przy przeładowaniu.",
+        "**Walidacja przez ETag**: serwer wysyła `ETag: \"a1b2\"`, czyli odcisk tej wersji (hash treści albo wersja wiersza). Gdy kopia się przeterminuje, klient pyta warunkowo z `If-None-Match: \"a1b2\"`. Jeśli nic się nie zmieniło, serwer odpowiada `304 Not Modified` bez body — oszczędzamy transfer i serializację, choć serwer i tak robi odczyt. Starsza, mniej precyzyjna alternatywa to `Last-Modified` + `If-Modified-Since` z rozdzielczością jednej sekundy. ETagi pozwalają też na optimistic locking przy zapisach przez `If-Match`.",
+        "```http\nGET /products/7              →  200 OK\n                                 Cache-Control: max-age=60\n                                 ETag: \"a1b2\"\n# po 60 s kopia jest nieświeża, więc przeglądarka rewaliduje:\nGET /products/7\nIf-None-Match: \"a1b2\"        →  304 Not Modified\n```",
+        "Cache zapisuje odpowiedzi pod **kluczem cache** — domyślnie metodą i URL-em. Jeśli odpowiedź zależy od jakiegoś nagłówka żądania, trzeba to zadeklarować przez **`Vary`**: `Vary: Accept-Encoding` rozdziela wersje gzip i brotli, `Vary: Accept-Language` — wersje językowe. Bez tego klient może dostać skompresowane bajty, których nie umie zdekodować, albo język innego użytkownika. `Vary: Authorization` czy `Cookie` formalnie dzieli cache per użytkownik, ale w praktyce takie odpowiedzi po prostu oznaczamy jako `private`.",
+        "Dla **plików statycznych** standardem są **nazwy z hashem treści** (`app.3f9c1a.js`, generowane przez Vite czy webpacka): URL zmienia się razem z treścią, więc można ustawić `Cache-Control: public, max-age=31536000, immutable` i zapomnieć o nieświeżych danych — krótko żyje (lub ma `no-cache`) tylko `index.html`. Złota zasada dla API: nigdy nie pozwól, by **cache współdzielony** zapisał spersonalizowaną odpowiedź. CDN serwujący stronę konta jednego użytkownika innemu to realny, powtarzający się incydent; dla wszystkiego, co zależy od użytkownika, używaj `private` albo `no-store`."
       ]
     }
   },
@@ -1569,6 +2503,14 @@ const FLASHCARDS = [
         "Non-simple requests (JSON body, custom headers, PUT/DELETE) trigger an `OPTIONS` preflight",
         "`*` cannot be used with credentials (cookies) – whitelist origins",
         "CORS protects users in browsers – it is not API authentication"
+      ],
+      more: [
+        "An **origin** is scheme + host + port: `https://app.example.com` and `https://api.example.com` are different origins, and so are `http://localhost:3000` and `http://localhost:8080`. Browsers enforce the **Same-Origin Policy**: JavaScript on one origin may send requests elsewhere, but it may not *read* the response from a different origin. That stops a malicious page you happen to visit from calling your bank's API with your cookies and reading the result. **CORS** (Cross-Origin Resource Sharing) is the controlled way for a server to relax that rule and say \"these origins may read my responses\".",
+        "It works through headers. The browser adds `Origin: https://app.example.com` to the request; the server replies with `Access-Control-Allow-Origin: https://app.example.com` (or `*`), and only then does the browser hand the response to the JS code. More headers widen the permission: `Access-Control-Allow-Methods`, `Access-Control-Allow-Headers` (e.g. `Authorization`, `Content-Type`), `Access-Control-Allow-Credentials: true` (cookies allowed), `Access-Control-Expose-Headers` (response headers JS may read) and `Access-Control-Max-Age` (how long the browser may cache a preflight answer).",
+        "**Simple requests** — GET, HEAD or POST with only basic headers and a form or `text/plain` content type — are sent straight away, because an HTML form could always do that. Everything else is **non-simple**: a JSON body (`Content-Type: application/json`), an `Authorization` or custom header, or `PUT`/`PATCH`/`DELETE`. For those the browser first sends a **preflight** — an `OPTIONS` request with `Access-Control-Request-Method` and `Access-Control-Request-Headers` asking for permission — and sends the real request only if the answer allows it. Your server or gateway must answer OPTIONS without requiring authentication, or every such call fails.",
+        "```js\nimport cors from \"cors\";\nconst allowed = new Set([\"https://app.example.com\", \"https://admin.example.com\"]);\n\napp.use(cors({\n  origin: (origin, cb) => cb(null, !origin || allowed.has(origin)), // echo only whitelisted origins\n  credentials: true, // cookies allowed, so the origin must be explicit, never *\n  maxAge: 600,       // browser may cache the preflight for 10 minutes\n}));\n```",
+        "With credentials (cookies, HTTP auth) the wildcard is forbidden: `Access-Control-Allow-Origin: *` is ignored, so the server must echo back one specific allowed origin and add `Vary: Origin` so caches don't mix answers. The classic mistake is reflecting *any* incoming `Origin` with credentials enabled — that switches the protection off completely.",
+        "What CORS is **not**: it is enforced only by browsers. `curl`, Postman or another backend ignore it entirely, so CORS is not authentication or authorisation for your API — it protects *users in browsers* from other websites abusing their session. You still need tokens and permission checks, and cookie-based auth still needs CSRF protection (e.g. `SameSite` cookies), because simple requests like form POSTs are sent even without CORS approval."
       ]
     },
     pl: {
@@ -1579,6 +2521,14 @@ const FLASHCARDS = [
         "Żądania nieproste (body JSON, własne nagłówki, PUT/DELETE) wywołują preflight `OPTIONS`",
         "`*` nie działa z credentials (cookies) – lista dozwolonych originów",
         "CORS chroni użytkowników w przeglądarce – to nie jest uwierzytelnianie API"
+      ],
+      more: [
+        "**Origin** to schemat + host + port: `https://app.example.com` i `https://api.example.com` to różne originy, podobnie jak `http://localhost:3000` i `http://localhost:8080`. Przeglądarki stosują **Same-Origin Policy**: JavaScript z jednego originu może wysyłać żądania gdzie indziej, ale nie może *odczytać* odpowiedzi z innego originu. To blokuje złośliwą stronę, na którą trafisz, przed wywołaniem API Twojego banku z Twoimi ciasteczkami i odczytaniem wyniku. **CORS** (Cross-Origin Resource Sharing) to kontrolowany sposób, w jaki serwer luzuje tę zasadę i mówi \"te originy mogą czytać moje odpowiedzi\".",
+        "Działa to przez nagłówki. Przeglądarka dodaje do żądania `Origin: https://app.example.com`; serwer odpowiada `Access-Control-Allow-Origin: https://app.example.com` (albo `*`) i dopiero wtedy przeglądarka oddaje odpowiedź kodowi JS. Kolejne nagłówki rozszerzają zgodę: `Access-Control-Allow-Methods`, `Access-Control-Allow-Headers` (np. `Authorization`, `Content-Type`), `Access-Control-Allow-Credentials: true` (ciasteczka dozwolone), `Access-Control-Expose-Headers` (które nagłówki odpowiedzi JS może czytać) i `Access-Control-Max-Age` (jak długo przeglądarka może pamiętać wynik preflightu).",
+        "**Żądania proste** — GET, HEAD lub POST tylko z podstawowymi nagłówkami i typem treści formularza albo `text/plain` — idą od razu, bo zwykły formularz HTML zawsze to potrafił. Wszystko inne to żądania **nieproste**: body JSON (`Content-Type: application/json`), nagłówek `Authorization` lub własny, albo `PUT`/`PATCH`/`DELETE`. Wtedy przeglądarka najpierw wysyła **preflight** — żądanie `OPTIONS` z `Access-Control-Request-Method` i `Access-Control-Request-Headers`, pytające o zgodę — i właściwe żądanie wysyła dopiero, gdy odpowiedź na to pozwala. Serwer lub gateway musi odpowiadać na OPTIONS bez wymagania uwierzytelnienia, inaczej każde takie wywołanie się wyłoży.",
+        "```js\nimport cors from \"cors\";\nconst allowed = new Set([\"https://app.example.com\", \"https://admin.example.com\"]);\n\napp.use(cors({\n  origin: (origin, cb) => cb(null, !origin || allowed.has(origin)), // odbijamy tylko originy z listy\n  credentials: true, // ciasteczka dozwolone, więc origin musi być jawny, nigdy *\n  maxAge: 600,       // przeglądarka może pamiętać preflight przez 10 minut\n}));\n```",
+        "Przy credentials (ciasteczka, HTTP auth) wildcard jest zabroniony: `Access-Control-Allow-Origin: *` zostanie zignorowany, więc serwer musi odesłać jeden konkretny dozwolony origin i dodać `Vary: Origin`, żeby cache nie mieszały odpowiedzi. Klasyczny błąd to odbijanie *dowolnego* przychodzącego `Origin` przy włączonych credentials — to całkowicie wyłącza ochronę.",
+        "Czym CORS **nie jest**: egzekwują go wyłącznie przeglądarki. `curl`, Postman czy inny backend całkowicie go ignorują, więc CORS nie jest uwierzytelnianiem ani autoryzacją API — chroni *użytkowników w przeglądarce* przed innymi stronami nadużywającymi ich sesji. Nadal potrzebujesz tokenów i sprawdzania uprawnień, a uwierzytelnianie oparte na ciasteczkach wciąż wymaga ochrony przed CSRF (np. ciasteczka `SameSite`), bo żądania proste, jak POST z formularza, wychodzą nawet bez zgody CORS."
       ]
     }
   },
@@ -1592,6 +2542,14 @@ const FLASHCARDS = [
         "Key by API key / user ID / IP; different limits per plan or endpoint",
         "Respond `429` + `Retry-After`, `RateLimit-*` headers",
         "Also at the edge: API Gateway, WAF, CDN"
+      ],
+      more: [
+        "**Rate limiting** caps how many requests a client may make in a period. It protects the service from overload and abuse (scrapers, brute-force logins, a buggy client stuck in a retry loop), keeps one tenant from starving the others, and enforces commercial plans. The algorithm decides *how* requests are counted:",
+        "- **Fixed window**: one counter per client per minute (`12:00–12:01`). Simplest, but allows double bursts at the boundary — 100 requests at 12:00:59 and another 100 at 12:01:00.\n- **Sliding window**: counts requests in the last 60 seconds (a sorted set of timestamps, or an approximation weighting the previous window's count). Smoother, a bit more memory.\n- **Token bucket**: a bucket holds up to N tokens refilled at rate r; each request takes one. Allows short **bursts** up to N while enforcing the average rate — the most common choice for APIs.\n- **Leaky bucket**: requests drain at a constant rate like water from a hole; smooths traffic, used for shaping.",
+        "With many instances behind a load balancer, an in-memory counter per instance is wrong: with 10 instances, \"100 per minute\" becomes roughly 1000. The counter must be **shared**, usually in Redis, and updates must be **atomic** — otherwise two instances read 99 at the same moment and both allow the request. `INCR` is atomic and returns the new value; on the first increment you set a TTL with `EXPIRE` so the key vanishes when the window ends. Multi-step algorithms (sliding window, token bucket) go into a **Lua script**, which Redis executes atomically — this also avoids a crash between `INCR` and `EXPIRE` leaving a key without TTL.",
+        "```ts\n// Fixed window: one key per client per minute\nconst window = Math.floor(Date.now() / 60_000);\nconst key = `rl:${apiKey}:${window}`;\nconst count = await redis.incr(key);\nif (count === 1) await redis.expire(key, 60);\nif (count > limit) {\n  const retryAfter = 60 - Math.floor((Date.now() / 1000) % 60);\n  return res.status(429).set(\"Retry-After\", String(retryAfter)).end();\n}\n```",
+        "Choose the **key** by what you protect: API key or user id for authenticated traffic, IP address for anonymous endpoints such as login (carefully — many users can share one IP behind NAT). Limits often differ per plan (free vs enterprise) and per endpoint (search costs more than a simple read). Over the limit, respond `429 Too Many Requests` with `Retry-After`, and advertise the quota on normal responses too — commonly `X-RateLimit-Limit/Remaining/Reset`, or the `RateLimit-Policy` and `RateLimit` headers from the IETF draft — so well-behaved clients slow down before hitting the wall.",
+        "Rate limiting belongs in layers. At the **edge** — API gateway (AWS API Gateway usage plans, Kong, Envoy), WAF rules, CDN — cheap, coarse limits stop floods before they reach your application. Inside the app go fine-grained limits that need business context (per tenant, per operation cost). Also decide what happens when Redis is unavailable: **fail open** (allow traffic, risk overload) or **fail closed** (reject, risking an outage caused by the limiter itself) — usually fail open with a local fallback limit."
       ]
     },
     pl: {
@@ -1602,6 +2560,14 @@ const FLASHCARDS = [
         "Klucz wg API key / ID użytkownika / IP; różne limity per plan lub endpoint",
         "Odpowiedź `429` + `Retry-After`, nagłówki `RateLimit-*`",
         "Także na brzegu: API Gateway, WAF, CDN"
+      ],
+      more: [
+        "**Rate limiting** ogranicza liczbę żądań, które klient może wykonać w danym czasie. Chroni usługę przed przeciążeniem i nadużyciami (scrapery, brute force na logowaniu, zbugowany klient zapętlony w ponowieniach), nie pozwala jednemu klientowi zagłodzić pozostałych i egzekwuje plany cenowe. Algorytm decyduje, *jak* liczymy żądania:",
+        "- **Fixed window**: jeden licznik na klienta na minutę (`12:00–12:01`). Najprostszy, ale na granicy okien pozwala na podwójny skok — 100 żądań o 12:00:59 i kolejne 100 o 12:01:00.\n- **Sliding window**: liczy żądania z ostatnich 60 sekund (posortowany zbiór znaczników czasu albo przybliżenie ważące licznik poprzedniego okna). Płynniejszy, trochę więcej pamięci.\n- **Token bucket**: wiadro mieści do N tokenów, uzupełnianych w tempie r; każde żądanie zabiera jeden. Pozwala na krótkie **skoki** do N przy zachowaniu średniego tempa — najczęstszy wybór dla API.\n- **Leaky bucket**: żądania wyciekają w stałym tempie jak woda z dziurawego wiadra; wygładza ruch, używany do jego kształtowania.",
+        "Przy wielu instancjach za load balancerem licznik w pamięci każdej instancji jest błędny: przy 10 instancjach \"100 na minutę\" robi się z tego około 1000. Licznik musi być **wspólny**, zwykle w Redisie, a aktualizacje **atomowe** — inaczej dwie instancje w tej samej chwili odczytają 99 i obie przepuszczą żądanie. `INCR` jest atomowe i zwraca nową wartość; przy pierwszym zwiększeniu ustawiamy TTL przez `EXPIRE`, żeby klucz zniknął razem z końcem okna. Algorytmy wieloetapowe (sliding window, token bucket) umieszczamy w **skrypcie Lua**, który Redis wykonuje atomowo — to przy okazji chroni przed awarią między `INCR` a `EXPIRE`, która zostawiłaby klucz bez TTL.",
+        "```ts\n// Fixed window: jeden klucz na klienta na minutę\nconst window = Math.floor(Date.now() / 60_000);\nconst key = `rl:${apiKey}:${window}`;\nconst count = await redis.incr(key);\nif (count === 1) await redis.expire(key, 60);\nif (count > limit) {\n  const retryAfter = 60 - Math.floor((Date.now() / 1000) % 60);\n  return res.status(429).set(\"Retry-After\", String(retryAfter)).end();\n}\n```",
+        "**Klucz** dobieramy do tego, co chronimy: API key lub ID użytkownika dla ruchu uwierzytelnionego, adres IP dla anonimowych endpointów jak logowanie (ostrożnie — za NAT-em wielu użytkowników dzieli jedno IP). Limity często różnią się per plan (free vs enterprise) i per endpoint (wyszukiwanie kosztuje więcej niż prosty odczyt). Po przekroczeniu limitu odpowiadamy `429 Too Many Requests` z `Retry-After`, a limit ogłaszamy też w zwykłych odpowiedziach — najczęściej `X-RateLimit-Limit/Remaining/Reset` albo nagłówki `RateLimit-Policy` i `RateLimit` z draftu IETF — żeby grzeczni klienci zwolnili, zanim uderzą w ścianę.",
+        "Rate limiting robimy warstwowo. Na **brzegu** (edge) — API Gateway (usage plans w AWS API Gateway, Kong, Envoy), reguły WAF, CDN — tanie, zgrubne limity zatrzymują zalew ruchu, zanim dotrze do aplikacji. W samej aplikacji siedzą precyzyjne limity wymagające kontekstu biznesowego (per tenant, per koszt operacji). Trzeba też zdecydować, co się dzieje, gdy Redis jest niedostępny: **fail open** (przepuszczamy ruch, ryzykując przeciążenie) czy **fail closed** (odrzucamy, ryzykując awarię spowodowaną przez sam limiter) — zwykle fail open z lokalnym limitem awaryjnym."
       ]
     }
   },
@@ -1615,6 +2581,13 @@ const FLASHCARDS = [
         "GraphQL schema → GraphQL Code Generator",
         "Monorepo: shared types/Zod schemas package; or tRPC for TS-only stacks",
         "Still validate at runtime on the server; contract tests in CI; breaking changes versioned"
+      ],
+      more: [
+        "The problem: the backend returns `{ createdAt: string }`, the frontend reads `created_at`, and nobody notices until production. TypeScript can't catch it, because the two codebases compile separately and HTTP is just bytes in between. The fix is a **single source of truth** for the API **contract** — the exact shapes of requests and responses — from which both sides derive their types, instead of writing them twice by hand.",
+        "For REST that source is usually an **OpenAPI** spec, written by hand (design-first) or generated from backend code (code-first). A generator turns it into frontend code: `openapi-typescript` emits plain TS types (paired with the tiny `openapi-fetch` client), while **Orval** or `@hey-api/openapi-ts` generate complete typed clients, even TanStack Query hooks. Regenerate in CI, and a backend change that breaks the frontend becomes a compile error instead of a bug report.",
+        "```ts\nimport createClient from \"openapi-fetch\";\nimport type { paths } from \"./generated/api\"; // produced by openapi-typescript\n\nconst api = createClient<paths>({ baseUrl: \"/api\" });\nconst { data, error } = await api.GET(\"/orders/{id}\", {\n  params: { path: { id: \"123\" } },\n});\n// data is typed from the spec; a wrong path or param is a compile error\n```",
+        "With **GraphQL** the schema already is the contract: **GraphQL Code Generator** reads the schema plus the queries in the frontend code and emits exact types for each operation's result. In a **monorepo** where both sides are TypeScript you can skip generation and share a package of **Zod** schemas: the backend validates input with them, the frontend derives types with `z.infer`. Going further, **tRPC** exposes the backend router's types directly to the client — no schema file at all — but only works when you own both ends and both are TS, so it's not for public APIs or mobile clients in other languages.",
+        "Types at compile time are a promise, not a guarantee. The server must still **validate at runtime** every incoming request, because any client — or attacker — can send anything. **Contract tests** in CI catch drift between the spec and the implementation (validating real responses against the OpenAPI schema, or consumer-driven contracts with Pact). And a **breaking change** still goes through versioning or deprecation: mobile apps and third parties can't be regenerated on your schedule."
       ]
     },
     pl: {
@@ -1625,6 +2598,13 @@ const FLASHCARDS = [
         "Schemat GraphQL → GraphQL Code Generator",
         "Monorepo: wspólna paczka typów/schematów Zod; lub tRPC przy stacku tylko TS",
         "Nadal walidacja w runtime na serwerze; testy kontraktowe w CI; zmiany psujące wersjonowane"
+      ],
+      more: [
+        "Problem: backend zwraca `{ createdAt: string }`, frontend czyta `created_at` i nikt tego nie zauważa aż do produkcji. TypeScript tego nie wyłapie, bo oba kody kompilują się osobno, a między nimi przez HTTP lecą po prostu bajty. Rozwiązaniem jest **jedno źródło prawdy** dla **kontraktu** API — dokładnych kształtów żądań i odpowiedzi — z którego obie strony wyprowadzają typy, zamiast pisać je dwa razy ręcznie.",
+        "W REST takim źródłem jest zwykle specyfikacja **OpenAPI**, pisana ręcznie (design-first) albo generowana z kodu backendu (code-first). Generator zamienia ją na kod frontendu: `openapi-typescript` tworzy same typy TS (w parze z malutkim klientem `openapi-fetch`), a **Orval** czy `@hey-api/openapi-ts` generują kompletnych typowanych klientów, nawet hooki TanStack Query. Generujemy ponownie w CI i zmiana w backendzie, która psuje frontend, staje się błędem kompilacji zamiast zgłoszeniem od użytkownika.",
+        "```ts\nimport createClient from \"openapi-fetch\";\nimport type { paths } from \"./generated/api\"; // wygenerowane przez openapi-typescript\n\nconst api = createClient<paths>({ baseUrl: \"/api\" });\nconst { data, error } = await api.GET(\"/orders/{id}\", {\n  params: { path: { id: \"123\" } },\n});\n// data ma typ ze specyfikacji; zła ścieżka lub parametr to błąd kompilacji\n```",
+        "W **GraphQL** schemat już jest kontraktem: **GraphQL Code Generator** czyta schemat oraz zapytania z kodu frontendu i generuje dokładne typy wyniku każdej operacji. W **monorepo**, gdzie obie strony są w TypeScripcie, można pominąć generowanie i współdzielić paczkę schematów **Zod**: backend waliduje nimi wejście, a frontend wyprowadza typy przez `z.infer`. Idąc dalej, **tRPC** udostępnia klientowi typy routera backendu bezpośrednio — bez żadnego pliku schematu — ale działa tylko wtedy, gdy kontrolujesz oba końce i oba są w TS, więc nie nadaje się do publicznych API ani klientów mobilnych w innych językach.",
+        "Typy w czasie kompilacji to obietnica, nie gwarancja. Serwer nadal musi **walidować w runtime** każde przychodzące żądanie, bo dowolny klient — albo atakujący — może wysłać cokolwiek. **Testy kontraktowe** w CI wyłapują rozjazd między specyfikacją a implementacją (walidacja realnych odpowiedzi względem schematu OpenAPI albo kontrakty sterowane przez konsumenta z Pactem). A **zmiana psująca** wciąż przechodzi przez wersjonowanie lub wycofywanie: aplikacji mobilnych i zewnętrznych klientów nie przegenerujesz według własnego harmonogramu."
       ]
     }
   },
@@ -1637,6 +2617,14 @@ const FLASHCARDS = [
         "Spec: paths, schemas, auth, examples; Swagger UI for try-it-out",
         "Code-first (annotations / Zod → spec) vs design-first (spec → code)",
         "Enables generated clients, request validation, mock servers, contract tests"
+      ],
+      more: [
+        "**OpenAPI** (formerly the Swagger Specification; current versions 3.1 and 3.2) is a standard, machine-readable description of an HTTP API, written in YAML or JSON. **Swagger** today names the tooling family around it — Swagger UI, Swagger Editor, Swagger Codegen. A spec is valuable precisely because tools can read it: documentation, clients, validation and tests all come from one file. That's why \"I documented the REST APIs our frontend consumed\" is a strong concrete answer — the spec was the contract between two teams.",
+        "- `paths` — every endpoint and method, with parameters, request body and responses per status code.\n- `components.schemas` — reusable data models in JSON Schema (3.1 is fully JSON Schema compatible).\n- `components.securitySchemes` + `security` — how to authenticate: bearer JWT, OAuth2 flows, API keys.\n- `examples` — sample payloads that make docs readable and feed mock servers.",
+        "```yaml\npaths:\n  /orders/{id}:\n    get:\n      parameters:\n        - { name: id, in: path, required: true, schema: { type: string } }\n      responses:\n        \"200\":\n          description: The order\n          content:\n            application/json: { schema: { $ref: \"#/components/schemas/Order\" } }\n        \"404\": { description: Not found }\n```",
+        "**Swagger UI** renders the spec as interactive documentation with a \"Try it out\" button that sends real requests — frontend developers and QA can explore the API without Postman. Redoc or Scalar render the same file in other styles.",
+        "There are two workflows. **Code-first**: you write handlers and generate the spec from code — decorators in NestJS (`@nestjs/swagger`), route schemas in Fastify, or Zod schemas converted with `zod-openapi` / `@asteasolutions/zod-to-openapi`. Low friction, and docs can't drift from code, but the API shape emerges from implementation details. **Design-first**: you write and review the spec first, agree on it with the frontend and other consumers, then implement. Slower start, but the contract is deliberate and both teams can work in parallel against mocks. Public and cross-team APIs lean design-first; internal services often go code-first.",
+        "Once the spec exists it unlocks a lot: **generated clients** and TS types (`openapi-typescript`, Orval); **request validation** middleware that rejects bodies not matching the schema (e.g. `express-openapi-validator`); **mock servers** (Prism) so the frontend can build before the backend exists; and **contract tests** asserting that real responses match the spec, plus breaking-change detection in CI by diffing spec versions (e.g. `oasdiff`)."
       ]
     },
     pl: {
@@ -1646,6 +2634,14 @@ const FLASHCARDS = [
         "Specyfikacja: ścieżki, schematy, auth, przykłady; Swagger UI do testowania",
         "Code-first (adnotacje / Zod → spec) vs design-first (spec → kod)",
         "Umożliwia generowanie klientów, walidację żądań, mock serwery, testy kontraktowe"
+      ],
+      more: [
+        "**OpenAPI** (dawniej Swagger Specification; obecne wersje to 3.1 i 3.2) to standardowy, czytelny dla maszyn opis API HTTP w YAML-u lub JSON-ie. Nazwa **Swagger** oznacza dziś rodzinę narzędzi wokół niego — Swagger UI, Swagger Editor, Swagger Codegen. Specyfikacja jest cenna właśnie dlatego, że narzędzia potrafią ją czytać: dokumentacja, klienci, walidacja i testy powstają z jednego pliku. Dlatego \"dokumentowałem REST API, z którego korzystał nasz frontend\" to mocna, konkretna odpowiedź — specyfikacja była kontraktem między dwoma zespołami.",
+        "- `paths` — każdy endpoint i metoda z parametrami, body żądania i odpowiedziami per kod statusu.\n- `components.schemas` — wielokrotnego użytku modele danych w JSON Schema (3.1 jest w pełni zgodne z JSON Schema).\n- `components.securitySchemes` + `security` — sposób uwierzytelniania: bearer JWT, flowy OAuth2, API keys.\n- `examples` — przykładowe payloady, które czynią dokumentację czytelną i zasilają mock serwery.",
+        "```yaml\npaths:\n  /orders/{id}:\n    get:\n      parameters:\n        - { name: id, in: path, required: true, schema: { type: string } }\n      responses:\n        \"200\":\n          description: The order\n          content:\n            application/json: { schema: { $ref: \"#/components/schemas/Order\" } }\n        \"404\": { description: Not found }\n```",
+        "**Swagger UI** renderuje specyfikację jako interaktywną dokumentację z przyciskiem \"Try it out\", który wysyła prawdziwe żądania — frontendowcy i testerzy mogą eksplorować API bez Postmana. Redoc czy Scalar renderują ten sam plik w innym stylu.",
+        "Są dwa podejścia. **Code-first**: piszesz handlery, a specyfikację generujesz z kodu — dekoratory w NestJS (`@nestjs/swagger`), schematy tras w Fastify albo schematy Zod konwertowane przez `zod-openapi` / `@asteasolutions/zod-to-openapi`. Mało tarcia, a dokumentacja nie rozjedzie się z kodem, ale kształt API wynika ze szczegółów implementacji. **Design-first**: najpierw piszesz i recenzujesz specyfikację, uzgadniasz ją z frontendem i innymi konsumentami, potem implementujesz. Wolniejszy start, ale kontrakt jest przemyślany, a oba zespoły mogą pracować równolegle na mockach. Publiczne i międzyzespołowe API skłaniają się ku design-first; wewnętrzne usługi często idą code-first.",
+        "Gdy specyfikacja istnieje, otwiera wiele możliwości: **generowani klienci** i typy TS (`openapi-typescript`, Orval); middleware do **walidacji żądań** odrzucające body niezgodne ze schematem (np. `express-openapi-validator`); **mock serwery** (Prism), dzięki którym frontend może powstawać, zanim gotowy będzie backend; oraz **testy kontraktowe** sprawdzające, że realne odpowiedzi zgadzają się ze specyfikacją, plus wykrywanie zmian psujących w CI przez porównywanie wersji specyfikacji (np. `oasdiff`)."
       ]
     }
   },
@@ -1662,6 +2658,15 @@ const FLASHCARDS = [
         "`context`: per-request data – user, DataLoaders, DB clients",
         "Introspection → tooling, codegen, GraphiQL",
         "Node servers: Apollo Server, GraphQL Yoga, Mercurius (Fastify)"
+      ],
+      more: [
+        "**GraphQL** is a query language for APIs plus a runtime that executes those queries, created at Facebook in 2012 and open-sourced in 2015. Instead of many endpoints each returning a fixed shape, the server publishes one **schema** describing all available data and operations, and the client sends a query listing exactly the fields it wants. The response mirrors the shape of the query.",
+        "The schema is written in **SDL** (Schema Definition Language) and is strongly typed: object types with fields, scalars (`ID`, `String`, `Int`, `Float`, `Boolean`, plus custom ones like `DateTime`), enums, input types, interfaces and unions; `!` marks a field as non-null. Three **root types** are the entry points: `Query` for reads, `Mutation` for writes, `Subscription` for real-time event streams.",
+        "```graphql\ntype User  { id: ID!  name: String! }\ntype Post  { id: ID!  title: String!  author: User! }\ntype Query { posts(first: Int = 10): [Post!]! }\n\n# A client query – only these fields come back:\nquery { posts(first: 2) { title author { name } } }\n```",
+        "Over HTTP there's typically a single endpoint, `POST /graphql`, with a JSON body `{ query, variables, operationName }`. Because the client picks the fields, it avoids both **over-fetching** (receiving fields it doesn't need) and **under-fetching** (needing several round trips to assemble one screen).",
+        "On the server, each field is backed by a **resolver** function with the signature `(parent, args, context, info)`: `parent` is the already-resolved parent object (the `Post` when resolving `author`), `args` are the field's arguments, `context` is a per-request object shared by all resolvers, and `info` holds the query AST and the field's path. A resolver can fetch from anything — SQL, a REST service, a cache — and when none is defined, a default resolver just returns `parent[fieldName]`. The engine walks the query tree, calling resolvers level by level.",
+        "**`context`** is built fresh for every request and holds the authenticated user (decoded from the token), database clients and **DataLoader** instances for batching. Being per-request is essential: sharing it across requests would leak one user's identity or cached data to another.",
+        "**Introspection** lets a client query the schema itself (`__schema`, `__type`). That powers the whole tooling ecosystem: GraphiQL or Apollo Sandbox with autocomplete and docs, GraphQL Code Generator producing TS types, IDE plugins validating queries. In Node.js the main servers are **Apollo Server** (the most popular, integrated with Apollo's platform), **GraphQL Yoga** (by The Guild, built on the Envelop plugin system, runs on Node, Bun and edge runtimes) and **Mercurius** (a Fastify plugin, very fast, with built-in loaders and JIT compilation)."
       ]
     },
     pl: {
@@ -1673,6 +2678,15 @@ const FLASHCARDS = [
         "`context`: dane per żądanie – użytkownik, DataLoadery, klienci DB",
         "Introspekcja → narzędzia, codegen, GraphiQL",
         "Serwery Node: Apollo Server, GraphQL Yoga, Mercurius (Fastify)"
+      ],
+      more: [
+        "**GraphQL** to język zapytań do API wraz ze środowiskiem, które te zapytania wykonuje — powstał w Facebooku w 2012 roku, a w 2015 został udostępniony jako open source. Zamiast wielu endpointów zwracających stały kształt, serwer publikuje jeden **schemat** opisujący wszystkie dostępne dane i operacje, a klient wysyła zapytanie z dokładną listą pól, których potrzebuje. Odpowiedź ma kształt zapytania.",
+        "Schemat pisze się w **SDL** (Schema Definition Language) i jest silnie typowany: typy obiektowe z polami, skalary (`ID`, `String`, `Int`, `Float`, `Boolean` plus własne, np. `DateTime`), enumy, typy wejściowe, interfejsy i unie; `!` oznacza pole non-null. Trzy **typy główne** (root types) to punkty wejścia: `Query` do odczytu, `Mutation` do zapisu, `Subscription` do strumieni zdarzeń w czasie rzeczywistym.",
+        "```graphql\ntype User  { id: ID!  name: String! }\ntype Post  { id: ID!  title: String!  author: User! }\ntype Query { posts(first: Int = 10): [Post!]! }\n\n# Zapytanie klienta – wracają tylko te pola:\nquery { posts(first: 2) { title author { name } } }\n```",
+        "Przez HTTP zwykle jest jeden endpoint, `POST /graphql`, z body JSON `{ query, variables, operationName }`. Ponieważ to klient wybiera pola, unika zarówno **over-fetchingu** (dostawania pól, których nie potrzebuje), jak i **under-fetchingu** (konieczności kilku zapytań, żeby złożyć jeden ekran).",
+        "Po stronie serwera każde pole obsługuje funkcja **resolver** o sygnaturze `(parent, args, context, info)`: `parent` to już rozwiązany obiekt nadrzędny (`Post` przy rozwiązywaniu `author`), `args` to argumenty pola, `context` to obiekt per żądanie współdzielony przez wszystkie resolvery, a `info` zawiera AST zapytania i ścieżkę pola. Resolver może pobierać dane skądkolwiek — z SQL, usługi REST, cache — a gdy go nie zdefiniujemy, domyślny resolver zwraca po prostu `parent[fieldName]`. Silnik przechodzi drzewo zapytania i wywołuje resolvery poziom po poziomie.",
+        "**`context`** jest tworzony od nowa dla każdego żądania i przechowuje uwierzytelnionego użytkownika (odczytanego z tokena), klientów bazy danych i instancje **DataLoadera** do batchowania. To, że jest per żądanie, jest kluczowe: współdzielenie go między żądaniami wyciekłoby tożsamość lub zcache'owane dane jednego użytkownika do innego.",
+        "**Introspekcja** pozwala klientowi odpytać sam schemat (`__schema`, `__type`). Na tym stoi cały ekosystem narzędzi: GraphiQL czy Apollo Sandbox z podpowiadaniem i dokumentacją, GraphQL Code Generator generujący typy TS, wtyczki IDE walidujące zapytania. W Node.js główne serwery to **Apollo Server** (najpopularniejszy, zintegrowany z platformą Apollo), **GraphQL Yoga** (od The Guild, oparty na systemie wtyczek Envelop, działa na Node, Bunie i runtime'ach edge) oraz **Mercurius** (wtyczka do Fastify, bardzo szybki, z wbudowanymi loaderami i kompilacją JIT)."
       ]
     }
   },
@@ -1686,6 +2700,13 @@ const FLASHCARDS = [
         "REST: simple CRUD, public APIs, file uploads, HTTP caching/CDN out of the box",
         "GraphQL costs: N+1, query cost limits, caching harder, field-level authZ, monitoring per operation",
         "Common mix: GraphQL gateway/BFF over REST/gRPC microservices"
+      ],
+      more: [
+        "Both expose data over HTTP; the real question is where you want the complexity. **REST** gives one URL per resource with server-defined responses. **GraphQL** gives one endpoint and a typed schema, and lets each client compose its own response. Neither is universally better — interviewers want to hear trade-offs tied to context.",
+        "GraphQL shines when **many different clients** use the same data with different needs — a web dashboard, a mobile app on a slow network, a TV app. With REST you'd either return everything (**over-fetching**: big payloads with unused fields), make clients chain calls to assemble a screen (**under-fetching**: `/users/1`, then `/users/1/orders`, then `/products/...`), or build a custom endpoint per screen. GraphQL fetches nested, related data in one round trip with exactly the requested fields. The typed schema plus introspection gives great **DX** (developer experience): autocomplete, live docs and generated TS types via codegen. And since clients only get fields they ask for, new fields break no one, so the schema evolves continuously **without versions** like `/v2`.",
+        "REST stays the better default for **simple CRUD**; **public APIs** (every language has an HTTP client, and integrators expect REST + OpenAPI); **file uploads and downloads** (GraphQL has no native file type — multipart upload is a non-standard extension with CSRF caveats, so teams use presigned URLs anyway); and anything that benefits from **HTTP caching** — each resource has its own GET URL, so browsers and CDNs cache it out of the box.",
+        "- **N+1 queries**: naive per-field resolvers fire one DB query per list item — you need DataLoader.\n- **Query cost limits**: clients can write arbitrarily deep or expensive queries, so you need depth and complexity limits.\n- **Caching is harder**: one POST URL defeats HTTP caches.\n- **Field-level authorisation**: any type can be reached via many paths, so checks must live in resolvers or the business layer, not per endpoint.\n- **Monitoring per operation**: every call is `POST /graphql` returning 200, so you track metrics by operation name and parse the `errors` array.",
+        "In practice they're often combined: a **GraphQL gateway or BFF** (Backend For Frontend — an API layer tailored to the needs of one frontend) sits in front of REST or gRPC microservices and aggregates them into one graph for UIs, while services keep talking to each other via REST, gRPC or events. A good interview answer names the context: \"for a public partner API, REST + OpenAPI; for a product with web and mobile apps built on many services, a GraphQL BFF\"."
       ]
     },
     pl: {
@@ -1696,6 +2717,13 @@ const FLASHCARDS = [
         "REST: prosty CRUD, publiczne API, upload plików, cache HTTP/CDN od ręki",
         "Koszty GraphQL: N+1, limity kosztu zapytań, trudniejszy cache, autoryzacja per pole, monitoring per operacja",
         "Częsty miks: gateway/BFF GraphQL nad mikroserwisami REST/gRPC"
+      ],
+      more: [
+        "Oba udostępniają dane przez HTTP; prawdziwe pytanie brzmi, gdzie chcesz mieć złożoność. **REST** daje jeden URL na zasób i odpowiedzi zdefiniowane przez serwer. **GraphQL** daje jeden endpoint i typowany schemat, a każdy klient sam komponuje swoją odpowiedź. Żadne nie jest lepsze zawsze — rekruter chce usłyszeć kompromisy powiązane z kontekstem.",
+        "GraphQL błyszczy, gdy **wielu różnych klientów** korzysta z tych samych danych na różne sposoby — dashboard webowy, aplikacja mobilna na słabym łączu, aplikacja na TV. W REST albo zwracasz wszystko (**over-fetching**: duże payloady z nieużywanymi polami), albo klient musi łańcuchowo wołać kilka endpointów, żeby złożyć ekran (**under-fetching**: `/users/1`, potem `/users/1/orders`, potem `/products/...`), albo budujesz osobny endpoint pod każdy ekran. GraphQL pobiera zagnieżdżone, powiązane dane w jednym zapytaniu, z dokładnie tymi polami, o które poproszono. Typowany schemat plus introspekcja dają świetne **DX** (developer experience): podpowiadanie, żywą dokumentację i typy TS z codegenu. A ponieważ klient dostaje tylko pola, o które pyta, nowe pola nikogo nie psują, więc schemat ewoluuje ciągle, **bez wersji** typu `/v2`.",
+        "REST pozostaje lepszym wyborem domyślnym dla **prostego CRUD-a**; **publicznych API** (każdy język ma klienta HTTP, a integratorzy oczekują REST + OpenAPI); **uploadu i pobierania plików** (GraphQL nie ma natywnego typu pliku — upload multipart to niestandardowe rozszerzenie z pułapkami CSRF, więc i tak używa się presigned URL-i); oraz wszystkiego, co korzysta z **cache HTTP** — każdy zasób ma własny URL pod GET, więc przeglądarki i CDN-y cache'ują go od ręki.",
+        "- **Zapytania N+1**: naiwne resolvery per pole odpalają jedno zapytanie do bazy na każdy element listy — potrzebny DataLoader.\n- **Limity kosztu zapytań**: klient może napisać dowolnie głębokie lub kosztowne zapytanie, więc potrzebne są limity głębokości i złożoności.\n- **Trudniejszy cache**: jeden URL pod POST unieszkodliwia cache HTTP.\n- **Autoryzacja per pole**: do każdego typu da się dojść wieloma ścieżkami, więc sprawdzenia muszą żyć w resolverach lub warstwie biznesowej, nie per endpoint.\n- **Monitoring per operacja**: każde wywołanie to `POST /graphql` ze statusem 200, więc metryki zbieramy po nazwie operacji i analizujemy tablicę `errors`.",
+        "W praktyce często się je łączy: **gateway lub BFF GraphQL** (Backend For Frontend — warstwa API skrojona pod potrzeby jednego frontendu) stoi przed mikroserwisami REST lub gRPC i składa je w jeden graf dla UI, a usługi dalej rozmawiają między sobą przez REST, gRPC albo zdarzenia. Dobra odpowiedź na rozmowie nazywa kontekst: \"dla publicznego API partnerskiego — REST + OpenAPI; dla produktu z aplikacją webową i mobilną opartą na wielu usługach — BFF w GraphQL\"."
       ]
     }
   },
@@ -1709,6 +2737,14 @@ const FLASHCARDS = [
         "Also caches per request (dedupes same ID)",
         "Create new DataLoaders per request (in `context`) – never share across users",
         "Batch function must return results in the same order as keys"
+      ],
+      more: [
+        "The **N+1 problem**: to render a list of N items you run 1 query for the list plus N more queries for a related field of each item. In GraphQL it appears naturally, because every field has its own resolver and resolvers run independently of each other. For `{ posts { title author { name } } }` the `posts` resolver runs `SELECT * FROM posts LIMIT 10` once, then the `author` resolver runs once per post — `SELECT * FROM users WHERE id = ?` ten times. Add another level (each author's `company`) and it multiplies. Every single query is fast, but the round trips add up and the database drowns under load.",
+        "**DataLoader** (the `dataloader` npm package, originally from Facebook) fixes it by **batching**. Resolvers call `loader.load(id)`, which returns a promise but doesn't query yet. DataLoader collects every key requested during the current tick of the event loop, then calls your **batch function** once with the whole array of keys — which runs a single `WHERE id IN (...)`. Eleven queries become two, however large N is.",
+        "```ts\nconst createLoaders = (db: Db) => ({\n  user: new DataLoader(async (ids: readonly string[]) => {\n    const rows = await db.user.findMany({ where: { id: { in: [...ids] } } });\n    const byId = new Map(rows.map((u) => [u.id, u]));\n    return ids.map((id) => byId.get(id) ?? null); // same length & order as ids\n  }),\n});\n// resolver: Post.author = (post, _args, ctx) => ctx.loaders.user.load(post.authorId)\n```",
+        "The batch function has a strict contract: it must return an array with the **same length and order as the keys**. The database returns rows in arbitrary order and simply omits missing ids, so you map results back by key and return `null` (or an `Error`) for ids that weren't found. Returning the rows as-is silently gives posts the wrong authors — a nasty, hard-to-spot bug.",
+        "DataLoader also **memoises** per instance: loading the same id twice (ten posts by one author) triggers one fetch and returns the same promise. That cache is exactly why loaders must be **created per request** and put into `context`. A global loader would serve stale data forever and, worse, could hand data loaded under one user's permissions to another user. It's a request-scoped deduplication tool, not an application cache — use Redis for that.",
+        "Alternatives exist — looking ahead at the selection set via `info` and building one SQL join (Join Monster-style), or ORM features such as Prisma's automatic batching of `findUnique` calls — but DataLoader is the standard answer. Note that N+1 isn't GraphQL-specific: an ORM lazily loading a relation inside a loop causes the same pattern in REST code."
       ]
     },
     pl: {
@@ -1719,6 +2755,14 @@ const FLASHCARDS = [
         "Dodatkowo cache per żądanie (deduplikacja tego samego ID)",
         "Nowe DataLoadery per żądanie (w `context`) – nigdy wspólne między użytkownikami",
         "Funkcja batch musi zwrócić wyniki w tej samej kolejności co klucze"
+      ],
+      more: [
+        "**Problem N+1**: żeby wyrenderować listę N elementów, wykonujesz 1 zapytanie o listę plus N kolejnych o powiązane pole każdego elementu. W GraphQL pojawia się on naturalnie, bo każde pole ma własny resolver, a resolvery działają niezależnie od siebie. Dla `{ posts { title author { name } } }` resolver `posts` wykonuje raz `SELECT * FROM posts LIMIT 10`, a potem resolver `author` odpala się dla każdego postu — dziesięć razy `SELECT * FROM users WHERE id = ?`. Dodaj kolejny poziom (`company` każdego autora) i liczba się mnoży. Każde pojedyncze zapytanie jest szybkie, ale round tripy się sumują i baza tonie pod obciążeniem.",
+        "**DataLoader** (paczka npm `dataloader`, pierwotnie z Facebooka) rozwiązuje to przez **batchowanie**. Resolvery wołają `loader.load(id)`, które zwraca promise, ale jeszcze nie odpytuje bazy. DataLoader zbiera wszystkie klucze zgłoszone w bieżącym ticku pętli zdarzeń (event loop), a potem raz wywołuje Twoją **funkcję batch** z całą tablicą kluczy — która wykonuje jedno `WHERE id IN (...)`. Jedenaście zapytań zamienia się w dwa, niezależnie od wielkości N.",
+        "```ts\nconst createLoaders = (db: Db) => ({\n  user: new DataLoader(async (ids: readonly string[]) => {\n    const rows = await db.user.findMany({ where: { id: { in: [...ids] } } });\n    const byId = new Map(rows.map((u) => [u.id, u]));\n    return ids.map((id) => byId.get(id) ?? null); // ta sama długość i kolejność co ids\n  }),\n});\n// resolver: Post.author = (post, _args, ctx) => ctx.loaders.user.load(post.authorId)\n```",
+        "Funkcja batch ma ścisły kontrakt: musi zwrócić tablicę o **tej samej długości i kolejności co klucze**. Baza zwraca wiersze w dowolnej kolejności i po prostu pomija brakujące id, więc mapujemy wyniki z powrotem po kluczu i zwracamy `null` (albo `Error`) dla nieznalezionych. Zwrócenie wierszy tak, jak przyszły, po cichu przypisze postom złych autorów — paskudny, trudny do wyłapania bug.",
+        "DataLoader dodatkowo **memoizuje** w obrębie instancji: dwukrotne `load` tego samego id (dziesięć postów jednego autora) to jedno pobranie i ta sama promise. Właśnie przez ten cache loadery muszą być **tworzone per żądanie** i trzymane w `context`. Globalny loader serwowałby w nieskończoność nieaktualne dane, a co gorsza mógłby oddać dane załadowane z uprawnieniami jednego użytkownika innemu. To narzędzie do deduplikacji w obrębie żądania, a nie cache aplikacji — do tego służy Redis.",
+        "Istnieją alternatywy — analiza z wyprzedzeniem selekcji pól przez `info` i zbudowanie jednego SQL-a z joinem (w stylu Join Monster) albo funkcje ORM-ów, jak automatyczne batchowanie wywołań `findUnique` w Prismie — ale standardową odpowiedzią jest DataLoader. Warto pamiętać, że N+1 nie jest specyficzne dla GraphQL: ORM leniwie ładujący relację w pętli daje ten sam wzorzec w kodzie REST."
       ]
     }
   },
@@ -1733,6 +2777,15 @@ const FLASHCARDS = [
         "Timeouts, rate limiting per client (by cost, not request count)",
         "AuthZ in resolvers / business layer – every field reachable via many paths",
         "Consider disabling introspection in prod; mask internal errors"
+      ],
+      more: [
+        "In REST the server decides what each endpoint costs. In GraphQL the **client writes the query**, so one request can demand enormous work: deeply nested cycles (`user → friends → friends → …`), huge lists, or hundreds of aliased copies of an expensive field in one document. Rate limiting by request count doesn't help when one request can cost 10,000× more than another. Protection therefore comes in layers.",
+        "```graphql\nquery Evil {\n  users(first: 1000) {\n    friends(first: 1000) {\n      friends(first: 1000) { name }  # up to 10^9 objects\n    }\n  }\n}\n```",
+        "**Depth limiting** rejects queries nested deeper than N levels (e.g. 10) before execution — cheap and effective against recursion. **Query complexity (cost) analysis** goes further: every field gets a cost (a scalar ~0, an object from the DB more, a list multiplied by its `first` argument), the server sums the cost of the parsed query and rejects anything over budget. Tools: `graphql-depth-limit`, `graphql-query-complexity`, GraphQL Armor (which also caps aliases, directives and tokens). This only works if list fields have a **maximum page size** — enforce e.g. `first <= 100`, otherwise cost is unbounded.",
+        "For your own web and mobile apps the strongest measure is **persisted queries** used as an **operation allow-list**: at build time every query the client uses is extracted and registered with the server under its hash; in production the server executes only known hashes and rejects any ad-hoc query. Attackers can no longer craft new queries at all. (Automatic Persisted Queries, APQ, are a caching optimisation that still accepts unknown queries, so they're not a security boundary.)",
+        "At runtime add **timeouts** for execution and downstream calls, and **rate limit by cost** rather than request count: each client gets a budget of complexity points per time window — the model GitHub's and Shopify's public GraphQL APIs use — so one heavy query consumes far more of it than a light one.",
+        "**Authorisation** in GraphQL is per object and per field, not per endpoint. The same `Invoice` may be reachable via `me.invoices`, `order.invoice`, `node(id:)` or a federated entity reference, so a check placed only in the top-level `invoices` resolver can be bypassed. Put checks in the **business/data layer** that every resolver calls (or enforce them with schema directives such as `@auth`), so every path is covered.",
+        "Finally, limit information leakage. **Introspection** hands attackers a full map of the API; for private APIs consider disabling it in production (it's obscurity rather than a fix, and \"Did you mean…?\" field suggestions leak names too). **Mask internal errors**: return a generic message plus a code instead of stack traces or SQL errors, and log the details server-side — Apollo, Yoga and Mercurius all have options for this."
       ]
     },
     pl: {
@@ -1744,6 +2797,15 @@ const FLASHCARDS = [
         "Timeouty, rate limiting per klient (wg kosztu, nie liczby żądań)",
         "Autoryzacja w resolverach / warstwie biznesowej – pole osiągalne wieloma ścieżkami",
         "Rozważ wyłączenie introspekcji na produkcji; maskowanie błędów wewnętrznych"
+      ],
+      more: [
+        "W REST to serwer decyduje, ile kosztuje każdy endpoint. W GraphQL **zapytanie pisze klient**, więc jedno żądanie może zażądać ogromnej pracy: głęboko zagnieżdżonych cykli (`user → friends → friends → …`), gigantycznych list albo setek aliasowanych kopii kosztownego pola w jednym dokumencie. Rate limiting po liczbie żądań nie pomoże, gdy jedno żądanie może kosztować 10 000 razy więcej niż inne. Dlatego ochrona jest warstwowa.",
+        "```graphql\nquery Evil {\n  users(first: 1000) {\n    friends(first: 1000) {\n      friends(first: 1000) { name }  # do 10^9 obiektów\n    }\n  }\n}\n```",
+        "**Limit głębokości** odrzuca przed wykonaniem zapytania zagnieżdżone głębiej niż N poziomów (np. 10) — tanie i skuteczne przeciw rekurencji. **Analiza złożoności (kosztu) zapytań** idzie dalej: każde pole ma koszt (skalar ~0, obiekt z bazy więcej, lista mnożona przez argument `first`), serwer sumuje koszt sparsowanego zapytania i odrzuca wszystko powyżej budżetu. Narzędzia: `graphql-depth-limit`, `graphql-query-complexity`, GraphQL Armor (który limituje też aliasy, dyrektywy i liczbę tokenów). Działa to tylko wtedy, gdy pola-listy mają **maksymalny rozmiar strony** — wymuszamy np. `first <= 100`, inaczej koszt jest nieograniczony.",
+        "Dla własnych aplikacji webowych i mobilnych najsilniejszą ochroną są **persisted queries** jako **lista dozwolonych operacji**: w czasie builda każde zapytanie używane przez klienta jest wyciągane i rejestrowane na serwerze pod swoim hashem; na produkcji serwer wykonuje wyłącznie znane hashe i odrzuca każde zapytanie ad hoc. Atakujący w ogóle nie może ułożyć nowego zapytania. (Automatic Persisted Queries, APQ, to optymalizacja pod cache, która nadal przyjmuje nieznane zapytania — nie jest więc granicą bezpieczeństwa.)",
+        "W runtime dodajemy **timeouty** na wykonanie i wywołania dalszych usług oraz **rate limiting wg kosztu**, a nie liczby żądań: każdy klient dostaje budżet punktów złożoności na okno czasowe — tak działają publiczne API GraphQL GitHuba i Shopify — więc jedno ciężkie zapytanie zużywa go dużo bardziej niż lekkie.",
+        "**Autoryzacja** w GraphQL jest per obiekt i per pole, a nie per endpoint. Ta sama `Invoice` może być osiągalna przez `me.invoices`, `order.invoice`, `node(id:)` czy referencję do encji w federacji, więc sprawdzenie umieszczone tylko w resolverze `invoices` najwyższego poziomu da się obejść. Sprawdzenia umieszczamy w **warstwie biznesowej/dostępu do danych**, którą wołają wszystkie resolvery (albo wymuszamy dyrektywami schematu, np. `@auth`), żeby pokryć każdą ścieżkę.",
+        "Na koniec ograniczamy wycieki informacji. **Introspekcja** daje atakującemu pełną mapę API; przy prywatnych API warto rozważyć jej wyłączenie na produkcji (to raczej zaciemnianie niż rozwiązanie, a podpowiedzi pól \"Did you mean…?\" też zdradzają nazwy). **Maskujemy błędy wewnętrzne**: zamiast stack trace'ów czy błędów SQL zwracamy ogólny komunikat z kodem, a szczegóły logujemy po stronie serwera — Apollo, Yoga i Mercurius mają do tego opcje."
       ]
     }
   },
@@ -1757,6 +2819,14 @@ const FLASHCARDS = [
         "`extensions.code` for machine-readable codes (`UNAUTHENTICATED`, `BAD_USER_INPUT`)",
         "Expected business errors often modelled in schema: union `CreateUserResult = User | ValidationError`",
         "Monitoring must parse `errors`, not rely on HTTP status"
+      ],
+      more: [
+        "GraphQL doesn't map errors onto HTTP status codes the way REST does. A request that was valid and got executed usually returns **HTTP 200**, and the JSON body has two top-level keys: `data` with whatever could be resolved, and `errors`, an array of objects like `{ \"message\": \"...\", \"path\": [\"order\", \"invoice\"], \"extensions\": { \"code\": \"...\" } }`. Because each field resolves independently, **partial success** is normal: one failing field doesn't sink the whole response. (Requests that can't execute at all — unparseable or invalid queries — return no `data`; with the newer `application/graphql-response+json` media type from the GraphQL-over-HTTP spec those get proper 4xx codes.)",
+        "What happens to `data` depends on **nullability**. If a resolver throws for a **nullable** field, that field becomes `null` and an error with its `path` is added. If the field is **non-null** (`String!`), `null` isn't allowed there, so the null **propagates (bubbles up)** to the nearest nullable ancestor and wipes it out — in the worst case all of `data` becomes `null`. That's why schema designers keep fields that can fail (especially those backed by other services) nullable: it contains the blast radius of one failure.",
+        "The `message` is for humans; for code, servers put a machine-readable code in **`extensions.code`**. Apollo's conventions are widely used: `UNAUTHENTICATED`, `FORBIDDEN`, `BAD_USER_INPUT`, `GRAPHQL_VALIDATION_FAILED`, `INTERNAL_SERVER_ERROR`. Clients branch on the code (e.g. redirect to login on `UNAUTHENTICATED`), never on message text.",
+        "For **expected business errors** — \"email already taken\", \"insufficient funds\" — many teams model them in the schema instead of the `errors` array (\"errors as data\"). A mutation returns a **union** of success and failure types; the generated types force the client to handle each case, and each error can carry typed fields:",
+        "```graphql\ntype ValidationError { field: String!  message: String! }\nunion CreateUserResult = User | ValidationError\n\nmutation {\n  createUser(input: { email: \"ann@example.com\" }) {\n    __typename\n    ... on User { id }\n    ... on ValidationError { field message }\n  }\n}\n```",
+        "Rule of thumb: `errors` for unexpected failures and system problems, schema types for domain outcomes the UI must present. And since almost everything comes back as HTTP 200, **monitoring can't rely on status codes** — a dashboard showing 0% 5xx can hide a broken checkout. Instrument per operation name, count responses that contain `errors` by code and path, and alert on those."
       ]
     },
     pl: {
@@ -1767,6 +2837,14 @@ const FLASHCARDS = [
         "`extensions.code` jako kody maszynowe (`UNAUTHENTICATED`, `BAD_USER_INPUT`)",
         "Oczekiwane błędy biznesowe często w schemacie: unia `CreateUserResult = User | ValidationError`",
         "Monitoring musi analizować `errors`, a nie status HTTP"
+      ],
+      more: [
+        "GraphQL nie mapuje błędów na kody statusu HTTP tak jak REST. Żądanie, które było poprawne i zostało wykonane, zwykle zwraca **HTTP 200**, a body JSON ma dwa klucze główne: `data` z tym, co udało się rozwiązać, oraz `errors`, tablicę obiektów w stylu `{ \"message\": \"...\", \"path\": [\"order\", \"invoice\"], \"extensions\": { \"code\": \"...\" } }`. Ponieważ każde pole rozwiązywane jest niezależnie, **częściowy sukces** jest normalny: jedno padnięte pole nie zatapia całej odpowiedzi. (Żądania, których w ogóle nie da się wykonać — nieparsowalne lub niepoprawne zapytania — nie mają `data`; przy nowszym typie `application/graphql-response+json` ze specyfikacji GraphQL-over-HTTP dostają one właściwe kody 4xx.)",
+        "To, co stanie się z `data`, zależy od **nullowalności**. Jeśli resolver rzuci błąd dla pola **nullable**, pole dostaje `null`, a do `errors` trafia błąd z jego `path`. Jeśli pole jest **non-null** (`String!`), `null` jest tam niedozwolony, więc null **wędruje w górę** (propaguje się) do najbliższego nullable przodka i go kasuje — w najgorszym razie całe `data` staje się `null`. Dlatego projektanci schematów zostawiają pola, które mogą zawieść (zwłaszcza zależne od innych usług), jako nullable: ogranicza to zasięg rażenia pojedynczej awarii.",
+        "`message` jest dla ludzi; dla kodu serwery umieszczają maszynowy kod w **`extensions.code`**. Powszechnie stosuje się konwencje Apollo: `UNAUTHENTICATED`, `FORBIDDEN`, `BAD_USER_INPUT`, `GRAPHQL_VALIDATION_FAILED`, `INTERNAL_SERVER_ERROR`. Klient rozgałęzia logikę po kodzie (np. przekierowanie do logowania przy `UNAUTHENTICATED`), nigdy po treści komunikatu.",
+        "**Oczekiwane błędy biznesowe** — \"e-mail już zajęty\", \"brak środków\" — wiele zespołów modeluje w schemacie zamiast w tablicy `errors` (\"errors as data\"). Mutacja zwraca **unię** typów sukcesu i porażki; wygenerowane typy zmuszają klienta do obsłużenia każdego przypadku, a każdy błąd może mieć typowane pola:",
+        "```graphql\ntype ValidationError { field: String!  message: String! }\nunion CreateUserResult = User | ValidationError\n\nmutation {\n  createUser(input: { email: \"ann@example.com\" }) {\n    __typename\n    ... on User { id }\n    ... on ValidationError { field message }\n  }\n}\n```",
+        "Reguła kciuka: `errors` dla nieoczekiwanych awarii i problemów systemowych, typy w schemacie dla wyników domenowych, które UI musi pokazać. A skoro prawie wszystko wraca jako HTTP 200, **monitoring nie może opierać się na kodach statusu** — dashboard z 0% błędów 5xx może ukrywać zepsuty checkout. Instrumentujemy per nazwa operacji, zliczamy odpowiedzi zawierające `errors` według kodu i ścieżki i na tym ustawiamy alerty."
       ]
     }
   },
@@ -1780,6 +2858,15 @@ const FLASHCARDS = [
         "Automatic Persisted Queries over GET → CDN-cacheable",
         "Server: response cache with cache hints (`@cacheControl`), per-resolver caching (Redis), DataLoader per request",
         "Watch for personalised data – cache scope `PRIVATE`"
+      ],
+      more: [
+        "REST gets caching almost for free: each resource is a GET to its own URL, so browsers and CDNs key on the URL and honour `Cache-Control`. GraphQL typically sends every operation as `POST /graphql` with the query in the body. HTTP caches don't cache POST, the URL never changes, and the response depends on which fields were requested. So GraphQL caching happens at other layers.",
+        "On the **client**, libraries like **Apollo Client** and **urql** (with its Graphcache exchange) keep a **normalised cache**: responses are split into individual objects stored under a key built from `__typename` + `id` (e.g. `User:42`), and query results become references into that store. If one query loaded `User:42` and a later mutation returns `User:42` with a new `name`, every component showing that user updates automatically, without refetching. Requirements: request `id` for your objects (the client adds `__typename` itself) or configure custom key fields; lists and pagination usually need explicit merge policies.",
+        "**Automatic Persisted Queries (APQ)** make CDN caching possible. The client sends only a SHA-256 hash of the query, via **GET** (`/graphql?extensions={\"persistedQuery\":{\"sha256Hash\":\"...\"}}&variables=...`). The first time, the server doesn't know the hash and replies `PersistedQueryNotFound`; the client resends with the full query and the server stores it. From then on the URL is short, stable and unique per query + variables — exactly what a CDN can cache — and request payloads shrink too.",
+        "On the **server** there are several layers:",
+        "- **Response cache**: whole results cached by operation + variables (+ user for private data). In Apollo Server, `@cacheControl` directives on types and fields are **cache hints**; the response gets the lowest `maxAge` of everything it touched and a matching `Cache-Control` header. GraphQL Yoga's response-cache plugin does the same, with invalidation on mutations.\n- **Per-resolver caching**: an expensive resolver (slow third-party API, aggregated stats) caches its result in Redis with a TTL, regardless of the query's shape.\n- **DataLoader per request**: batches and dedupes within one request only — it's not a cross-request cache.",
+        "```graphql\ntype Product @cacheControl(maxAge: 3600) {\n  id: ID!\n  name: String!\n  price: Money! @cacheControl(maxAge: 60)\n  isInMyWishlist: Boolean @cacheControl(scope: PRIVATE)\n}\n```",
+        "The dangerous part is **personalised data**. If a response contains anything user-specific (`me`, customer-tier prices, permissions), it must never land in a shared cache. Marking such fields `scope: PRIVATE` makes the whole response private: cached per user, or only in the browser via `Cache-Control: private`. Mixing public catalogue data with `me { cart }` in one operation is a common way to lose cacheability — splitting it into separate operations helps."
       ]
     },
     pl: {
@@ -1790,6 +2877,15 @@ const FLASHCARDS = [
         "Automatic Persisted Queries przez GET → cache w CDN",
         "Serwer: cache odpowiedzi z podpowiedziami (`@cacheControl`), cache resolverów (Redis), DataLoader per żądanie",
         "Uwaga na dane spersonalizowane – zakres cache `PRIVATE`"
+      ],
+      more: [
+        "REST dostaje cache niemal za darmo: każdy zasób to GET pod własnym URL-em, więc przeglądarki i CDN-y używają URL-a jako klucza i respektują `Cache-Control`. GraphQL zwykle wysyła każdą operację jako `POST /graphql` z zapytaniem w body. Cache HTTP nie cache'ują POST-ów, URL się nie zmienia, a odpowiedź zależy od tego, o które pola zapytano. Dlatego cache w GraphQL realizuje się na innych warstwach.",
+        "Po stronie **klienta** biblioteki takie jak **Apollo Client** i **urql** (z exchange'em Graphcache) utrzymują **znormalizowany cache**: odpowiedzi są rozbijane na pojedyncze obiekty zapisywane pod kluczem z `__typename` + `id` (np. `User:42`), a wyniki zapytań stają się referencjami do tego magazynu. Jeśli jedno zapytanie pobrało `User:42`, a późniejsza mutacja zwróci `User:42` z nowym `name`, każdy komponent pokazujący tego użytkownika zaktualizuje się automatycznie, bez ponownego pobierania. Warunki: pobieramy `id` obiektów (`__typename` klient dodaje sam) albo konfigurujemy własne pola klucza; listy i paginacja zwykle wymagają jawnych polityk scalania.",
+        "**Automatic Persisted Queries (APQ)** umożliwiają cache w CDN. Klient wysyła tylko hash SHA-256 zapytania, metodą **GET** (`/graphql?extensions={\"persistedQuery\":{\"sha256Hash\":\"...\"}}&variables=...`). Za pierwszym razem serwer nie zna hasha i odpowiada `PersistedQueryNotFound`; klient wysyła ponownie pełne zapytanie, a serwer je zapamiętuje. Od tej pory URL jest krótki, stabilny i unikalny dla zapytania + zmiennych — dokładnie to, co CDN potrafi cache'ować — a przy okazji maleje rozmiar żądań.",
+        "Po stronie **serwera** jest kilka warstw:",
+        "- **Cache odpowiedzi**: całe wyniki cache'owane po operacji + zmiennych (+ użytkowniku przy danych prywatnych). W Apollo Server dyrektywy `@cacheControl` na typach i polach to **podpowiedzi cache** (cache hints); odpowiedź dostaje najniższe `maxAge` spośród wszystkiego, czego dotknęła, i pasujący nagłówek `Cache-Control`. Plugin response-cache w GraphQL Yoga robi to samo, z unieważnianiem przy mutacjach.\n- **Cache per resolver**: kosztowny resolver (wolne zewnętrzne API, zagregowane statystyki) zapisuje wynik w Redisie z TTL, niezależnie od kształtu zapytania.\n- **DataLoader per żądanie**: batchuje i deduplikuje tylko w obrębie jednego żądania — to nie jest cache między żądaniami.",
+        "```graphql\ntype Product @cacheControl(maxAge: 3600) {\n  id: ID!\n  name: String!\n  price: Money! @cacheControl(maxAge: 60)\n  isInMyWishlist: Boolean @cacheControl(scope: PRIVATE)\n}\n```",
+        "Niebezpieczne są **dane spersonalizowane**. Jeśli odpowiedź zawiera cokolwiek zależnego od użytkownika (`me`, ceny dla grupy klienta, uprawnienia), nigdy nie może trafić do współdzielonego cache. Oznaczenie takich pól jako `scope: PRIVATE` czyni prywatną całą odpowiedź: cache per użytkownik albo tylko w przeglądarce przez `Cache-Control: private`. Mieszanie publicznych danych katalogu z `me { cart }` w jednej operacji to częsty sposób na utratę cache'owalności — pomaga rozbicie na osobne operacje."
       ]
     }
   },
@@ -1803,6 +2899,14 @@ const FLASHCARDS = [
         "Nullability: output fields nullable give flexibility; making a field non-null → nullable is breaking for clients",
         "New required arguments/input fields are breaking – add as optional",
         "Schema checks in CI against real client operations (e.g. GraphQL Inspector, Apollo checks)"
+      ],
+      more: [
+        "REST APIs often version (`/v2`) because the server decides the response shape: adding or removing a field changes it for everyone. In GraphQL the **client decides** — a query lists exactly the fields it wants and receives nothing else. That changes the game: the GraphQL community recommends continuously evolving one schema instead of versioning it. The question becomes \"which changes break an existing query?\"",
+        "**Adding** is safe: new types, new fields, new optional arguments, new queries and mutations. Old clients never request them, so their responses stay byte-for-byte identical. One caveat: adding a value to an output enum or a member to a union can break clients that handle them exhaustively — generated client code should always have a default branch.",
+        "**Removing or renaming** is breaking, so it happens in steps. Add the new field, mark the old one with `@deprecated(reason: ...)` — it shows up in introspection, so GraphiQL and IDEs strike it through and codegen flags it. Then **track field usage**: Apollo GraphOS, Hive or your own tracing record which operations and client versions still request the field. When usage reaches zero (or the old mobile versions are out of support), delete it.",
+        "```graphql\ntype User {\n  id: ID!\n  name: String @deprecated(reason: \"Use fullName. Removal after 2026-12-01.\")\n  fullName: String\n  # new argument added as optional, so existing queries still work\n  orders(first: Int = 20, status: OrderStatus): OrderConnection!\n}\n```",
+        "**Nullability** is part of the contract, and the rules flip between output and input. For **output** fields, changing **non-null to nullable** (`String!` → `String`) is breaking: clients and their generated TS types assume a value is always present and will crash on `null`. The reverse (nullable → non-null) is safe for readers. That's why many teams start output fields as nullable — it keeps the freedom to return `null` later (for example when the data moves to a service that can fail) and localises errors. For **inputs** it's the other way round: a **new required argument or input field** (`!` with no default) breaks every existing call that doesn't send it, so add it as optional or with a default value.",
+        "These rules are easy to forget, so automate them with **schema checks in CI**: compare the proposed schema with the current one and with real operations collected from clients. **GraphQL Inspector** / Hive (The Guild) and **Apollo schema checks** (`rover subgraph check`) flag breaking changes and tell you whether any client actually uses the affected field — so a technically breaking change to an unused field can pass, while one that hits a live mobile query blocks the merge."
       ]
     },
     pl: {
@@ -1813,6 +2917,14 @@ const FLASHCARDS = [
         "Nullowalność: pola wyjściowe nullable dają elastyczność; zmiana non-null → nullable psuje klientów",
         "Nowe wymagane argumenty/pola wejściowe psują – dodawaj jako opcjonalne",
         "Sprawdzanie schematu w CI względem realnych operacji klientów (np. GraphQL Inspector, Apollo checks)"
+      ],
+      more: [
+        "API REST często się wersjonuje (`/v2`), bo to serwer decyduje o kształcie odpowiedzi: dodanie czy usunięcie pola zmienia ją wszystkim. W GraphQL **decyduje klient** — zapytanie wymienia dokładnie te pola, których chce, i nic więcej nie dostaje. To zmienia reguły gry: społeczność GraphQL zaleca ciągłą ewolucję jednego schematu zamiast wersjonowania. Pytanie brzmi więc: \"które zmiany psują istniejące zapytanie?\"",
+        "**Dodawanie** jest bezpieczne: nowe typy, pola, opcjonalne argumenty, nowe query i mutacje. Starzy klienci nigdy o nie nie pytają, więc ich odpowiedzi pozostają identyczne co do bajta. Jedno zastrzeżenie: nowa wartość w wyjściowym enumie albo nowy członek unii mogą zepsuć klientów, którzy obsługują je wyczerpująco — wygenerowany kod klienta powinien zawsze mieć gałąź domyślną.",
+        "**Usuwanie lub zmiana nazwy** psuje, więc robimy to etapami. Dodajemy nowe pole, stare oznaczamy `@deprecated(reason: ...)` — widać to w introspekcji, więc GraphiQL i IDE je przekreślają, a codegen oznacza. Potem **śledzimy użycie pola**: Apollo GraphOS, Hive albo własny tracing zapisują, które operacje i wersje klientów wciąż o nie pytają. Gdy użycie spadnie do zera (albo stare wersje aplikacji mobilnej wypadną ze wsparcia), usuwamy je.",
+        "```graphql\ntype User {\n  id: ID!\n  name: String @deprecated(reason: \"Use fullName. Removal after 2026-12-01.\")\n  fullName: String\n  # nowy argument dodany jako opcjonalny, więc istniejące zapytania działają\n  orders(first: Int = 20, status: OrderStatus): OrderConnection!\n}\n```",
+        "**Nullowalność** jest częścią kontraktu, a zasady odwracają się między wyjściem a wejściem. Dla pól **wyjściowych** zmiana **non-null na nullable** (`String!` → `String`) psuje: klienci i ich wygenerowane typy TS zakładają, że wartość zawsze jest, i wywrócą się na `null`. Odwrotna zmiana (nullable → non-null) jest dla czytających bezpieczna. Dlatego wiele zespołów zaczyna od pól wyjściowych nullable — zostawia to swobodę zwrócenia `null` w przyszłości (np. gdy dane przeniosą się do usługi, która może zawieść) i lokalizuje błędy. Dla **wejścia** jest na odwrót: **nowy wymagany argument lub pole wejściowe** (`!` bez wartości domyślnej) psuje każde istniejące wywołanie, które go nie wysyła, więc dodajemy go jako opcjonalny albo z wartością domyślną.",
+        "Łatwo o tych zasadach zapomnieć, więc automatyzujemy je **sprawdzaniem schematu w CI**: porównujemy proponowany schemat z obecnym oraz z realnymi operacjami zebranymi od klientów. **GraphQL Inspector** / Hive (The Guild) i **Apollo schema checks** (`rover subgraph check`) oznaczają zmiany psujące i mówią, czy jakikolwiek klient faktycznie używa danego pola — więc formalnie psująca zmiana w nieużywanym polu przejdzie, a taka, która trafia w żywe zapytanie aplikacji mobilnej, zablokuje merge."
       ]
     }
   },
@@ -1826,6 +2938,14 @@ const FLASHCARDS = [
         "Alternative: schema stitching, or a single BFF that calls REST services",
         "Router handles query planning; each team deploys its subgraph independently",
         "Cost: composition checks, distributed tracing across subgraphs"
+      ],
+      more: [
+        "In a microservice architecture each team owns a service, but frontends want one graph. There are three ways to get there: a **single BFF** (one GraphQL server that itself calls the services' REST or gRPC APIs), **schema stitching** (a gateway merges several GraphQL schemas, with hand-written glue to link types), and **federation**, where the links between services are declared inside each service's own schema.",
+        "In **Apollo Federation** (v2), each service exposes a **subgraph** — an ordinary GraphQL schema plus a few federation directives. A **router** (Apollo Router, written in Rust, or open alternatives such as Hive Gateway or WunderGraph Cosmo) composes all subgraphs into one **supergraph**, the schema clients actually see. Clients query the router as if it were a single server.",
+        "The central concept is an **entity**: a type that several subgraphs contribute fields to, identified by a key. The Users subgraph defines `User` with `@key(fields: \"id\")`; the Orders subgraph declares the same entity by its key and adds an `orders` field. Neither service calls the other directly.",
+        "```graphql\n# users subgraph\ntype User @key(fields: \"id\") { id: ID!  name: String! }\n\n# orders subgraph\ntype User @key(fields: \"id\") { id: ID!  orders: [Order!]! }\ntype Order { id: ID!  total: Float! }\n```",
+        "When a client asks `{ me { name orders { total } } }`, the router builds a **query plan**: fetch `me { id name }` from Users, pass the `id` to Orders through the special `_entities` query, where a **reference resolver** (`__resolveReference`) loads that user's orders, then merge the results. Because each subgraph is an independent service with its own schema, teams **deploy independently** — as long as their change still composes with the rest.",
+        "The costs: **composition checks** — every subgraph change must be validated against the others (`rover subgraph check`, a schema registry) so one team can't break the supergraph; the router becomes critical infrastructure to run and scale; query plans can fan out into several sequential hops, adding latency and cross-service N+1 patterns (reference resolvers must batch); and debugging needs **distributed tracing** (OpenTelemetry) through the router and every subgraph. For a handful of services owned by one team, a single BFF is simpler; federation pays off when many teams own parts of the graph."
       ]
     },
     pl: {
@@ -1836,6 +2956,14 @@ const FLASHCARDS = [
         "Alternatywy: schema stitching lub jeden BFF wołający usługi REST",
         "Router planuje zapytania; każdy zespół wdraża swój subgraph niezależnie",
         "Koszt: sprawdzanie kompozycji, rozproszony tracing między subgraphami"
+      ],
+      more: [
+        "W architekturze mikroserwisowej każdy zespół ma swoją usługę, ale frontendy chcą jednego grafu. Są trzy drogi: **jeden BFF** (pojedynczy serwer GraphQL, który sam woła API REST lub gRPC usług), **schema stitching** (gateway scala kilka schematów GraphQL, a powiązania typów trzeba dopisać ręcznie) oraz **federacja**, w której powiązania między usługami deklaruje się w schemacie każdej z nich.",
+        "W **Apollo Federation** (v2) każda usługa wystawia **subgraph** — zwykły schemat GraphQL z kilkoma dyrektywami federacyjnymi. **Router** (Apollo Router napisany w Ruście albo otwarte alternatywy jak Hive Gateway czy WunderGraph Cosmo) składa wszystkie subgraphy w jeden **supergraph** — schemat, który faktycznie widzą klienci. Klient odpytuje router tak, jakby był pojedynczym serwerem.",
+        "Kluczowe pojęcie to **encja**: typ, do którego pola dokłada kilka subgraphów, identyfikowany kluczem. Subgraph Users definiuje `User` z `@key(fields: \"id\")`; subgraph Orders deklaruje tę samą encję po kluczu i dodaje pole `orders`. Żadna z usług nie woła drugiej bezpośrednio.",
+        "```graphql\n# subgraph users\ntype User @key(fields: \"id\") { id: ID!  name: String! }\n\n# subgraph orders\ntype User @key(fields: \"id\") { id: ID!  orders: [Order!]! }\ntype Order { id: ID!  total: Float! }\n```",
+        "Gdy klient pyta o `{ me { name orders { total } } }`, router buduje **plan zapytania**: pobiera `me { id name }` z Users, przekazuje `id` do Orders przez specjalne zapytanie `_entities`, gdzie **resolver referencji** (`__resolveReference`) ładuje zamówienia tego użytkownika, a na końcu scala wyniki. Ponieważ każdy subgraph to niezależna usługa z własnym schematem, zespoły **wdrażają niezależnie** — o ile ich zmiana nadal poprawnie się komponuje z resztą.",
+        "Koszty: **sprawdzanie kompozycji** — każdą zmianę subgraphu trzeba zwalidować względem pozostałych (`rover subgraph check`, rejestr schematów), żeby jeden zespół nie zepsuł supergraphu; router staje się krytyczną infrastrukturą do utrzymania i skalowania; plany zapytań mogą rozgałęziać się na kilka sekwencyjnych skoków, dokładając opóźnienia i wzorce N+1 między usługami (resolvery referencji muszą batchować); a debugowanie wymaga **rozproszonego tracingu** (OpenTelemetry) przez router i każdy subgraph. Przy kilku usługach jednego zespołu prostszy jest pojedynczy BFF; federacja opłaca się, gdy części grafu należą do wielu zespołów."
       ]
     }
   },
@@ -1849,6 +2977,15 @@ const FLASHCARDS = [
         "Multiple instances → shared pub/sub (Redis, SNS/SQS, Kafka) so any node can publish",
         "Sticky sessions / connection-aware load balancing; auth on connection init",
         "For simple cases, polling or plain SSE may be enough"
+      ],
+      more: [
+        "Queries and mutations are request/response. A **subscription** is the third operation type, for real-time updates: the client subscribes once — `subscription { orderStatusChanged(orderId: \"7\") { status } }` — and the server **pushes** a result every time a matching event occurs, each shaped by the subscription's selection set exactly like a query result. Typical uses: chat, notifications, live dashboards, order tracking.",
+        "Because the server pushes, a plain request/response doesn't fit — you need a **long-lived connection**. The usual choice is WebSocket with the **`graphql-ws`** library and protocol (subprotocol `graphql-transport-ws`); the older `subscriptions-transport-ws` is deprecated. The alternative is **SSE** (Server-Sent Events — a one-way stream over ordinary HTTP, e.g. via `graphql-sse` or Yoga's built-in support). It passes through proxies and HTTP/2 more easily and is enough, since subscription data only flows server → client.",
+        "On the server, a subscription resolver returns an **async iterator**; every value it yields is executed against the selection set and sent to the client. The iterator is usually fed by a **pub/sub** mechanism: a mutation publishes an event, and the iterators of interested subscribers receive it, filtered by topic or arguments.",
+        "```ts\n// Mutation side: after saving, publish an event (GraphQL Yoga-style pubsub)\npubsub.publish(`ORDER_STATUS:${order.id}`, { orderStatusChanged: order });\n\n// Subscription side: return an async iterator of events for this order\nconst resolvers = {\n  Subscription: {\n    orderStatusChanged: {\n      subscribe: (_parent, { orderId }, { pubsub }) => pubsub.subscribe(`ORDER_STATUS:${orderId}`),\n    },\n  },\n};\n```",
+        "Scaling is where it gets interesting. With one instance, an in-memory pub/sub works. With several, the mutation may run on instance A while the subscriber's socket lives on instance B, so the event never reaches it. The fix is a **shared pub/sub** backbone — Redis Pub/Sub (e.g. `graphql-redis-subscriptions` or Yoga's Redis event target), Kafka, NATS, or SNS/SQS on AWS — so any node can publish and every node holding interested connections receives the event. Connections are stateful: a WebSocket stays pinned to one instance, so the load balancer must support upgrades and long idle timeouts, balance by **connection count** rather than requests, and use **sticky sessions** where a transport spans several HTTP requests. Clients must reconnect and resubscribe after deploys.",
+        "**Authentication** happens when the connection opens: browsers can't set custom headers on a WebSocket handshake, so `graphql-ws` sends the token in the `connection_init` payload, validated in the server's `onConnect` hook before any subscription starts. Tokens can expire during a long connection, so re-check or close on expiry, and authorise each subscription too (may this user watch order 7?).",
+        "Subscriptions add real infrastructure cost. If updates are rare or a few seconds of delay is fine, **polling** a query (Apollo's `pollInterval`) is simpler and scales like ordinary HTTP; for one-way notifications a plain **SSE** endpoint outside GraphQL may be enough. Some teams use subscriptions only as a \"something changed\" signal and then refetch with a normal query."
       ]
     },
     pl: {
@@ -1859,6 +2996,15 @@ const FLASHCARDS = [
         "Wiele instancji → wspólny pub/sub (Redis, SNS/SQS, Kafka), żeby każdy węzeł mógł publikować",
         "Sticky sessions / load balancing świadomy połączeń; auth przy inicjacji połączenia",
         "W prostych przypadkach wystarczy polling lub zwykłe SSE"
+      ],
+      more: [
+        "Query i mutacje działają w modelu żądanie/odpowiedź. **Subskrypcja** to trzeci typ operacji, do aktualizacji w czasie rzeczywistym: klient subskrybuje raz — `subscription { orderStatusChanged(orderId: \"7\") { status } }` — a serwer **wypycha** wynik za każdym razem, gdy wystąpi pasujące zdarzenie; każdy ma kształt wyznaczony przez selekcję pól subskrypcji, dokładnie jak wynik zapytania. Typowe zastosowania: czat, powiadomienia, dashboardy na żywo, śledzenie zamówień.",
+        "Skoro to serwer wypycha dane, zwykłe żądanie/odpowiedź nie wystarcza — potrzebne jest **długotrwałe połączenie**. Standardem jest WebSocket z biblioteką i protokołem **`graphql-ws`** (subprotokół `graphql-transport-ws`); starsze `subscriptions-transport-ws` jest przestarzałe. Alternatywą jest **SSE** (Server-Sent Events — jednokierunkowy strumień po zwykłym HTTP, np. przez `graphql-sse` albo wbudowane wsparcie w Yodze). Łatwiej przechodzi przez proxy i HTTP/2 i w zupełności wystarcza, bo dane subskrypcji płyną tylko w kierunku serwer → klient.",
+        "Na serwerze resolver subskrypcji zwraca **async iterator**; każda wartość, którą wyemituje, jest wykonywana względem selekcji pól i wysyłana do klienta. Iterator zasila zwykle mechanizm **pub/sub**: mutacja publikuje zdarzenie, a iteratory zainteresowanych subskrybentów je odbierają, filtrowane po temacie lub argumentach.",
+        "```ts\n// Strona mutacji: po zapisie publikujemy zdarzenie (pubsub w stylu GraphQL Yoga)\npubsub.publish(`ORDER_STATUS:${order.id}`, { orderStatusChanged: order });\n\n// Strona subskrypcji: zwracamy async iterator zdarzeń dla tego zamówienia\nconst resolvers = {\n  Subscription: {\n    orderStatusChanged: {\n      subscribe: (_parent, { orderId }, { pubsub }) => pubsub.subscribe(`ORDER_STATUS:${orderId}`),\n    },\n  },\n};\n```",
+        "Ciekawie robi się przy skalowaniu. Przy jednej instancji wystarczy pub/sub w pamięci. Przy kilku mutacja może wykonać się na instancji A, a socket subskrybenta żyje na instancji B — zdarzenie nigdy do niego nie dotrze. Rozwiązaniem jest **wspólny pub/sub** — Redis Pub/Sub (np. `graphql-redis-subscriptions` albo Redisowy event target w Yodze), Kafka, NATS lub SNS/SQS w AWS — dzięki któremu dowolny węzeł może publikować, a każdy węzeł z zainteresowanymi połączeniami odbiera zdarzenie. Połączenia są stanowe: WebSocket jest przypięty do jednej instancji, więc load balancer musi obsługiwać upgrade i długie timeouty bezczynności, rozkładać ruch wg **liczby połączeń**, a nie żądań, i stosować **sticky sessions** tam, gdzie transport obejmuje kilka żądań HTTP. Klienci muszą umieć połączyć się ponownie i odnowić subskrypcje po deployu.",
+        "**Uwierzytelnienie** odbywa się przy otwieraniu połączenia: przeglądarka nie pozwala ustawić własnych nagłówków w handshake'u WebSocket, więc `graphql-ws` wysyła token w payloadzie `connection_init`, weryfikowanym w hooku `onConnect` serwera, zanim ruszy jakakolwiek subskrypcja. Token może wygasnąć w trakcie długiego połączenia, więc trzeba go ponownie sprawdzać lub zamykać połączenie po wygaśnięciu, a do tego autoryzować każdą subskrypcję (czy ten użytkownik może śledzić zamówienie 7?).",
+        "Subskrypcje to realny koszt infrastrukturalny. Jeśli zmiany są rzadkie albo kilka sekund opóźnienia nie przeszkadza, **polling** zapytania (`pollInterval` w Apollo) jest prostszy i skaluje się jak zwykłe HTTP; dla jednokierunkowych powiadomień może wystarczyć zwykły endpoint **SSE** poza GraphQL. Niektóre zespoły używają subskrypcji tylko jako sygnału \"coś się zmieniło\", a dane pobierają potem zwykłym zapytaniem."
       ]
     }
   },
@@ -1896,6 +3042,15 @@ const FLASHCARDS = [
         "Client Credentials: service-to-service",
         "Access token (short-lived) + refresh token (long-lived, rotated)",
         "OIDC adds identity on top: ID token (JWT), `/userinfo`"
+      ],
+      more: [
+        "The problem OAuth 2.0 solves: you want an app (say, a photo printing service) to access your photos stored elsewhere (Google Photos) **without giving it your Google password**. OAuth lets you grant that app a limited, revocable permission, an **access token** with specific **scopes** like `photos.read`. It is a framework for **delegated authorisation**: it answers \"what may this client access on the user's behalf?\", not \"who is the user?\".",
+        "The four roles:",
+        "- **Resource owner**: the user who owns the data\n- **Client**: the application requesting access (your SPA, mobile app or backend)\n- **Authorisation server**: issues tokens after authenticating the user and getting consent (Auth0, Keycloak, Cognito, Entra ID, Google)\n- **Resource server**: the API holding the data, which accepts and validates access tokens",
+        "**Authorization Code flow with PKCE** is the default for anything user-facing. The client redirects the browser to the authorisation server; the user logs in there (the client never sees the password); the server redirects back with a short-lived one-time **authorization code**; the client exchanges the code for tokens. **PKCE** (Proof Key for Code Exchange) protects that exchange: the client generates a random `code_verifier`, sends its hash (`code_challenge`) in the first redirect, and must present the original verifier when redeeming the code, so a stolen code is useless. This matters because SPAs and mobile apps are **public clients**: they cannot keep a client secret, since anyone can read the shipped code. OAuth 2.1 makes PKCE mandatory for all clients and drops the old Implicit and Password flows.",
+        "**Client Credentials flow** is for **machine-to-machine** calls with no user involved: a backend service authenticates with its own client ID and secret (or a signed assertion / mTLS) and gets a token for its own permissions, e.g. a billing job calling the invoicing API.",
+        "Tokens: the **access token** is short-lived (minutes to an hour) and sent on every API call as `Authorization: Bearer ...`; if stolen, it expires quickly. The **refresh token** is long-lived and used only against the authorisation server to get new access tokens without re-login. Best practice is **refresh token rotation**: every use returns a new refresh token and invalidates the old one, so reuse of a stolen one is detected and the whole session can be revoked.",
+        "**OpenID Connect (OIDC)** is a thin identity layer on top of OAuth 2.0. Request the `openid` scope and, besides the access token, you get an **ID token**: a signed JWT with claims about the user (`sub` user ID, `email`, `name`, `iss`, `aud`) meant for the client to learn who logged in. The `/userinfo` endpoint returns more profile data. \"Log in with Google\" is OIDC. The classic interview trap: do not use an OAuth access token as proof of identity, and do not send ID tokens to APIs as access tokens."
       ]
     },
     pl: {
@@ -1907,6 +3062,15 @@ const FLASHCARDS = [
         "Client Credentials: komunikacja usługa–usługa",
         "Access token (krótko żyjący) + refresh token (długo żyjący, rotowany)",
         "OIDC dodaje tożsamość: ID token (JWT), `/userinfo`"
+      ],
+      more: [
+        "Problem, który rozwiązuje OAuth 2.0: chcesz, żeby aplikacja (np. serwis do drukowania zdjęć) miała dostęp do Twoich zdjęć przechowywanych gdzie indziej (Google Photos) **bez podawania jej hasła do Google**. OAuth pozwala nadać tej aplikacji ograniczone, odwoływalne uprawnienie – **access token** z określonymi **scope'ami**, np. `photos.read`. To framework **delegowanej autoryzacji**: odpowiada na pytanie „do czego ten klient ma dostęp w imieniu użytkownika?”, a nie „kim jest użytkownik?”.",
+        "Cztery role:",
+        "- **Właściciel zasobu (resource owner)**: użytkownik, do którego należą dane\n- **Klient (client)**: aplikacja prosząca o dostęp (Twoje SPA, aplikacja mobilna, backend)\n- **Serwer autoryzacji (authorization server)**: wydaje tokeny po uwierzytelnieniu użytkownika i uzyskaniu zgody (Auth0, Keycloak, Cognito, Entra ID, Google)\n- **Serwer zasobów (resource server)**: API z danymi, które przyjmuje i weryfikuje access tokeny",
+        "**Authorization Code z PKCE** to domyślny flow dla wszystkiego, z czego korzysta użytkownik. Klient przekierowuje przeglądarkę do serwera autoryzacji; użytkownik loguje się tam (klient nigdy nie widzi hasła); serwer przekierowuje z powrotem z krótko żyjącym, jednorazowym **kodem autoryzacyjnym**; klient wymienia kod na tokeny. **PKCE** (Proof Key for Code Exchange) chroni tę wymianę: klient generuje losowy `code_verifier`, w pierwszym przekierowaniu wysyła jego hash (`code_challenge`), a przy wymianie kodu musi pokazać oryginalny verifier – skradziony kod jest bezużyteczny. Ma to znaczenie, bo SPA i aplikacje mobilne to **klienci publiczni**: nie mogą przechowywać client secret, skoro każdy może odczytać ich kod. OAuth 2.1 wymaga PKCE dla wszystkich klientów i usuwa stare flow Implicit i Password.",
+        "**Client Credentials** służy do komunikacji **maszyna–maszyna** bez udziału użytkownika: usługa backendowa uwierzytelnia się własnym client ID i sekretem (albo podpisanym assertion / mTLS) i dostaje token na własne uprawnienia, np. zadanie rozliczeniowe wywołujące API faktur.",
+        "Tokeny: **access token** żyje krótko (minuty do godziny) i jest wysyłany przy każdym wywołaniu API jako `Authorization: Bearer ...`; jeśli wycieknie, szybko wygaśnie. **Refresh token** żyje długo i służy wyłącznie do pobierania nowych access tokenów z serwera autoryzacji bez ponownego logowania. Dobra praktyka to **rotacja refresh tokenów**: każde użycie zwraca nowy refresh token i unieważnia stary, więc ponowne użycie skradzionego zostaje wykryte, a całą sesję można odwołać.",
+        "**OpenID Connect (OIDC)** to cienka warstwa tożsamości nad OAuth 2.0. Poproś o scope `openid`, a oprócz access tokenu dostaniesz **ID token**: podpisany JWT z informacjami o użytkowniku (`sub` – ID użytkownika, `email`, `name`, `iss`, `aud`), przeznaczony dla klienta, żeby wiedział, kto się zalogował. Endpoint `/userinfo` zwraca więcej danych profilu. „Zaloguj przez Google” to właśnie OIDC. Klasyczna pułapka z rozmów: nie używaj access tokenu OAuth jako dowodu tożsamości i nie wysyłaj ID tokenów do API zamiast access tokenów."
       ]
     }
   },
@@ -1921,6 +3085,15 @@ const FLASHCARDS = [
         "Hard to revoke → short expiry (5–15 min) + refresh token rotation / denylist",
         "Always verify `alg`, `exp`, `iss`, `aud`; no secrets in payload",
         "Browser storage: httpOnly Secure SameSite cookie (XSS-safe) vs memory; avoid localStorage"
+      ],
+      more: [
+        "A **JSON Web Token (JWT)** is a compact, self-contained token: it carries claims (facts like user ID, roles, expiry) plus a cryptographic signature proving who issued it and that nobody changed it. It looks like `xxxxx.yyyyy.zzzzz`: three **base64url**-encoded parts. The **header** says which algorithm signed it (`{\"alg\":\"RS256\",\"kid\":\"key-1\"}`), the **payload** holds the claims (`sub`, `exp`, `iss`, `aud`, custom ones), and the **signature** is computed over the first two parts. Crucially, a standard JWT (a JWS) is **signed, not encrypted**. Base64url is just an encoding; anyone can paste a token into jwt.io and read the payload. So never put secrets or sensitive personal data in it. (Encrypted JWTs, JWE, exist but are much less common.)",
+        "Signing algorithms:",
+        "- **HS256** (HMAC + SHA-256): one **shared secret** both signs and verifies, so every service that verifies tokens could also forge them. Fine within a single service.\n- **RS256 / ES256** (RSA / elliptic curve): the auth server signs with a **private key**; everyone else verifies with the **public key**, typically fetched from a **JWKS** endpoint (JSON Web Key Set, e.g. `/.well-known/jwks.json`). The `kid` header tells verifiers which key to use, which enables key rotation. Preferred for distributed systems.",
+        "The big advantage is **statelessness**: an API can verify a token with just the key, no database or session-store lookup, so it scales across many services. The flip side is **revocation**: a valid token stays valid until `exp`, even if the user logs out or is banned. Mitigations: short access-token lifetime (5–15 min), long-lived **refresh tokens** that are stored server-side, rotated on each use and revocable, and for high-risk cases a **denylist** of revoked token IDs (`jti`), which reintroduces a bit of state.",
+        "```ts\nimport { jwtVerify, createRemoteJWKSet } from 'jose';\nconst jwks = createRemoteJWKSet(new URL('https://auth.example.com/.well-known/jwks.json'));\nconst { payload } = await jwtVerify(token, jwks, {\n  algorithms: ['RS256'],               // pin alg: never trust the header\n  issuer: 'https://auth.example.com',\n  audience: 'orders-api',\n}); // also checks exp / nbf\n```",
+        "Why verify each claim: historic attacks include `alg: none` (unsigned token accepted) and algorithm confusion (RS256 public key used as an HS256 secret). Pin the allowed algorithms; check `exp` (expired), `iss` (issued by the server you trust), `aud` (intended for this API, not another one).",
+        "Storage in the browser: **localStorage** is readable by any JavaScript on the page, so one XSS bug leaks the token. An **httpOnly** cookie cannot be read by JS; add **Secure** (HTTPS only) and **SameSite** (limits cross-site sending, mitigating CSRF). Alternatively, keep the access token only in memory and refresh via an httpOnly cookie. Many teams now use a **BFF** so tokens never reach the browser at all."
       ]
     },
     pl: {
@@ -1932,6 +3105,15 @@ const FLASHCARDS = [
         "Trudno unieważnić → krótki czas życia (5–15 min) + rotacja refresh tokenów / denylista",
         "Zawsze sprawdzaj `alg`, `exp`, `iss`, `aud`; bez sekretów w payloadzie",
         "W przeglądarce: cookie httpOnly Secure SameSite (odporne na XSS) vs pamięć; unikać localStorage"
+      ],
+      more: [
+        "**JSON Web Token (JWT)** to kompaktowy, samowystarczalny token: niesie claimy (fakty, np. ID użytkownika, role, czas wygaśnięcia) oraz podpis kryptograficzny potwierdzający, kto go wydał i że nikt go nie zmienił. Wygląda jak `xxxxx.yyyyy.zzzzz`: trzy części zakodowane **base64url**. **Nagłówek (header)** mówi, jakim algorytmem go podpisano (`{\"alg\":\"RS256\",\"kid\":\"key-1\"}`), **payload** zawiera claimy (`sub`, `exp`, `iss`, `aud`, własne), a **podpis (signature)** jest liczony z dwóch pierwszych części. Kluczowe: standardowy JWT (JWS) jest **podpisany, a nie szyfrowany**. Base64url to tylko kodowanie; każdy może wkleić token do jwt.io i przeczytać payload. Nigdy więc nie umieszczaj w nim sekretów ani wrażliwych danych osobowych. (Szyfrowane JWT, czyli JWE, istnieją, ale są dużo rzadsze.)",
+        "Algorytmy podpisu:",
+        "- **HS256** (HMAC + SHA-256): jeden **wspólny sekret** podpisuje i weryfikuje, więc każda usługa, która weryfikuje tokeny, mogłaby je też podrabiać. W obrębie jednej usługi – w porządku.\n- **RS256 / ES256** (RSA / krzywe eliptyczne): serwer auth podpisuje **kluczem prywatnym**, a wszyscy inni weryfikują **kluczem publicznym**, zwykle pobieranym z endpointu **JWKS** (JSON Web Key Set, np. `/.well-known/jwks.json`). Nagłówek `kid` wskazuje, którego klucza użyć, co umożliwia rotację kluczy. Preferowane w systemach rozproszonych.",
+        "Duża zaleta to **bezstanowość**: API weryfikuje token samym kluczem, bez zapytania do bazy czy magazynu sesji, więc rozwiązanie skaluje się na wiele usług. Druga strona medalu to **unieważnianie**: poprawny token jest ważny do `exp`, nawet jeśli użytkownik się wylogował lub został zablokowany. Łagodzenie: krótki czas życia access tokenu (5–15 min), długo żyjące **refresh tokeny** przechowywane po stronie serwera, rotowane przy każdym użyciu i odwoływalne, a w przypadkach wysokiego ryzyka **denylista** unieważnionych ID tokenów (`jti`), która przywraca odrobinę stanu.",
+        "```ts\nimport { jwtVerify, createRemoteJWKSet } from 'jose';\nconst jwks = createRemoteJWKSet(new URL('https://auth.example.com/.well-known/jwks.json'));\nconst { payload } = await jwtVerify(token, jwks, {\n  algorithms: ['RS256'],               // przypnij alg: nigdy nie ufaj nagłówkowi\n  issuer: 'https://auth.example.com',\n  audience: 'orders-api',\n}); // sprawdza też exp / nbf\n```",
+        "Po co sprawdzać każdy claim: znane ataki to m.in. `alg: none` (akceptacja niepodpisanego tokenu) i pomylenie algorytmów (klucz publiczny RS256 użyty jako sekret HS256). Przypnij dozwolone algorytmy; sprawdzaj `exp` (wygaśnięcie), `iss` (wydany przez zaufany serwer), `aud` (przeznaczony dla tego API, a nie innego).",
+        "Przechowywanie w przeglądarce: **localStorage** jest dostępny dla każdego JavaScriptu na stronie, więc jeden błąd XSS oznacza wyciek tokenu. Cookie **httpOnly** nie da się odczytać z JS; dodaj **Secure** (tylko HTTPS) i **SameSite** (ogranicza wysyłanie między witrynami, łagodząc CSRF). Alternatywa: access token tylko w pamięci, a odświeżanie przez cookie httpOnly. Wiele zespołów stosuje dziś **BFF**, dzięki czemu tokeny w ogóle nie trafiają do przeglądarki."
       ]
     }
   },
@@ -1945,6 +3127,14 @@ const FLASHCARDS = [
         "ABAC / policy-based: rules on attributes (owner, tenant, region)",
         "Always check resource ownership server-side → prevents IDOR",
         "Centralise checks in a policy layer, not scattered in controllers"
+      ],
+      more: [
+        "Two words that are constantly confused. **Authentication (AuthN)** answers \"who are you?\": verifying identity via password, passkey, SSO or a token. **Authorisation (AuthZ)** answers \"what are you allowed to do?\": given a known identity, may it perform this action on this resource? HTTP reflects the difference: **401 Unauthorized** (confusingly named) means \"not authenticated, send valid credentials\"; **403 Forbidden** means \"I know who you are, and you may not do this\".",
+        "**RBAC (role-based access control)**: users get roles (`admin`, `editor`, `viewer`), roles map to permissions (`invoice:read`, `invoice:approve`), and code checks permissions. It is simple to understand, audit and manage in an admin UI. Its weakness is **role explosion**: real rules like \"editor, but only for their own region's projects\" lead to roles such as `editor-eu`, `editor-us`, `editor-eu-readonly-finance`… until nobody knows what a role means.",
+        "**ABAC (attribute-based access control)** or **policy-based** access control evaluates rules over attributes of the user, the resource, the action and the context: `allow if user.tenantId == resource.tenantId and (user.id == resource.ownerId or user.role == 'manager') and request.region == resource.region`. It is far more expressive and handles multi-tenancy naturally, at the cost of being harder to reason about and test. Policy engines like OPA, Cedar or Casbin let you write these rules declaratively. A related model, **ReBAC** (relationship-based, as in Google Zanzibar / OpenFGA), derives permissions from relationships like \"member of team that owns folder\". Many systems combine them: RBAC for coarse permissions, attribute checks for ownership.",
+        "Whatever the model, **resource ownership must be checked on the server** for every request. The classic failure is **IDOR** (insecure direct object reference): `GET /api/orders/1043` checks that the caller is logged in but not that order 1043 belongs to them, so incrementing the ID reveals other customers' data. Hiding IDs in the UI or using UUIDs is not a fix; the check is.",
+        "```ts\n// policy layer: one place that knows the rules\nexport const canEditOrder = (user: User, order: Order) =>\n  order.tenantId === user.tenantId &&\n  (order.ownerId === user.id || user.roles.includes('manager'));\n\nconst order = await orders.get(id);\nif (!canEditOrder(req.user, order)) throw new ForbiddenError();\n```",
+        "**Centralise** the rules in a policy layer (functions, a policy module, NestJS guards, or an external engine) rather than sprinkling `if (user.role === 'admin')` through controllers. Scattered checks drift, get forgotten on new endpoints, and are impossible to audit. A central layer is testable in isolation, and ideally the default is **deny**."
       ]
     },
     pl: {
@@ -1955,6 +3145,14 @@ const FLASHCARDS = [
         "ABAC / polityki: reguły na atrybutach (właściciel, tenant, region)",
         "Zawsze sprawdzaj właściciela zasobu po stronie serwera → brak IDOR",
         "Centralizacja w warstwie polityk, nie rozproszona po kontrolerach"
+      ],
+      more: [
+        "Dwa nieustannie mylone pojęcia. **Uwierzytelnianie (AuthN)** odpowiada na pytanie „kim jesteś?”: weryfikacja tożsamości hasłem, passkeyem, przez SSO lub token. **Autoryzacja (AuthZ)** odpowiada na „co wolno Ci zrobić?”: czy znana już tożsamość może wykonać tę akcję na tym zasobie. HTTP odzwierciedla tę różnicę: **401 Unauthorized** (myląca nazwa) oznacza „nieuwierzytelniony, prześlij poprawne dane logowania”; **403 Forbidden** oznacza „wiem, kim jesteś, i nie wolno Ci tego zrobić”.",
+        "**RBAC (role-based access control)**: użytkownicy mają role (`admin`, `editor`, `viewer`), role mapują się na uprawnienia (`invoice:read`, `invoice:approve`), a kod sprawdza uprawnienia. Model jest prosty do zrozumienia, audytu i zarządzania w panelu admina. Jego słabość to **eksplozja ról**: realne reguły typu „edytor, ale tylko projektów ze swojego regionu” prowadzą do ról `editor-eu`, `editor-us`, `editor-eu-readonly-finance`… aż nikt nie wie, co dana rola znaczy.",
+        "**ABAC (attribute-based access control)**, czyli kontrola oparta na politykach, ocenia reguły na atrybutach użytkownika, zasobu, akcji i kontekstu: `allow if user.tenantId == resource.tenantId and (user.id == resource.ownerId or user.role == 'manager') and request.region == resource.region`. Jest znacznie bardziej ekspresyjna i naturalnie obsługuje multi-tenancy, kosztem trudniejszej analizy i testowania. Silniki polityk jak OPA, Cedar czy Casbin pozwalają zapisywać te reguły deklaratywnie. Pokrewny model **ReBAC** (oparty na relacjach, jak Google Zanzibar / OpenFGA) wyprowadza uprawnienia z relacji typu „członek zespołu, który jest właścicielem folderu”. Wiele systemów łączy te podejścia: RBAC dla ogólnych uprawnień, atrybuty do sprawdzania własności.",
+        "Niezależnie od modelu **własność zasobu musi być sprawdzana po stronie serwera** przy każdym żądaniu. Klasyczna wpadka to **IDOR** (insecure direct object reference): `GET /api/orders/1043` sprawdza, czy wywołujący jest zalogowany, ale nie, czy zamówienie 1043 należy do niego – zwiększanie ID ujawnia dane innych klientów. Ukrycie ID w UI czy użycie UUID nie jest poprawką; poprawką jest sprawdzenie.",
+        "```ts\n// warstwa polityk: jedno miejsce, które zna reguły\nexport const canEditOrder = (user: User, order: Order) =>\n  order.tenantId === user.tenantId &&\n  (order.ownerId === user.id || user.roles.includes('manager'));\n\nconst order = await orders.get(id);\nif (!canEditOrder(req.user, order)) throw new ForbiddenError();\n```",
+        "**Scentralizuj** reguły w warstwie polityk (funkcje, moduł polityk, guardy NestJS albo zewnętrzny silnik), zamiast rozsiewać `if (user.role === 'admin')` po kontrolerach. Rozproszone sprawdzenia się rozjeżdżają, są zapominane w nowych endpointach i nie da się ich audytować. Centralną warstwę można testować w izolacji, a domyślną decyzją powinna być **odmowa**."
       ]
     }
   },
@@ -1969,6 +3167,15 @@ const FLASHCARDS = [
         "CSRF (cookie auth) → SameSite cookies, CSRF tokens",
         "SSRF → allow-list outbound URLs, block metadata IPs",
         "Vulnerable deps, secrets in code, missing rate limits, verbose errors"
+      ],
+      more: [
+        "**OWASP** (Open Worldwide Application Security Project) publishes the **OWASP Top 10**, the industry's reference list of the most critical web application risks. Interviewers use it as a shared vocabulary; you don't need to recite it, but you should explain the big ones, how they are exploited, and how you prevent them in code.",
+        "**Broken access control** has been #1 for years. The typical form is **IDOR** (insecure direct object reference): the API trusts an ID from the client, e.g. `DELETE /documents/881`, and only checks that the caller is logged in, not that document 881 is theirs. Fix: every request re-checks ownership or permissions server-side, with deny-by-default.",
+        "**Injection**: untrusted input is interpreted as code. SQL injection turns `' OR 1=1 --` into part of the query. Fix: **parameterised queries** or an ORM/query builder that binds parameters (and never raw string interpolation, even inside the ORM), plus schema validation so fields have the expected type.",
+        "**XSS** (cross-site scripting): attacker-supplied text is rendered as HTML/JS in another user's browser, where it can steal data or act as that user. React, Vue and Angular escape output by default; the danger is bypassing it with `dangerouslySetInnerHTML` or `v-html` on user data (sanitise with DOMPurify if you must). A **CSP** (Content Security Policy header) restricts which scripts can run, limiting damage if something slips through.",
+        "**CSRF** (cross-site request forgery): if auth is a cookie, the browser attaches it automatically, so a malicious site can make the victim's browser submit a request to your API. Fix: `SameSite=Lax` or `Strict` cookies (the browser won't send them on cross-site requests), plus anti-CSRF tokens for sensitive actions. APIs that use `Authorization: Bearer` headers are not vulnerable in the same way, since browsers don't add those automatically.",
+        "**SSRF** (server-side request forgery): your server fetches a URL supplied by the user (webhooks, \"import from URL\", image previews), and the attacker points it at internal targets, most famously the cloud metadata endpoint `169.254.169.254`, which can hand out IAM credentials. Fix: **allow-list** destination hosts, resolve the DNS and block private/link-local IP ranges, disable redirects, and on AWS require IMDSv2.",
+        "The rest of the list is largely hygiene: **vulnerable dependencies** (automated scanning and updates), **secrets in code** (secret stores, secret scanning), **missing rate limits** enabling brute force and scraping, **security misconfiguration**, and **verbose errors** that leak stack traces or SQL. A strong answer ties each item to a concrete control in your stack."
       ]
     },
     pl: {
@@ -1980,6 +3187,15 @@ const FLASHCARDS = [
         "CSRF (auth przez cookie) → cookies SameSite, tokeny CSRF",
         "SSRF → lista dozwolonych URL wychodzących, blokada IP metadanych",
         "Podatne zależności, sekrety w kodzie, brak rate limitów, zbyt szczegółowe błędy"
+      ],
+      more: [
+        "**OWASP** (Open Worldwide Application Security Project) publikuje **OWASP Top 10** – branżową listę najpoważniejszych zagrożeń dla aplikacji webowych. Rekruterzy traktują ją jako wspólny słownik; nie trzeba jej recytować, ale warto umieć wyjaśnić najważniejsze pozycje, sposób ataku i to, jak zapobiegasz im w kodzie.",
+        "**Błędna kontrola dostępu (broken access control)** od lat zajmuje 1. miejsce. Typowa postać to **IDOR** (insecure direct object reference): API ufa ID od klienta, np. `DELETE /documents/881`, i sprawdza tylko, czy wywołujący jest zalogowany, a nie, czy dokument 881 należy do niego. Naprawa: każde żądanie ponownie weryfikuje własność lub uprawnienia po stronie serwera, domyślnie odmawiając.",
+        "**Injection**: niezaufane wejście jest interpretowane jako kod. SQL injection zamienia `' OR 1=1 --` w część zapytania. Naprawa: **zapytania parametryzowane** albo ORM/query builder wiążący parametry (i nigdy surowa interpolacja stringów, nawet w ORM), plus walidacja schematem, żeby pola miały oczekiwany typ.",
+        "**XSS** (cross-site scripting): tekst dostarczony przez atakującego zostaje wyrenderowany jako HTML/JS w przeglądarce innego użytkownika, gdzie może wykraść dane lub działać w jego imieniu. React, Vue i Angular domyślnie escapują wyjście; zagrożenie to obejście tego przez `dangerouslySetInnerHTML` lub `v-html` z danymi użytkownika (jeśli musisz, sanityzuj DOMPurify). **CSP** (nagłówek Content Security Policy) ogranicza, jakie skrypty mogą się wykonać, co zmniejsza szkody, gdy coś się prześlizgnie.",
+        "**CSRF** (cross-site request forgery): jeśli uwierzytelnianie opiera się na cookie, przeglądarka dołącza je automatycznie, więc złośliwa strona może skłonić przeglądarkę ofiary do wysłania żądania do Twojego API. Naprawa: cookies `SameSite=Lax` lub `Strict` (przeglądarka nie wyśle ich przy żądaniach między witrynami) oraz tokeny CSRF dla wrażliwych akcji. API używające nagłówka `Authorization: Bearer` nie są podatne w ten sam sposób, bo przeglądarka nie dodaje go sama.",
+        "**SSRF** (server-side request forgery): serwer pobiera URL podany przez użytkownika (webhooki, „import z URL”, podglądy obrazów), a atakujący kieruje go na cele wewnętrzne – najsłynniej na endpoint metadanych chmury `169.254.169.254`, który potrafi wydać poświadczenia IAM. Naprawa: **lista dozwolonych** hostów docelowych, rozwiązanie DNS i blokada prywatnych oraz link-local zakresów IP, wyłączenie przekierowań, a na AWS wymuszenie IMDSv2.",
+        "Reszta listy to w dużej mierze higiena: **podatne zależności** (automatyczne skanowanie i aktualizacje), **sekrety w kodzie** (magazyny sekretów, skanowanie sekretów), **brak rate limitów** ułatwiający brute force i scraping, **błędna konfiguracja bezpieczeństwa** oraz **zbyt szczegółowe błędy** ujawniające stack trace czy SQL. Mocna odpowiedź łączy każdy punkt z konkretnym zabezpieczeniem w Twoim stacku."
       ]
     }
   },
@@ -1994,6 +3210,14 @@ const FLASHCARDS = [
         "Malware scanning if files are shared; strip metadata from images if needed",
         "Serve with `Content-Disposition: attachment` / separate domain to avoid XSS",
         "Built this in ZONE: user-uploaded files for buildings/inspections"
+      ],
+      more: [
+        "File uploads are one of the riskiest features in a web app because you accept arbitrary bytes from strangers and later serve them to other users. The threats: filling your disk or memory (denial of service), uploading executable content or HTML that runs in other users' browsers (stored XSS), overwriting or reading other files (path traversal), distributing malware, leaking private data through guessable URLs or embedded metadata.",
+        "**Validate early**. Enforce a **size limit** while streaming, not after buffering the whole file. Check the **real content type** by inspecting **magic bytes**, the signature at the start of a file (e.g. PNG starts with `89 50 4E 47`, PDF with `%PDF`), using a library like `file-type`. The filename extension and the `Content-Type` header come from the client and can be anything; `invoice.pdf` may well be an HTML page with a script.",
+        "**Store safely**. Keep files out of your application directory and out of any web root where the server might execute or serve them directly; object storage like **S3** is the norm. Generate **random keys** (UUIDs) instead of using the user's filename: that prevents path traversal (`../../etc/passwd`), collisions and guessable URLs. Keep the original name only as metadata in the database. Buckets should be private.",
+        "**Authorise both directions**: check that the user may attach a file to this record on upload, and that they may see it on download. For downloads, the API does the permission check and then returns a **presigned URL**, a signed S3 link valid for a few minutes, so files are fetched directly from storage but links cannot be shared forever or guessed.",
+        "If files are shared between users, **scan for malware** (ClamAV, or a cloud scanning service triggered on the S3 upload event) and only mark them available once clean. Photos often carry **EXIF metadata** including GPS coordinates; strip it if images are published. Re-encoding images (e.g. with `sharp`) both strips metadata and neutralises malformed files.",
+        "**Serve defensively**: send `Content-Disposition: attachment` so the browser downloads rather than renders, plus the correct `Content-Type` and `X-Content-Type-Options: nosniff`. Better still, serve user content from a **separate domain** (like `usercontent.example.com`), so even if an HTML or SVG file does render, its scripts run on a different origin and cannot touch your app's cookies or DOM."
       ]
     },
     pl: {
@@ -2005,6 +3229,14 @@ const FLASHCARDS = [
         "Skanowanie antywirusowe przy plikach współdzielonych; usuwanie metadanych ze zdjęć w razie potrzeby",
         "Serwowanie z `Content-Disposition: attachment` / osobna domena – ochrona przed XSS",
         "Budowałem to w ZONE: pliki użytkowników dla budynków/inspekcji"
+      ],
+      more: [
+        "Upload plików to jedna z najbardziej ryzykownych funkcji aplikacji webowej: przyjmujesz dowolne bajty od obcych osób, a potem serwujesz je innym użytkownikom. Zagrożenia: zapchanie dysku lub pamięci (odmowa usługi), wgranie treści wykonywalnej lub HTML-a, który uruchomi się w przeglądarkach innych użytkowników (stored XSS), nadpisanie lub odczyt innych plików (path traversal), dystrybucja malware, wyciek prywatnych danych przez przewidywalne URL-e albo osadzone metadane.",
+        "**Waliduj wcześnie**. Wymuszaj **limit rozmiaru** w trakcie strumieniowania, a nie po zbuforowaniu całego pliku. Sprawdzaj **rzeczywisty typ treści** na podstawie **magic bytes**, czyli sygnatury na początku pliku (np. PNG zaczyna się od `89 50 4E 47`, PDF od `%PDF`), używając biblioteki typu `file-type`. Rozszerzenie nazwy i nagłówek `Content-Type` pochodzą od klienta i mogą być czymkolwiek; `faktura.pdf` może okazać się stroną HTML ze skryptem.",
+        "**Przechowuj bezpiecznie**. Trzymaj pliki poza katalogiem aplikacji i poza webrootem, gdzie serwer mógłby je wykonać lub serwować bezpośrednio; standardem jest magazyn obiektowy typu **S3**. Generuj **losowe klucze** (UUID) zamiast używać nazwy pliku od użytkownika: to zapobiega path traversal (`../../etc/passwd`), kolizjom i zgadywaniu URL-i. Oryginalną nazwę zapisz tylko jako metadane w bazie. Buckety powinny być prywatne.",
+        "**Autoryzuj w obie strony**: przy wysyłaniu sprawdź, czy użytkownik może dołączyć plik do tego rekordu, a przy pobieraniu – czy może go zobaczyć. Przy pobieraniu API wykonuje sprawdzenie uprawnień, a potem zwraca **presigned URL**, podpisany link S3 ważny kilka minut – pliki są pobierane prosto z magazynu, ale linków nie da się udostępniać w nieskończoność ani zgadnąć.",
+        "Jeśli pliki są współdzielone między użytkownikami, **skanuj je antywirusem** (ClamAV albo chmurowa usługa skanująca uruchamiana zdarzeniem uploadu w S3) i oznaczaj jako dostępne dopiero po pozytywnym wyniku. Zdjęcia często zawierają **metadane EXIF**, w tym współrzędne GPS; usuń je, jeśli obrazy są publikowane. Ponowne zakodowanie obrazów (np. przez `sharp`) jednocześnie usuwa metadane i neutralizuje zniekształcone pliki.",
+        "**Serwuj defensywnie**: wysyłaj `Content-Disposition: attachment`, żeby przeglądarka pobrała plik zamiast go renderować, do tego poprawny `Content-Type` i `X-Content-Type-Options: nosniff`. Jeszcze lepiej serwować treści użytkowników z **osobnej domeny** (np. `usercontent.example.com`) – nawet jeśli plik HTML czy SVG się wyrenderuje, jego skrypty działają w innym originie i nie dosięgną cookies ani DOM Twojej aplikacji."
       ]
     }
   },
@@ -2021,6 +3253,14 @@ const FLASHCARDS = [
         "Postgres extras: GIN (JSONB, full-text, arrays), GiST (geo/PostGIS), BRIN (huge time-series)",
         "Cost: slower writes, more storage; low-selectivity columns rarely benefit",
         "Verify with `EXPLAIN (ANALYZE, BUFFERS)`"
+      ],
+      more: [
+        "An **index** is a separate data structure the database keeps next to a table so it can find rows without reading the whole table. Without one, a query like `WHERE email = 'a@b.com'` forces a **sequential scan** (seq scan): every row is read and checked. With an index, the database jumps almost directly to the matching rows, like using the index at the back of a book.",
+        "The default index type is the **B-tree**: a balanced, sorted tree where each lookup takes a few page reads even for millions of rows (logarithmic cost). Because the keys are kept in sorted order, a B-tree serves equality (`=`), ranges (`>`, `BETWEEN`), `ORDER BY` without an extra sort, and prefix matches like `LIKE 'abc%'`. It cannot help with `LIKE '%abc'`, because the start of the string is unknown and there is no place in the sorted order to jump to.",
+        "A **composite index** on `(a, b)` is sorted by `a` first, then by `b` within each `a`, like a phone book. That is why it works for filters on `a` or on `a AND b`, but not on `b` alone: the rows for a given `b` are scattered across the whole index. This is the **leftmost prefix** rule. Put the equality-filtered column first and the range or sort column after it.",
+        "- **Covering index**: the index holds every column the query needs (Postgres: `INCLUDE (col)`), so the database can answer from the index alone with an **index-only scan** and skip the table.\n- **Partial index**: indexes only the rows matching a condition, e.g. `WHERE status = 'active'`. It is smaller and faster when queries always target that subset.\n- **GIN**: an inverted index for values that contain many items: JSONB keys, arrays, full-text search tokens.\n- **GiST**: for geometric and range data; PostGIS uses it for \"points near here\" queries.\n- **BRIN**: stores only min/max per block of pages. Tiny, and effective on huge append-only tables whose column follows insert order (timestamps in logs, time-series).",
+        "Indexes are not free. Every `INSERT`, `UPDATE` or `DELETE` must also update every index on the table, and each index takes disk space and memory. **Selectivity** is the fraction of rows a condition filters out. On a boolean column where half the rows are `true`, the planner will usually prefer a seq scan anyway, because jumping between the index and the table costs more than a straight read.",
+        "Always check the plan with `EXPLAIN (ANALYZE, BUFFERS)`: `ANALYZE` runs the query and shows real timings and row counts, `BUFFERS` shows pages read from memory versus disk. The nuance interviewers probe: an index helps only if the planner picks it. Wrapping the column in a function (`WHERE lower(email) = ...`) defeats a plain index; the fix is an **expression index** on `lower(email)`."
       ]
     },
     pl: {
@@ -2032,6 +3272,14 @@ const FLASHCARDS = [
         "Postgres: GIN (JSONB, full-text, tablice), GiST (geo/PostGIS), BRIN (ogromne szeregi czasowe)",
         "Koszt: wolniejsze zapisy, więcej miejsca; kolumny o niskiej selektywności rzadko zyskują",
         "Weryfikacja przez `EXPLAIN (ANALYZE, BUFFERS)`"
+      ],
+      more: [
+        "**Indeks** to osobna struktura danych, którą baza trzyma obok tabeli, żeby znajdować wiersze bez czytania całej tabeli. Bez indeksu zapytanie `WHERE email = 'a@b.com'` kończy się **seq scanem** (skanem sekwencyjnym): baza czyta i sprawdza każdy wiersz. Z indeksem trafia niemal od razu w pasujące wiersze. Działa to jak skorowidz na końcu książki.",
+        "Domyślny typ to **B-tree**, czyli zrównoważone, posortowane drzewo. Każde wyszukiwanie wymaga kilku odczytów stron nawet przy milionach wierszy (koszt logarytmiczny). Klucze są posortowane, więc B-tree obsługuje równość (`=`), zakresy (`>`, `BETWEEN`), `ORDER BY` bez dodatkowego sortowania oraz prefiksy typu `LIKE 'abc%'`. Nie pomoże przy `LIKE '%abc'`, bo przy nieznanym początku napisu nie ma miejsca w porządku sortowania, do którego można by skoczyć.",
+        "**Indeks złożony** na `(a, b)` jest posortowany najpierw po `a`, a w obrębie każdego `a` po `b`, jak książka telefoniczna. Dlatego działa dla filtrów po `a` albo po `a AND b`, ale nie po samym `b`: wiersze z danym `b` są rozrzucone po całym indeksie. To reguła **lewego prefiksu**. Kolumnę filtrowaną równością daj na początek, kolumnę zakresu lub sortowania za nią.",
+        "- **Indeks pokrywający**: zawiera wszystkie kolumny potrzebne zapytaniu (w Postgresie `INCLUDE (kol)`), więc baza odpowiada z samego indeksu przez **index-only scan**, bez zaglądania do tabeli.\n- **Indeks częściowy**: obejmuje tylko wiersze spełniające warunek, np. `WHERE status = 'active'`. Jest mniejszy i szybszy, gdy zapytania i tak dotyczą tylko tego podzbioru.\n- **GIN**: indeks odwrócony dla wartości złożonych z wielu elementów: klucze JSONB, tablice, tokeny full-text.\n- **GiST**: dane geometryczne i zakresy; PostGIS używa go do zapytań typu „punkty w pobliżu”.\n- **BRIN**: trzyma tylko min/max dla bloków stron. Jest malutki i skuteczny na ogromnych tabelach append-only, w których wartości kolumny rosną zgodnie z kolejnością zapisu (znaczniki czasu w logach, szeregi czasowe).",
+        "Indeksy kosztują. Każdy `INSERT`, `UPDATE` i `DELETE` musi zaktualizować wszystkie indeksy tabeli, a każdy indeks zajmuje dysk i pamięć. **Selektywność** mówi, jaką część wierszy odsiewa warunek. Na kolumnie typu boolean, gdzie połowa to `true`, planer zwykle i tak wybierze seq scan, bo skakanie między indeksem a tabelą kosztuje więcej niż zwykły odczyt po kolei.",
+        "Plan zawsze sprawdzaj przez `EXPLAIN (ANALYZE, BUFFERS)`: `ANALYZE` wykonuje zapytanie i pokazuje rzeczywiste czasy i liczby wierszy, `BUFFERS` pokazuje strony czytane z pamięci i z dysku. Niuans, którego szuka rekruter: indeks pomaga tylko wtedy, gdy planer go wybierze. Opakowanie kolumny w funkcję (`WHERE lower(email) = ...`) wyłącza zwykły indeks; rozwiązaniem jest **indeks na wyrażeniu** `lower(email)`."
       ]
     }
   },
@@ -2046,6 +3294,15 @@ const FLASHCARDS = [
         "Check for N+1 from ORM; batch or join",
         "Stale stats → `ANALYZE`; bloat → vacuum",
         "Still heavy → cache, read replica, denormalise / materialised view"
+      ],
+      more: [
+        "When an endpoint is slow, first **prove** that the database is the cause instead of guessing. An **APM** (Application Performance Monitoring) tool such as Datadog, New Relic or OpenTelemetry-based tracing splits a request's time into spans: HTTP handler, each SQL query, external calls. If 900 ms of a 1 s request is one query, you know where to look. If instead you see 200 tiny queries, the problem is different (see N+1 below).",
+        "On the database side, `pg_stat_statements` is a Postgres extension that aggregates every normalised query with its call count, total and mean time. Sorting by `total_exec_time` shows what costs the database most overall, which is often a fast query called a million times rather than one slow query. The **slow query log** (`log_min_duration_statement`) records individual executions above a threshold.",
+        "Next, run `EXPLAIN ANALYZE` on the query with realistic parameters. Things to look for:",
+        "- **Seq Scan** on a large table where you expected an index lookup.\n- **Row estimates far from actual** (estimated 10, actual 500,000). The planner chose a plan for the wrong data size, often because statistics are stale.\n- **Sort Method: external merge Disk**: the sort did not fit in `work_mem` and spilled to disk.\n- Nested loops running a huge number of times.",
+        "Typical fixes, cheapest first: add or adjust an index (composite, matching the filter and sort); rewrite the query (avoid functions on indexed columns, replace `OR` chains, use `EXISTS` instead of `IN` with a big subquery); `SELECT` only the columns you need instead of `*`; and paginate. For deep pages prefer **keyset pagination** (`WHERE id > :last ORDER BY id LIMIT 50`) over a large `OFFSET`, because the database still reads and discards every skipped row.",
+        "Check whether the ORM is producing **N+1**: one query for a list, then one extra query per item. The fix is to batch (`WHERE id IN (...)`) or join / eager-load. Also check database health. The planner relies on statistics, and `ANALYZE` refreshes them. Postgres uses MVCC, so updates and deletes leave dead row versions (**bloat**). `VACUUM` reclaims them; autovacuum normally does this, but can fall behind on hot tables.",
+        "If the query is already well optimised and still heavy, reduce how often it runs or where it runs: cache the result (Redis) with a clear staleness budget, send it to a **read replica**, or precompute. A **materialised view** stores a query's result as a table and is refreshed on a schedule. **Denormalisation** stores redundant data to avoid expensive joins. Interviewers want to see the order: measure, then the cheapest fix, then architecture."
       ]
     },
     pl: {
@@ -2057,6 +3314,15 @@ const FLASHCARDS = [
         "Sprawdzenie N+1 z ORM; batch lub join",
         "Nieaktualne statystyki → `ANALYZE`; bloat → vacuum",
         "Dalej ciężko → cache, replika do odczytu, denormalizacja / widok zmaterializowany"
+      ],
+      more: [
+        "Gdy endpoint jest wolny, najpierw **udowodnij**, że winna jest baza, zamiast zgadywać. Narzędzie **APM** (Application Performance Monitoring), np. Datadog, New Relic albo tracing oparty na OpenTelemetry, dzieli czas żądania na spany: handler HTTP, każde zapytanie SQL, wywołania zewnętrzne. Jeśli 900 ms z 1 s to jedno zapytanie, wiesz, gdzie szukać. Jeśli zamiast tego widać 200 drobnych zapytań, problem jest inny (N+1, o nim niżej).",
+        "Po stronie bazy `pg_stat_statements` to rozszerzenie Postgresa, które agreguje każde znormalizowane zapytanie z liczbą wywołań oraz łącznym i średnim czasem. Sortowanie po `total_exec_time` pokazuje, co łącznie kosztuje bazę najwięcej. Często jest to szybkie zapytanie wołane milion razy, a nie jedno wolne. **Slow query log** (`log_min_duration_statement`) zapisuje pojedyncze wykonania powyżej progu.",
+        "Następnie `EXPLAIN ANALYZE` z realistycznymi parametrami. Na co patrzeć:",
+        "- **Seq Scan** na dużej tabeli tam, gdzie spodziewałeś się indeksu.\n- **Szacunki wierszy dalekie od rzeczywistości** (szacowane 10, faktycznie 500 000). Planer dobrał plan do złego rozmiaru danych, często przez nieaktualne statystyki.\n- **Sort Method: external merge Disk**: sortowanie nie zmieściło się w `work_mem` i poszło na dysk.\n- Nested loop wykonywany ogromną liczbę razy.",
+        "Typowe poprawki, od najtańszych: dodanie lub zmiana indeksu (złożonego, zgodnego z filtrem i sortowaniem); przepisanie zapytania (bez funkcji na indeksowanych kolumnach, zamiast łańcuchów `OR` coś lepszego, `EXISTS` zamiast `IN` z dużym podzapytaniem); `SELECT` tylko potrzebnych kolumn zamiast `*`; paginacja. Przy dalekich stronach lepsza jest **paginacja keyset** (`WHERE id > :last ORDER BY id LIMIT 50`) niż duży `OFFSET`, bo baza i tak czyta i odrzuca wszystkie pominięte wiersze.",
+        "Sprawdź, czy ORM nie generuje **N+1**: jedno zapytanie o listę, a potem po jednym dodatkowym na każdy element. Naprawa to batch (`WHERE id IN (...)`) albo join / eager loading. Sprawdź też kondycję bazy. Planer opiera się na statystykach, które odświeża `ANALYZE`. Postgres używa MVCC, więc aktualizacje i usunięcia zostawiają martwe wersje wierszy (**bloat**). `VACUUM` je odzyskuje; zwykle robi to autovacuum, ale na gorących tabelach potrafi nie nadążać.",
+        "Jeśli zapytanie jest już dobrze zoptymalizowane i nadal ciężkie, ogranicz, jak często i gdzie się wykonuje: cache'uj wynik (Redis) z jasno ustaloną akceptowalną nieaktualnością, kieruj je na **replikę do odczytu** albo licz z wyprzedzeniem. **Widok zmaterializowany** zapisuje wynik zapytania jak tabelę i jest odświeżany cyklicznie. **Denormalizacja** przechowuje nadmiarowe dane, żeby uniknąć kosztownych joinów. Rekruter chce zobaczyć kolejność: pomiar, potem najtańsza poprawka, na końcu architektura."
       ]
     }
   },
@@ -2071,6 +3337,15 @@ const FLASHCARDS = [
         "Serializable: as if run one by one; may fail → retry on serialization error",
         "Lost updates → `SELECT ... FOR UPDATE`, optimistic locking (`version` column), or atomic `UPDATE ... SET x = x + 1`",
         "Keep transactions short; no external HTTP calls inside"
+      ],
+      more: [
+        "A **transaction** groups several statements into one unit of work, for example \"debit account A, credit account B\". **ACID** names the guarantees:",
+        "- **Atomicity**: all statements take effect or none do; a crash midway rolls everything back.\n- **Consistency**: the transaction moves the database from one valid state to another; constraints (FKs, `CHECK`, `UNIQUE`) are never left violated.\n- **Isolation**: concurrent transactions do not see each other's half-done work, to a degree set by the isolation level.\n- **Durability**: once committed, the data survives a crash (it is in the write-ahead log on disk).",
+        "Perfect isolation is slow, so SQL defines levels by which **anomalies** they allow. A **dirty read** means seeing uncommitted data; Postgres never allows it. A **non-repeatable read** means reading the same row twice in one transaction and getting different values because someone committed in between. A **phantom** means re-running a query and getting new rows. **Write skew** means two transactions each read data, make a decision based on it, and write different rows, together breaking a rule neither broke alone.",
+        "- **Read Committed** (Postgres default): each statement sees a fresh snapshot of committed data. Non-repeatable reads and phantoms are possible.\n- **Repeatable Read**: the whole transaction sees one snapshot taken at its first statement. Postgres implements it as snapshot isolation, so phantoms are also prevented, but write skew is still possible.\n- **Serializable**: the result is as if transactions ran one at a time. Postgres uses SSI (Serializable Snapshot Isolation): it does not block, but aborts one transaction with error `40001` (`serialization_failure`) when it detects a conflict. Your code must catch that error and retry the whole transaction.",
+        "A classic bug is the **lost update**: two requests read `stock = 5`, both compute `4`, both write `4`, and one sale disappears. Read Committed does not prevent it. The fixes:",
+        "- **Atomic update**: `UPDATE products SET stock = stock - 1 WHERE id = $1 AND stock > 0`. The database does the read-modify-write itself.\n- **Pessimistic locking**: `SELECT ... FOR UPDATE` locks the row until commit, so the second transaction waits.\n- **Optimistic locking**: keep a `version` column and write `UPDATE ... SET ..., version = version + 1 WHERE id = $1 AND version = $2`. If 0 rows are updated, someone else won the race, so reload and retry or report a conflict.",
+        "Keep transactions **short**. An open transaction holds locks and a database connection, and in Postgres it also stops VACUUM from cleaning up rows newer than its snapshot. Never make an HTTP call or send an email inside a transaction: a 30-second call means 30 seconds of held locks, and after a rollback the email is still sent. Do the external work before or after the transaction, or use the outbox pattern."
       ]
     },
     pl: {
@@ -2082,6 +3357,15 @@ const FLASHCARDS = [
         "Serializable: jakby wykonywane po kolei; może się nie udać → ponowienie przy błędzie serializacji",
         "Utracone aktualizacje → `SELECT ... FOR UPDATE`, optimistic locking (kolumna `version`) lub atomowe `UPDATE ... SET x = x + 1`",
         "Krótkie transakcje; bez zewnętrznych wywołań HTTP w środku"
+      ],
+      more: [
+        "**Transakcja** grupuje kilka instrukcji w jedną jednostkę pracy, np. „obciąż konto A, uznaj konto B”. **ACID** to nazwy gwarancji:",
+        "- **Atomowość**: wykonują się wszystkie instrukcje albo żadna; awaria w połowie wycofuje całość.\n- **Spójność**: transakcja przeprowadza bazę z jednego poprawnego stanu do drugiego; ograniczenia (FK, `CHECK`, `UNIQUE`) nigdy nie zostają naruszone.\n- **Izolacja**: równoległe transakcje nie widzą swojej niedokończonej pracy, w stopniu zależnym od poziomu izolacji.\n- **Trwałość**: po commicie dane przetrwają awarię (są w write-ahead logu na dysku).",
+        "Pełna izolacja jest wolna, więc SQL definiuje poziomy według tego, jakie **anomalie** dopuszczają. **Dirty read** to odczyt niezatwierdzonych danych; Postgres nigdy na to nie pozwala. **Niepowtarzalny odczyt** to dwukrotny odczyt tego samego wiersza w jednej transakcji z różnym wynikiem, bo ktoś w międzyczasie zrobił commit. **Fantom** to ponowne zapytanie, które zwraca nowe wiersze. **Write skew** to sytuacja, w której dwie transakcje coś czytają, na tej podstawie decydują i zapisują różne wiersze, razem łamiąc regułę, której żadna nie złamała osobno.",
+        "- **Read Committed** (domyślny w Postgresie): każda instrukcja widzi świeży snapshot zatwierdzonych danych. Możliwe są niepowtarzalne odczyty i fantomy.\n- **Repeatable Read**: cała transakcja widzi jeden snapshot z chwili pierwszej instrukcji. Postgres implementuje to jako snapshot isolation, więc chroni też przed fantomami, ale write skew nadal jest możliwy.\n- **Serializable**: wynik jest taki, jakby transakcje szły po kolei. Postgres używa SSI (Serializable Snapshot Isolation): nie blokuje, tylko po wykryciu konfliktu przerywa jedną z transakcji błędem `40001` (`serialization_failure`). Kod musi ten błąd złapać i ponowić całą transakcję.",
+        "Klasyczny błąd to **utracona aktualizacja** (lost update): dwa żądania czytają `stock = 5`, oba liczą `4`, oba zapisują `4` i jedna sprzedaż znika. Read Committed przed tym nie chroni. Rozwiązania:",
+        "- **Atomowy update**: `UPDATE products SET stock = stock - 1 WHERE id = $1 AND stock > 0`. Baza sama robi odczyt, modyfikację i zapis.\n- **Blokada pesymistyczna**: `SELECT ... FOR UPDATE` blokuje wiersz do commita, więc druga transakcja czeka.\n- **Optimistic locking**: kolumna `version` i zapis `UPDATE ... SET ..., version = version + 1 WHERE id = $1 AND version = $2`. Jeśli zmieniono 0 wierszy, ktoś inny wygrał wyścig: przeładuj dane i ponów albo zgłoś konflikt.",
+        "Transakcje mają być **krótkie**. Otwarta transakcja trzyma blokady i połączenie z bazą, a w Postgresie dodatkowo nie pozwala VACUUM sprzątać wierszy nowszych niż jej snapshot. Nigdy nie wołaj HTTP ani nie wysyłaj maila w środku transakcji: 30-sekundowe wywołanie to 30 sekund trzymanych blokad, a po rollbacku mail i tak już poszedł. Pracę zewnętrzną zrób przed transakcją lub po niej albo użyj wzorca outbox."
       ]
     }
   },
@@ -2095,6 +3379,14 @@ const FLASHCARDS = [
         "Cons: hidden N+1 (lazy relations), inefficient generated SQL, leaky abstraction",
         "Mitigate: eager loading / `include`, log SQL in dev, raw SQL for hot paths",
         "Mongo: Mongoose schemas + validation"
+      ],
+      more: [
+        "An **ORM** (Object-Relational Mapper) maps database tables to objects or typed records in your language, so you write `user.posts` or `prisma.user.findMany()` instead of SQL strings. The Node ecosystem has several styles:",
+        "- **Prisma**: you describe the model in a `schema.prisma` file (schema-first) and it generates a fully typed client plus migrations.\n- **TypeORM**: entities are classes with decorators (`@Entity`, `@Column`). It supports **Active Record** (the entity saves itself: `user.save()`) and **Data Mapper** (a separate repository persists plain entities).\n- **Sequelize**: older, model-based, weaker TypeScript support.\n- **Drizzle**: schema in TS, queries that read almost like SQL, fully typed, thin runtime.\n- **Knex**: not an ORM but a **query builder**: it composes SQL safely but does not map relations to objects.",
+        "The benefits are real: compile-time types for rows, generated migrations, and less repetitive mapping code. The costs come from the abstraction hiding SQL. The ORM can generate inefficient queries (huge joins, `SELECT *`, several round trips where one would do), and when you need database-specific features (CTEs, window functions, `ON CONFLICT`, locking hints) the abstraction **leaks** and you have to understand the SQL anyway.",
+        "The most famous hidden cost is the **N+1 problem**. You load a list (1 query), then access a relation on each item, and the ORM lazily fires one more query per item (N queries). With 100 orders that is 101 round trips; each is fast, but together they dominate the latency.",
+        "```ts\n// N+1: 1 query for orders + 1 per order for its customer\nconst orders = await orderRepo.find();\nfor (const o of orders) console.log((await o.customer).name);\n\n// Fixed: eager load in one or two queries\nconst withCustomer = await prisma.order.findMany({\n  include: { customer: true },\n});\n```",
+        "Mitigations: use eager loading (`include` in Prisma, `relations` / `leftJoinAndSelect` in TypeORM) or batch the lookups yourself with `WHERE id IN (...)`. In GraphQL, DataLoader does this batching per request. Turn on SQL logging in development so you can see the actual queries, and write raw SQL (or Knex/Drizzle) for hot paths where every millisecond matters. For MongoDB, **Mongoose** plays a similar role: it adds schemas, validation, defaults and middleware on top of a schemaless database, and its `populate()` has the same N+1-style cost if used carelessly."
       ]
     },
     pl: {
@@ -2105,6 +3397,14 @@ const FLASHCARDS = [
         "Wady: ukryte N+1 (leniwe relacje), nieefektywny wygenerowany SQL, przeciekająca abstrakcja",
         "Zaradzenie: eager loading / `include`, logowanie SQL w dev, surowy SQL na gorących ścieżkach",
         "Mongo: schematy Mongoose + walidacja"
+      ],
+      more: [
+        "**ORM** (Object-Relational Mapper) mapuje tabele bazy na obiekty lub typowane rekordy w twoim języku, więc zamiast SQL w stringach piszesz `user.posts` albo `prisma.user.findMany()`. W Node jest kilka podejść:",
+        "- **Prisma**: model opisujesz w pliku `schema.prisma` (schema-first), a Prisma generuje w pełni typowany klient i migracje.\n- **TypeORM**: encje to klasy z dekoratorami (`@Entity`, `@Column`). Wspiera **Active Record** (encja sama się zapisuje: `user.save()`) i **Data Mapper** (osobne repozytorium zapisuje zwykłe encje).\n- **Sequelize**: starszy, oparty na modelach, słabsze wsparcie TypeScriptu.\n- **Drizzle**: schemat w TS, zapytania wyglądające prawie jak SQL, pełne typowanie, cienki runtime.\n- **Knex**: nie ORM, tylko **query builder**. Bezpiecznie składa SQL, ale nie mapuje relacji na obiekty.",
+        "Zalety są realne: typy wierszy w czasie kompilacji, generowane migracje, mniej powtarzalnego kodu mapującego. Koszty biorą się z tego, że abstrakcja ukrywa SQL. ORM potrafi wygenerować nieefektywne zapytania (ogromne joiny, `SELECT *`, kilka round tripów tam, gdzie wystarczyłby jeden), a gdy potrzebujesz funkcji specyficznych dla bazy (CTE, funkcje okna, `ON CONFLICT`, blokady), abstrakcja **przecieka** i i tak musisz rozumieć SQL.",
+        "Najsłynniejszy ukryty koszt to **problem N+1**. Pobierasz listę (1 zapytanie), a potem przy każdym elemencie sięgasz po relację i ORM leniwie odpala jeszcze jedno zapytanie na element (N zapytań). Przy 100 zamówieniach to 101 round tripów; każdy jest szybki, ale razem dominują w czasie odpowiedzi.",
+        "```ts\n// N+1: 1 zapytanie o zamówienia + 1 na każde zamówienie o klienta\nconst orders = await orderRepo.find();\nfor (const o of orders) console.log((await o.customer).name);\n\n// Poprawione: eager loading w jednym lub dwóch zapytaniach\nconst withCustomer = await prisma.order.findMany({\n  include: { customer: true },\n});\n```",
+        "Jak temu zaradzić: eager loading (`include` w Prismie, `relations` / `leftJoinAndSelect` w TypeORM) albo samodzielne batchowanie przez `WHERE id IN (...)`. W GraphQL robi to DataLoader w obrębie jednego żądania. Włącz logowanie SQL w dev, żeby widzieć faktyczne zapytania, a na gorących ścieżkach, gdzie liczy się każda milisekunda, pisz surowy SQL (albo Knex/Drizzle). W MongoDB podobną rolę pełni **Mongoose**: dodaje schematy, walidację, wartości domyślne i middleware na bazie bez schematu, a jego `populate()` użyte bez zastanowienia ma ten sam koszt typu N+1."
       ]
     }
   },
@@ -2119,6 +3419,14 @@ const FLASHCARDS = [
         "Fix: external pooler (PgBouncer, RDS Proxy), smaller per-instance pools",
         "Lambda: each concurrent execution holds a connection → RDS Proxy",
         "Always release connections (use `pool.query` or `try/finally client.release()`)"
+      ],
+      more: [
+        "Opening a database connection is expensive. For Postgres it means a TCP handshake, usually TLS, authentication, and then the server **forks a new OS process** for that connection, which costs a few MB of memory. Doing this on every HTTP request adds tens of milliseconds of latency and burns database CPU. Postgres also has a hard cap, `max_connections` (often 100 to a few hundred), because each connection is a real process.",
+        "A **connection pool** opens a fixed set of connections once and lends them out. A request borrows a connection, runs its queries and returns it; if all are busy, the request waits in a queue. In Node, `pg.Pool` does this per application instance with a `max` setting (default 10).",
+        "```js\nconst pool = new Pool({ max: 10 });\n// Simple case: pool.query borrows and releases automatically\nawait pool.query('SELECT 1');\n// Transaction: you must release, even on error\nconst client = await pool.connect();\ntry {\n  await client.query('BEGIN'); /* ... */ await client.query('COMMIT');\n} catch (e) { await client.query('ROLLBACK'); throw e; }\nfinally { client.release(); }\n```",
+        "The scaling trap is multiplication. Each instance has its own pool, so total connections = pool size × instances. Ten containers with `max: 20` is 200 connections. When autoscaling adds instances under load, you exceed `max_connections` and new connections fail with \"too many clients\", exactly when traffic is highest. **Serverless** makes it worse: every concurrent AWS Lambda execution is a separate process with its own connection, so 500 concurrent invocations means 500 connections.",
+        "The fix is an **external pooler** between the app and the database. **PgBouncer** (self-hosted) or **RDS Proxy** (managed on AWS) accepts thousands of cheap client connections and multiplexes them onto a small number of real database connections. In **transaction pooling** mode, a server connection is assigned only for the duration of a transaction. The catch: session state (session-level `SET`, advisory locks, `LISTEN`) does not carry over between transactions, and prepared statements need pooler support (newer PgBouncer versions have it). Also keep per-instance pools small, since more connections than CPU cores rarely makes a database faster.",
+        "The other classic failure is a **connection leak**: code calls `pool.connect()` and an exception skips `client.release()`. The pool slowly drains, and eventually every request hangs waiting for a connection. Use `pool.query` for single statements, and `try/finally` whenever you check out a client manually."
       ]
     },
     pl: {
@@ -2130,6 +3438,14 @@ const FLASHCARDS = [
         "Rozwiązanie: zewnętrzny pooler (PgBouncer, RDS Proxy), mniejsze pule na instancję",
         "Lambda: każde współbieżne wykonanie trzyma połączenie → RDS Proxy",
         "Zawsze zwalniaj połączenia (`pool.query` lub `try/finally client.release()`)"
+      ],
+      more: [
+        "Otwarcie połączenia z bazą jest drogie. W Postgresie to handshake TCP, zwykle TLS, uwierzytelnienie, a na końcu serwer **forkuje nowy proces systemowy** dla tego połączenia, co kosztuje kilka MB pamięci. Robienie tego przy każdym żądaniu HTTP dokłada dziesiątki milisekund i zużywa CPU bazy. Postgres ma też twardy limit `max_connections` (często od 100 do kilkuset), bo każde połączenie to prawdziwy proces.",
+        "**Pula połączeń** (connection pool) otwiera stały zestaw połączeń raz i je wypożycza. Żądanie bierze połączenie, wykonuje zapytania i je oddaje; gdy wszystkie są zajęte, czeka w kolejce. W Node robi to `pg.Pool` w obrębie jednej instancji aplikacji, z ustawieniem `max` (domyślnie 10).",
+        "```js\nconst pool = new Pool({ max: 10 });\n// Prosty przypadek: pool.query sam pobiera i zwalnia połączenie\nawait pool.query('SELECT 1');\n// Transakcja: musisz zwolnić połączenie, nawet przy błędzie\nconst client = await pool.connect();\ntry {\n  await client.query('BEGIN'); /* ... */ await client.query('COMMIT');\n} catch (e) { await client.query('ROLLBACK'); throw e; }\nfinally { client.release(); }\n```",
+        "Pułapka przy skalowaniu to mnożenie. Każda instancja ma własną pulę, więc łączna liczba połączeń = rozmiar puli × liczba instancji. Dziesięć kontenerów z `max: 20` to 200 połączeń. Gdy autoskalowanie dokłada instancje pod obciążeniem, przekraczasz `max_connections` i nowe połączenia padają z błędem „too many clients”, dokładnie wtedy, gdy ruch jest największy. **Serverless** pogarsza sprawę: każde współbieżne wykonanie AWS Lambdy to osobny proces z własnym połączeniem, więc 500 równoległych wywołań to 500 połączeń.",
+        "Rozwiązaniem jest **zewnętrzny pooler** między aplikacją a bazą. **PgBouncer** (self-hosted) albo **RDS Proxy** (zarządzany w AWS) przyjmuje tysiące tanich połączeń klientów i multipleksuje je na niewielką liczbę prawdziwych połączeń z bazą. W trybie **transaction pooling** połączenie serwerowe jest przydzielane tylko na czas transakcji. Haczyk: stan sesji (`SET` na poziomie sesji, advisory locki, `LISTEN`) nie przechodzi między transakcjami, a prepared statements wymagają wsparcia poolera (nowsze wersje PgBouncera je mają). Trzymaj też małe pule per instancja, bo więcej połączeń niż rdzeni CPU rzadko przyspiesza bazę.",
+        "Druga klasyczna awaria to **wyciek połączeń**: kod woła `pool.connect()`, a wyjątek omija `client.release()`. Pula powoli się wyczerpuje i w końcu każde żądanie wisi, czekając na połączenie. Do pojedynczych zapytań używaj `pool.query`, a przy ręcznym pobieraniu klienta zawsze `try/finally`."
       ]
     }
   },
@@ -2143,6 +3459,14 @@ const FLASHCARDS = [
         "Mongo supports multi-document transactions, but design to avoid needing them",
         "Choose by access patterns and consistency needs, not hype",
         "Used both: Postgres at Redge/OPEGIEKA, MongoDB for Gestamp CMMS"
+      ],
+      more: [
+        "**PostgreSQL** is a relational database. Data lives in tables with a fixed schema, and relationships are expressed with foreign keys and combined at query time with **joins**. It enforces **constraints** (`NOT NULL`, `UNIQUE`, foreign keys, `CHECK`) so invalid data cannot be written, and it offers full ACID transactions across any number of rows and tables. For the parts of the data that really are free-form, the **JSONB** column type stores binary JSON that can be indexed (with GIN) and queried, so you get document-style flexibility inside a relational database.",
+        "**MongoDB** is a **document database**. A record is a JSON-like document (stored as BSON) that can contain nested objects and arrays, and documents in one collection do not need identical shapes (**flexible schema**). The core design idea is that data read together is stored together: an order document embeds its line items, so one read returns everything without joins. Mongo was built for **horizontal sharding**: a collection is split by a shard key across many servers, and the cluster routes queries automatically.",
+        "Since version 4.0, Mongo supports **multi-document ACID transactions**, but they cost more than single-document writes and are limited in duration. Idiomatic Mongo design makes the document the unit of consistency: a write to one document is always atomic. If most operations need transactions across several collections, the data is probably relational and Postgres is a better fit.",
+        "How to choose, by **access patterns** (which queries you run, how often, with what filters) and **consistency needs**:",
+        "- Many entities with many-to-many relations, reporting and ad-hoc queries, strong integrity (finance, orders, permissions) → Postgres.\n- Self-contained aggregates read by key, a schema that varies per record or changes often (CMS content, IoT readings, product catalogues with varied attributes), very high write volume that needs sharding → Mongo is reasonable.\n- Unsure → Postgres with JSONB is the safer default, because it covers most document use cases too.",
+        "The interviewer is checking that you do not pick by fashion (\"NoSQL scales, SQL doesn't\"). Postgres scales very far vertically and with read replicas. Mongo's \"schemaless\" design still has a schema; it just lives in application code (for example Mongoose models) instead of the database. Mentioning a real project where you used each, and why, is the strongest answer."
       ]
     },
     pl: {
@@ -2153,6 +3477,14 @@ const FLASHCARDS = [
         "Mongo wspiera transakcje wielodokumentowe, ale lepiej projektować tak, by ich nie potrzebować",
         "Wybór wg wzorców dostępu i wymagań spójności, nie mody",
         "Używałem obu: Postgres w Redge/OPEGIEKA, MongoDB w CMMS Gestamp"
+      ],
+      more: [
+        "**PostgreSQL** to baza relacyjna. Dane są w tabelach o stałym schemacie, relacje wyraża się kluczami obcymi i łączy w czasie zapytania **joinami**. Baza pilnuje **ograniczeń** (`NOT NULL`, `UNIQUE`, klucze obce, `CHECK`), więc niepoprawnych danych nie da się zapisać, i oferuje pełne transakcje ACID na dowolnej liczbie wierszy i tabel. Na części danych, które naprawdę są dowolne, jest typ **JSONB**: binarny JSON, który można indeksować (GIN) i odpytywać. Masz więc elastyczność dokumentową wewnątrz bazy relacyjnej.",
+        "**MongoDB** to **baza dokumentowa**. Rekord to dokument podobny do JSON-a (zapisany jako BSON), który może zawierać zagnieżdżone obiekty i tablice, a dokumenty w jednej kolekcji nie muszą mieć identycznego kształtu (**elastyczny schemat**). Główna zasada projektowa: dane czytane razem są przechowywane razem. Dokument zamówienia zawiera swoje pozycje, więc jeden odczyt zwraca wszystko bez joinów. Mongo powstało z myślą o **shardingu poziomym**: kolekcja jest dzielona kluczem shardu na wiele serwerów, a klaster sam kieruje zapytania.",
+        "Od wersji 4.0 Mongo obsługuje **transakcje ACID na wielu dokumentach**, ale kosztują więcej niż zapisy pojedynczych dokumentów i mają ograniczony czas trwania. Idiomatyczny projekt w Mongo traktuje dokument jako jednostkę spójności: zapis do jednego dokumentu jest zawsze atomowy. Jeśli większość operacji wymaga transakcji na kilku kolekcjach, dane są pewnie relacyjne i lepiej pasuje Postgres.",
+        "Wybór według **wzorców dostępu** (jakie zapytania, jak często, z jakimi filtrami) i **wymagań spójności**:",
+        "- Wiele encji z relacjami wiele-do-wielu, raporty i zapytania ad hoc, silna integralność (finanse, zamówienia, uprawnienia) → Postgres.\n- Samodzielne agregaty czytane po kluczu, schemat różny dla rekordów albo często zmieniany (treści CMS, odczyty IoT, katalog produktów o różnych atrybutach), bardzo duży wolumen zapisów wymagający shardingu → Mongo ma sens.\n- Brak pewności → Postgres z JSONB to bezpieczniejszy wybór domyślny, bo pokrywa też większość przypadków dokumentowych.",
+        "Rekruter sprawdza, czy nie wybierasz według mody („NoSQL się skaluje, SQL nie”). Postgres skaluje się bardzo daleko pionowo i przez repliki do odczytu. „Bezschematowe” Mongo i tak ma schemat, tylko że żyje on w kodzie aplikacji (np. w modelach Mongoose), a nie w bazie. Najmocniejsza odpowiedź to przykład z prawdziwego projektu, w którym użyłeś każdej z baz, z uzasadnieniem dlaczego."
       ]
     }
   },
@@ -2166,6 +3498,15 @@ const FLASHCARDS = [
         "16 MB document limit – unbounded arrays are an anti-pattern",
         "Model for queries; add compound indexes matching filter + sort",
         "`$lookup` exists but frequent joins hint at a relational model"
+      ],
+      more: [
+        "In MongoDB you can store related data in two ways. **Embedding** puts the child data inside the parent document (a user document with an `address` sub-object or an `items` array). **Referencing** stores only an ID (`customerId: ObjectId(...)`) and keeps the related data in a separate document, often in another collection, much like a foreign key. There are no enforced foreign keys, so this is a data-modelling decision, not a database feature.",
+        "**Embed** when the relationship is **one-to-few** (a handful of addresses, not thousands of comments), when the child is almost always read together with the parent, and when the child has no life of its own (it is created, updated and deleted with the parent). The payoff: one read returns everything, and because single-document writes are atomic, you update parent and children consistently without a transaction.",
+        "**Reference** when:",
+        "- the \"many\" side is **unbounded** (a user's orders, an article's comments, sensor readings);\n- the relationship is **many-to-many** (students and courses);\n- the data is **shared** by many parents (a product referenced by many orders; embedding would mean updating every copy on a price change);\n- the child is queried or updated on its own.",
+        "A common middle ground is to embed a small snapshot (for example the product name and price at order time) and keep a reference for the rest.",
+        "A single document is capped at **16 MB**. An array that keeps growing (every comment, every event) will eventually hit that limit, and long before that it makes every read and update of the parent slower. Unbounded arrays are therefore an anti-pattern. Put the growing items in their own collection with a reference back to the parent, or use the **bucket pattern** (for example one document per sensor per hour).",
+        "Model **for your queries**, not for abstract normalisation: list the screens and API calls first, then shape documents so each is served by one or two reads. Then create **compound indexes** whose field order matches the filter and sort, for example `{ tenantId: 1, status: 1, createdAt: -1 }` for \"active items of a tenant, newest first\". The general guideline is equality fields first, then sort, then range. `$lookup` is Mongo's left join in the aggregation pipeline. It works, but if your core queries rely on it constantly, you are rebuilding a relational database without its guarantees."
       ]
     },
     pl: {
@@ -2176,6 +3517,15 @@ const FLASHCARDS = [
         "Limit dokumentu 16 MB – nieograniczone tablice to antywzorzec",
         "Model pod zapytania; indeksy złożone zgodne z filtrem + sortowaniem",
         "`$lookup` istnieje, ale częste joiny sugerują model relacyjny"
+      ],
+      more: [
+        "W MongoDB powiązane dane można trzymać na dwa sposoby. **Osadzanie** (embedding) umieszcza dane dziecka wewnątrz dokumentu rodzica (dokument użytkownika z podobiektem `address` albo tablicą `items`). **Referencja** zapisuje tylko ID (`customerId: ObjectId(...)`), a powiązane dane leżą w osobnym dokumencie, często w innej kolekcji, podobnie jak przy kluczu obcym. Mongo nie wymusza kluczy obcych, więc to decyzja modelowania danych, a nie funkcja bazy.",
+        "**Osadzaj**, gdy relacja jest typu **jeden-do-kilku** (kilka adresów, a nie tysiące komentarzy), gdy dziecko prawie zawsze czyta się razem z rodzicem i gdy dziecko nie ma własnego życia (powstaje, zmienia się i znika razem z rodzicem). Zysk: jeden odczyt zwraca wszystko, a ponieważ zapis pojedynczego dokumentu jest atomowy, rodzica i dzieci aktualizujesz spójnie bez transakcji.",
+        "**Referencjonuj**, gdy:",
+        "- strona „wiele” jest **nieograniczona** (zamówienia użytkownika, komentarze artykułu, odczyty z czujników);\n- relacja jest **wiele-do-wielu** (studenci i kursy);\n- dane są **współdzielone** przez wielu rodziców (produkt w wielu zamówieniach; osadzenie oznaczałoby aktualizację każdej kopii przy zmianie ceny);\n- dziecko jest odpytywane lub zmieniane samodzielnie.",
+        "Częsty kompromis to osadzenie małej migawki (np. nazwa i cena produktu w chwili zamówienia) i referencja do reszty.",
+        "Pojedynczy dokument może mieć najwyżej **16 MB**. Tablica, która ciągle rośnie (każdy komentarz, każde zdarzenie), w końcu dobije do limitu, a dużo wcześniej spowolni każdy odczyt i zapis rodzica. Dlatego nieograniczone tablice to antywzorzec. Rosnące elementy trzymaj w osobnej kolekcji z referencją do rodzica albo użyj **wzorca bucket** (np. jeden dokument na czujnik na godzinę).",
+        "Modeluj **pod zapytania**, a nie pod abstrakcyjną normalizację: najpierw wypisz ekrany i wywołania API, potem ukształtuj dokumenty tak, żeby każde obsłużyć jednym lub dwoma odczytami. Następnie załóż **indeksy złożone**, w których kolejność pól odpowiada filtrowi i sortowaniu, np. `{ tenantId: 1, status: 1, createdAt: -1 }` dla „aktywne elementy tenanta, od najnowszych”. Ogólna zasada: najpierw pola z równością, potem sortowanie, na końcu zakres. `$lookup` to left join Mongo w pipeline agregacji. Działa, ale jeśli główne zapytania stale na nim polegają, odtwarzasz bazę relacyjną bez jej gwarancji."
       ]
     }
   },
@@ -2189,6 +3539,15 @@ const FLASHCARDS = [
         "Add columns nullable / with default; avoid long table locks",
         "Postgres: `CREATE INDEX CONCURRENTLY`; add FK/NOT NULL as `NOT VALID` then `VALIDATE`",
         "Migrations versioned in git, run in CI/CD before or with deploy, never destructive in the same release"
+      ],
+      more: [
+        "During a normal rolling deploy, old and new versions of your app run **at the same time** against the same database for minutes, and a rollback can bring the old version back. A schema migration is therefore zero-downtime only if **both versions work with the schema at every moment**, and if it never locks a busy table for long. Postgres DDL takes locks: an `ALTER TABLE` that rewrites the table or scans it under an exclusive lock blocks all reads and writes on it until it finishes. The general technique is **expand → migrate → contract** (also called parallel change):",
+        "- **Expand**: add the new structure in a backward-compatible way (new nullable column, new table). Old code ignores it.\n- **Migrate**: deploy code that writes both old and new, backfill existing data, then switch reads to the new structure.\n- **Contract**: once nothing uses the old structure (and a rollback no longer needs it), drop it in a later release.",
+        "Example: renaming `users.name` to `full_name`. A plain `RENAME COLUMN` breaks the old version still running. Instead:",
+        "- add `full_name` (nullable);\n- deploy code that **dual-writes** to both columns;\n- **backfill** old rows in batches (`UPDATE ... WHERE id BETWEEN x AND y`, a few thousand rows at a time) to avoid one giant transaction, long locks and replication lag;\n- switch reads to `full_name`;\n- stop writing `name`, and drop it in a later release.",
+        "Postgres-specific tools:",
+        "- Adding a nullable column, or a column with a constant default, is instant (since PG 11 the default is stored as metadata, with no table rewrite).\n- `CREATE INDEX CONCURRENTLY` builds an index without blocking writes. It is slower, cannot run inside a transaction, and can leave an `INVALID` index if it fails.\n- A new foreign key or `CHECK` added as `NOT VALID` is enforced only for new writes; a later `VALIDATE CONSTRAINT` checks existing rows under a light lock.\n- For `NOT NULL`: add `CHECK (col IS NOT NULL) NOT VALID`, validate it, then `SET NOT NULL` (PG 12+ skips the full scan).\n- Set `lock_timeout` so a migration that cannot get its lock fails fast instead of queueing behind a long query and blocking everyone else.",
+        "Process: migrations are versioned files in git (Prisma Migrate, Flyway, Knex, TypeORM migrations), reviewed like code, and run automatically by CI/CD as a step before or with the deploy. They are never applied by hand in production. Destructive changes (drop column, drop table) never ship in the same release that stops using the column, because a rollback to the previous version would then crash."
       ]
     },
     pl: {
@@ -2199,6 +3558,15 @@ const FLASHCARDS = [
         "Nowe kolumny nullable / z domyślną wartością; unikać długich blokad tabel",
         "Postgres: `CREATE INDEX CONCURRENTLY`; FK/NOT NULL jako `NOT VALID`, potem `VALIDATE`",
         "Migracje wersjonowane w git, uruchamiane w CI/CD przed lub z wdrożeniem, nigdy destrukcyjne w tym samym wydaniu"
+      ],
+      more: [
+        "Przy zwykłym rolling deployu stara i nowa wersja aplikacji działają **jednocześnie** na tej samej bazie przez kilka minut, a rollback może przywrócić starą wersję. Migracja schematu jest więc bezprzestojowa tylko wtedy, gdy **obie wersje działają ze schematem w każdym momencie** i gdy migracja nigdy nie blokuje na długo ruchliwej tabeli. DDL w Postgresie zakłada blokady: `ALTER TABLE`, który przepisuje tabelę albo skanuje ją pod blokadą wyłączną, blokuje wszystkie odczyty i zapisy do czasu zakończenia. Ogólna technika to **expand → migrate → contract** (tzw. parallel change):",
+        "- **Expand**: dodaj nową strukturę w sposób wstecznie zgodny (nowa kolumna nullable, nowa tabela). Stary kod ją ignoruje.\n- **Migrate**: wdróż kod, który zapisuje stare i nowe, zrób backfill istniejących danych, potem przełącz odczyty na nową strukturę.\n- **Contract**: gdy nic już nie używa starej struktury (i rollback jej nie potrzebuje), usuń ją w kolejnym wydaniu.",
+        "Przykład: zmiana nazwy `users.name` na `full_name`. Zwykłe `RENAME COLUMN` psuje wciąż działającą starą wersję. Zamiast tego:",
+        "- dodaj `full_name` (nullable);\n- wdróż kod z **podwójnym zapisem** do obu kolumn;\n- zrób **backfill** starych wierszy partiami (`UPDATE ... WHERE id BETWEEN x AND y`, po kilka tysięcy), żeby uniknąć jednej gigantycznej transakcji, długich blokad i opóźnienia replikacji;\n- przełącz odczyty na `full_name`;\n- przestań zapisywać `name`, a usuń ją w kolejnym wydaniu.",
+        "Narzędzia w Postgresie:",
+        "- Dodanie kolumny nullable albo ze stałą wartością domyślną jest natychmiastowe (od PG 11 wartość domyślna trafia do metadanych, bez przepisywania tabeli).\n- `CREATE INDEX CONCURRENTLY` buduje indeks bez blokowania zapisów. Jest wolniejsze, nie działa w transakcji i po błędzie może zostawić indeks `INVALID`.\n- Nowy klucz obcy lub `CHECK` dodany jako `NOT VALID` obowiązuje tylko dla nowych zapisów; późniejsze `VALIDATE CONSTRAINT` sprawdza istniejące wiersze pod lekką blokadą.\n- Dla `NOT NULL`: dodaj `CHECK (col IS NOT NULL) NOT VALID`, zwaliduj, potem `SET NOT NULL` (PG 12+ pomija wtedy pełny skan).\n- Ustaw `lock_timeout`, żeby migracja, która nie dostanie blokady, szybko padła, zamiast czekać w kolejce za długim zapytaniem i blokować wszystkich za sobą.",
+        "Proces: migracje to wersjonowane pliki w gicie (Prisma Migrate, Flyway, Knex, migracje TypeORM), przechodzą review jak kod i są uruchamiane automatycznie przez CI/CD jako krok przed wdrożeniem lub razem z nim. Nigdy nie odpala się ich ręcznie na produkcji. Zmiany destrukcyjne (usunięcie kolumny, tabeli) nigdy nie idą w tym samym wydaniu, które przestaje używać kolumny, bo rollback do poprzedniej wersji by się wtedy wywrócił."
       ]
     }
   },
@@ -2213,6 +3581,14 @@ const FLASHCARDS = [
         "Partitioning big tables (by time/tenant) for maintenance and pruning",
         "Sharding: last resort – cross-shard queries and transactions get hard",
         "Offload: search → Elasticsearch, analytics → warehouse, hot keys → Redis"
+      ],
+      more: [
+        "Before adding infrastructure, make the database do less work. Most \"the DB can't keep up\" incidents are a few bad queries: a missing index, an N+1 loop, a report scanning the whole table. Fix those (see indexes and slow queries), add **connection pooling** so the database is not overwhelmed by connections, and **cache** hot, rarely-changing reads in Redis. This is cheap and often buys an order of magnitude.",
+        "**Vertical scaling** (scale up) means a bigger machine: more CPU, RAM (so the working set fits in memory) and faster storage. On managed services like RDS or Aurora it is a setting change and a short failover. It needs no code changes, so it is the first real scaling step, but it has a ceiling and cost grows faster than capacity.",
+        "**Read replicas** are copies of the primary that receive its write-ahead log stream and serve read-only queries. They help when reads dominate (most web apps). Replication is usually **asynchronous**, so a replica can lag behind by milliseconds or seconds (**replication lag**). The classic bug: a user saves a profile, the next page reads from a replica and shows the old data. The fix is **read-your-writes** consistency: route a user's reads to the primary for a short time after they write, or read critical data from the primary.",
+        "**Partitioning** splits one big table into smaller physical tables inside the same database, for example `events` by month or by tenant. Queries that filter on the partition key touch only the relevant partitions (**partition pruning**), and maintenance becomes easy: dropping last year's data is `DROP TABLE events_2025_01` instead of a massive `DELETE`. Postgres has built-in declarative partitioning.",
+        "**Sharding** splits data across **multiple database servers** by a shard key (for example `tenant_id`), so writes scale too. It is a last resort because the application (or a layer like Citus or Vitess) must route every query. Queries across shards become scatter-gather, and transactions across shards lose simple ACID guarantees. Resharding later is painful, and a bad key creates hot shards.",
+        "Finally, **offload** workloads the primary database is bad at: full-text and faceted search go to Elasticsearch or OpenSearch; heavy analytics go to a warehouse (BigQuery, Snowflake, Redshift) fed by CDC or ETL; hot counters, sessions and rate limits go to Redis. The interviewer wants the ladder in this order, with the trade-off of each step named."
       ]
     },
     pl: {
@@ -2224,6 +3600,14 @@ const FLASHCARDS = [
         "Partycjonowanie dużych tabel (po czasie/tenancie) dla utrzymania i pruningu",
         "Sharding: ostateczność – zapytania i transakcje między shardami są trudne",
         "Odciążenie: wyszukiwanie → Elasticsearch, analityka → hurtownia, gorące klucze → Redis"
+      ],
+      more: [
+        "Zanim dołożysz infrastrukturę, spraw, żeby baza robiła mniej. Większość incydentów typu „baza nie wyrabia” to kilka złych zapytań: brakujący indeks, pętla N+1, raport skanujący całą tabelę. Napraw je (zob. indeksy i wolne zapytania), dodaj **pulę połączeń**, żeby baza nie tonęła w połączeniach, i **cache'uj** gorące, rzadko zmieniane odczyty w Redisie. To tanie i często daje rząd wielkości zapasu.",
+        "**Skalowanie pionowe** (scale up) to większa maszyna: więcej CPU, RAM-u (żeby zbiór roboczy mieścił się w pamięci) i szybszy dysk. W usługach zarządzanych jak RDS czy Aurora to zmiana ustawienia i krótki failover. Nie wymaga zmian w kodzie, więc to pierwszy realny krok skalowania, ale ma sufit, a koszt rośnie szybciej niż wydajność.",
+        "**Repliki do odczytu** (read replicas) to kopie primary, które dostają strumień jego write-ahead logu i obsługują zapytania tylko do odczytu. Pomagają, gdy dominują odczyty (większość aplikacji webowych). Replikacja jest zwykle **asynchroniczna**, więc replika może być w tyle o milisekundy lub sekundy (**opóźnienie replikacji**, replication lag). Klasyczny błąd: użytkownik zapisuje profil, a następna strona czyta z repliki i pokazuje stare dane. Rozwiązanie to spójność **read-your-writes**: przez krótki czas po zapisie kieruj odczyty tego użytkownika na primary albo czytaj krytyczne dane z primary.",
+        "**Partycjonowanie** dzieli jedną dużą tabelę na mniejsze fizyczne tabele w tej samej bazie, np. `events` po miesiącach albo po tenancie. Zapytania filtrujące po kluczu partycji dotykają tylko właściwych partycji (**partition pruning**), a utrzymanie staje się proste: usunięcie danych sprzed roku to `DROP TABLE events_2025_01` zamiast gigantycznego `DELETE`. Postgres ma wbudowane partycjonowanie deklaratywne.",
+        "**Sharding** dzieli dane między **wiele serwerów bazy** według klucza shardu (np. `tenant_id`), więc skalują się też zapisy. To ostateczność, bo aplikacja (albo warstwa typu Citus czy Vitess) musi kierować każde zapytanie. Zapytania między shardami zamieniają się w scatter-gather, a transakcje między shardami tracą proste gwarancje ACID. Późniejszy resharding jest bolesny, a zły klucz tworzy gorące shardy.",
+        "Na koniec **odciąż** bazę z zadań, w których jest słaba: wyszukiwanie pełnotekstowe i fasetowe → Elasticsearch/OpenSearch; ciężka analityka → hurtownia (BigQuery, Snowflake, Redshift) zasilana przez CDC lub ETL; gorące liczniki, sesje i rate limity → Redis. Rekruter chce usłyszeć tę drabinę w tej kolejności, z nazwanym kompromisem każdego kroku."
       ]
     }
   },
@@ -2239,6 +3623,15 @@ const FLASHCARDS = [
         "DB: indexes, pooling, read replicas",
         "Move slow work to queues/workers; timeouts, rate limits, backpressure",
         "Load test (k6) before the traffic arrives; graceful degradation plan"
+      ],
+      more: [
+        "The first rule is to **measure before changing anything**. A system is only as fast as its **bottleneck**, the one resource that saturates first, and 10× traffic will expose it. Look at:",
+        "- **p95/p99 latency**: the time within which 95% or 99% of requests complete. Averages hide the slow tail that users actually feel.\n- **Error rate**: timeouts and 5xx responses that appear under load.\n- **CPU/memory** of app instances; in Node, also event loop lag.\n- **DB load**: CPU, active connections, slow queries, locks.\n- **Queue depth**: jobs piling up faster than workers finish them.",
+        "If app instances are **stateless** (no sessions or files in local memory), you can run many identical copies behind a **load balancer** and let **autoscaling** add instances based on CPU or request rate. This is horizontal scaling, and for the application tier it is usually the easy part. The hard part is everything shared behind it.",
+        "**Caching** removes load before it reaches your code. A **CDN** (CloudFront, Cloudflare) serves static assets and cacheable public responses from edge locations near users. **Redis** holds hot, expensive-to-compute reads (a product page, a config, a leaderboard). Every cache hit is a request the database never sees. The database is usually the real limit, because app instances multiply but there is one primary. Apply the standard ladder: fix slow queries and add indexes, put a pooler in front so more instances do not exhaust connections, and send read traffic to read replicas.",
+        "Anything slow and not needed for the immediate response (emails, PDFs, image processing, third-party sync) moves to a **queue with workers**, so web requests stay fast and workers scale separately. Protect the system against overload as well:",
+        "- **timeouts** on every call, so a slow dependency does not hold resources forever;\n- **rate limits** per client, so one caller cannot starve others;\n- **backpressure**: when a component is full, it pushes back (rejects with 429/503 or stops consuming) instead of accepting unbounded work and collapsing.",
+        "Do not wait for real traffic to find the limit. **Load test** with a tool like k6 in a production-like environment, ramping to 10× and beyond, and watch which metric breaks first. Prepare a **graceful degradation** plan: which features can be switched off or served stale (recommendations, live counters) so that the core flow (login, checkout) keeps working under stress."
       ]
     },
     pl: {
@@ -2250,6 +3643,15 @@ const FLASHCARDS = [
         "DB: indeksy, pula połączeń, repliki do odczytu",
         "Wolna praca do kolejek/workerów; timeouty, rate limity, backpressure",
         "Testy obciążeniowe (k6) przed wzrostem ruchu; plan degradacji funkcji"
+      ],
+      more: [
+        "Pierwsza zasada: **najpierw zmierz, potem cokolwiek zmieniaj**. System jest tak szybki, jak jego **wąskie gardło**, czyli zasób, który nasyca się pierwszy, a 10× ruch je odsłoni. Patrz na:",
+        "- **opóźnienia p95/p99**: czas, w którym kończy się 95% lub 99% żądań. Średnia ukrywa wolny ogon, który użytkownicy faktycznie odczuwają.\n- **Odsetek błędów**: timeouty i odpowiedzi 5xx pojawiające się pod obciążeniem.\n- **CPU/pamięć** instancji aplikacji; w Node także opóźnienie event loopa.\n- **Obciążenie DB**: CPU, aktywne połączenia, wolne zapytania, blokady.\n- **Długość kolejek**: zadania przybywają szybciej, niż workery je kończą.",
+        "Jeśli instancje aplikacji są **bezstanowe** (bez sesji i plików w lokalnej pamięci), możesz uruchomić wiele identycznych kopii za **load balancerem** i pozwolić **autoskalowaniu** dokładać instancje na podstawie CPU lub liczby żądań. To skalowanie poziome i w warstwie aplikacji jest to zwykle łatwa część. Trudna jest cała wspólna infrastruktura za nią.",
+        "**Cache** usuwa obciążenie, zanim dotrze do twojego kodu. **CDN** (CloudFront, Cloudflare) serwuje statyczne zasoby i publiczne odpowiedzi nadające się do cache'owania z serwerów brzegowych blisko użytkownika. **Redis** trzyma gorące, drogie do policzenia odczyty (strona produktu, konfiguracja, ranking). Każde trafienie w cache to żądanie, którego baza nigdy nie zobaczy. Prawdziwym limitem jest zwykle baza, bo instancje aplikacji się mnożą, a primary jest jeden. Zastosuj standardową drabinę: popraw wolne zapytania i dodaj indeksy, postaw pooler, żeby więcej instancji nie wyczerpało połączeń, i przenieś ruch odczytów na repliki.",
+        "Wszystko, co wolne i niepotrzebne do natychmiastowej odpowiedzi (maile, PDF-y, przetwarzanie obrazów, synchronizacja z zewnętrznymi systemami), idzie do **kolejki z workerami**. Żądania webowe zostają szybkie, a workery skalują się osobno. Chroń też system przed przeciążeniem:",
+        "- **timeouty** na każdym wywołaniu, żeby wolna zależność nie trzymała zasobów w nieskończoność;\n- **rate limity** per klient, żeby jeden wywołujący nie zagłodził innych;\n- **backpressure**: pełny komponent stawia opór (odrzuca z 429/503 albo przestaje konsumować), zamiast przyjmować nieograniczoną pracę i się załamać.",
+        "Nie czekaj, aż limit znajdzie prawdziwy ruch. Zrób **test obciążeniowy** narzędziem typu k6 w środowisku zbliżonym do produkcji, podnosząc ruch do 10× i wyżej, i patrz, która metryka pęka pierwsza. Przygotuj plan **łagodnej degradacji**: które funkcje można wyłączyć albo serwować z nieaktualnymi danymi (rekomendacje, liczniki na żywo), żeby główny przepływ (logowanie, płatność) działał pod presją."
       ]
     }
   },
@@ -2264,6 +3666,15 @@ const FLASHCARDS = [
         "Stampede on expiry → locking/single-flight, jittered TTL, stale-while-revalidate",
         "Layers: browser → CDN → app memory (LRU) → Redis → DB",
         "Never cache without knowing the acceptable staleness"
+      ],
+      more: [
+        "A **cache** keeps a copy of data in a faster place so it does not have to be recomputed or fetched from the slower source (usually the database) every time. It reduces latency and load, but introduces **staleness**: the copy can differ from the truth. Every caching decision is about how stale is acceptable and how you bring the copy back in line. **Cache-aside** (lazy loading) is the most common pattern: the application checks the cache; on a **miss** it reads the database, stores the result with a TTL and returns it. Only data that is actually requested gets cached, and a cache outage just means slower reads.",
+        "```ts\nasync function getProduct(id: string) {\n  const hit = await redis.get(`product:${id}`);\n  if (hit) return JSON.parse(hit);\n  const product = await db.product.findUnique({ where: { id } });\n  await redis.set(`product:${id}`, JSON.stringify(product), 'EX', 300);\n  return product;\n}\n```",
+        "Two write-side strategies keep the cache updated on every write. **Write-through** writes to the cache and the database together, so the cache is always warm and fresh, but writes get slower and you may cache data nobody reads. **Write-behind** (write-back) writes to the cache, acknowledges, and flushes to the database asynchronously. Writes are very fast, but data is lost if the cache dies before flushing, so use it only where that risk is acceptable (counters, metrics).",
+        "**Invalidation** means removing or updating stale entries:",
+        "- **TTL** (time to live): the entry expires after N seconds. Simple, with bounded staleness.\n- **Delete on write**: after updating the DB, delete the key; the next read repopulates it. Delete rather than set, to avoid races between concurrent writers.\n- **Event-based**: a change event (from the app or CDC) triggers invalidation across services.\n- **Versioned keys**: include a version in the key (`product:42:v7`, or a global `catalog:v12` prefix). Bumping the version makes old entries unreachable at once, and they expire on their own.",
+        "A **cache stampede** (thundering herd) happens when a hot key expires and hundreds of concurrent requests all miss and hit the database at once. Defences: **locking / single-flight** (only one request recomputes, the others wait for its result), **jittered TTL** (add randomness so many keys do not expire in the same second), and **stale-while-revalidate** (keep serving the old value while one background refresh runs).",
+        "Caches form **layers**, from closest to the user outward: browser (`Cache-Control` headers), CDN at the edge, in-process memory (an **LRU** cache that evicts the least recently used entries; fastest, but per instance and inconsistent across instances), Redis (shared by all instances), and finally the database. The senior point: before caching anything, agree on the **acceptable staleness** with the product owner. A price or a balance may need 0 seconds; a view counter can lag by minutes."
       ]
     },
     pl: {
@@ -2275,6 +3686,15 @@ const FLASHCARDS = [
         "Stampede przy wygaśnięciu → blokada/single-flight, TTL z jitterem, stale-while-revalidate",
         "Warstwy: przeglądarka → CDN → pamięć aplikacji (LRU) → Redis → DB",
         "Nie cache'uj bez ustalenia akceptowalnej nieaktualności"
+      ],
+      more: [
+        "**Cache** trzyma kopię danych w szybszym miejscu, żeby nie trzeba było ich za każdym razem liczyć od nowa albo pobierać z wolniejszego źródła (zwykle bazy). Zmniejsza opóźnienia i obciążenie, ale wprowadza **nieaktualność**: kopia może się różnić od prawdy. Każda decyzja o cache sprowadza się do pytań, jaka nieaktualność jest akceptowalna i jak kopię z powrotem zsynchronizować. **Cache-aside** (lazy loading) to najczęstszy wzorzec: aplikacja sprawdza cache; przy **braku trafienia** (miss) czyta z bazy, zapisuje wynik z TTL i go zwraca. Do cache trafia tylko to, o co ktoś faktycznie prosi, a awaria cache oznacza po prostu wolniejsze odczyty.",
+        "```ts\nasync function getProduct(id: string) {\n  const hit = await redis.get(`product:${id}`);\n  if (hit) return JSON.parse(hit);\n  const product = await db.product.findUnique({ where: { id } });\n  await redis.set(`product:${id}`, JSON.stringify(product), 'EX', 300);\n  return product;\n}\n```",
+        "Dwie strategie po stronie zapisu aktualizują cache przy każdym zapisie. **Write-through** zapisuje jednocześnie do cache i do bazy, więc cache jest zawsze rozgrzany i świeży, ale zapisy są wolniejsze i możesz cache'ować dane, których nikt nie przeczyta. **Write-behind** (write-back) zapisuje do cache, potwierdza i asynchronicznie zrzuca dane do bazy. Zapisy są bardzo szybkie, ale dane przepadają, jeśli cache padnie przed zrzutem, więc stosuj to tylko tam, gdzie to ryzyko jest akceptowalne (liczniki, metryki).",
+        "**Invalidacja** to usuwanie lub aktualizacja nieaktualnych wpisów:",
+        "- **TTL** (time to live): wpis wygasa po N sekundach. Proste, z ograniczoną nieaktualnością.\n- **Usuwanie przy zapisie**: po aktualizacji DB usuń klucz; następny odczyt go odbuduje. Lepiej usuwać niż nadpisywać, żeby uniknąć wyścigów między równoległymi zapisami.\n- **Zdarzenia**: zdarzenie zmiany (z aplikacji lub CDC) wyzwala invalidację w wielu usługach.\n- **Wersjonowane klucze**: wersja w kluczu (`product:42:v7` albo globalny prefiks `catalog:v12`). Podbicie wersji od razu czyni stare wpisy nieosiągalnymi, a te same wygasają.",
+        "**Cache stampede** (thundering herd) zdarza się, gdy gorący klucz wygasa i setki równoległych żądań jednocześnie nie trafiają w cache i uderzają w bazę. Obrona: **blokada / single-flight** (przelicza tylko jedno żądanie, reszta czeka na jego wynik), **TTL z jitterem** (losowy dodatek, żeby wiele kluczy nie wygasało w tej samej sekundzie) oraz **stale-while-revalidate** (dalej serwuj starą wartość, a odświeżanie idzie raz w tle).",
+        "Cache tworzy **warstwy**, od najbliższej użytkownikowi: przeglądarka (nagłówki `Cache-Control`), CDN na brzegu, pamięć procesu (cache **LRU**, który wyrzuca najdawniej używane wpisy; najszybszy, ale osobny dla każdej instancji i niespójny między nimi), Redis (wspólny dla wszystkich instancji) i na końcu baza. Seniorski punkt: zanim cokolwiek zcache'ujesz, ustal z właścicielem produktu **akceptowalną nieaktualność**. Cena czy saldo mogą wymagać 0 sekund, licznik wyświetleń może się spóźniać o minuty."
       ]
     }
   },
@@ -2288,6 +3708,14 @@ const FLASHCARDS = [
         "Any instance can serve any request → easy horizontal scaling, rolling deploys, crash recovery",
         "Horizontal (more instances) vs vertical (bigger instance) scaling",
         "WebSockets are stateful → sticky sessions + shared pub/sub"
+      ],
+      more: [
+        "**State** is any data a server remembers between requests. A service is **stateless** when no request depends on something kept in the memory or local disk of one specific instance. Everything a request needs arrives with the request (a token, parameters) or lives in a shared external store. Statelessness describes the application servers, not the whole system: the state still exists, it has just moved somewhere shared.",
+        "Typical in-memory state that breaks scaling, and where it should live instead:",
+        "- **Sessions**: an Express `MemoryStore` session exists only on the instance that created it; the next request, routed elsewhere, is logged out. Use Redis, a DB, or self-contained tokens such as JWT.\n- **Caches**: a local LRU is fine as an optimisation, but shared data must go to Redis so instances agree.\n- **Locks and rate-limit counters**: a counter in one process does not limit the other nine. Use Redis (atomic `INCR`, `SET NX`).\n- **Uploads and generated files**: files on local disk disappear when the container is replaced. Use S3 or other object storage.\n- **Scheduled jobs** (cron in-process): these run on every instance at once. Use a single scheduler or a distributed lock.",
+        "The payoff is that **any instance can serve any request**. A load balancer can spread traffic round-robin, and autoscaling can add or remove instances freely. **Rolling deploys** replace instances one by one without logging anyone out. If an instance crashes, the others take over with no lost data, because nothing important lived only there.",
+        "**Vertical scaling** means a bigger machine (more CPU and RAM). It is simple and needs no code changes, but it has a hard ceiling, costs rise steeply, and the machine is a single point of failure. **Horizontal scaling** means more machines of the same size. It is practically unlimited and adds redundancy, but it requires statelessness.",
+        "The exception is **WebSockets** (and SSE): a connection is a long-lived socket pinned to one instance, so that instance holds state by nature. You need **sticky sessions** so a reconnecting or upgrading client lands on the right node, and a **shared pub/sub** (Redis, NATS) so that a message produced on instance A reaches a user connected to instance B. The Socket.IO Redis adapter does exactly this."
       ]
     },
     pl: {
@@ -2298,6 +3726,14 @@ const FLASHCARDS = [
         "Każda instancja obsłuży każde żądanie → łatwe skalowanie poziome, rolling deploy, odporność na awarie",
         "Skalowanie poziome (więcej instancji) vs pionowe (większa instancja)",
         "WebSockety są stanowe → sticky sessions + wspólny pub/sub"
+      ],
+      more: [
+        "**Stan** to dowolne dane, które serwer pamięta między żądaniami. Usługa jest **bezstanowa**, gdy żadne żądanie nie zależy od czegoś trzymanego w pamięci lub na lokalnym dysku konkretnej instancji. Wszystko, czego żądanie potrzebuje, przychodzi razem z nim (token, parametry) albo leży we wspólnym zewnętrznym magazynie. Bezstanowość dotyczy serwerów aplikacji, a nie całego systemu: stan nadal istnieje, tylko przeniósł się w miejsce wspólne dla wszystkich.",
+        "Typowy stan w pamięci, który psuje skalowanie, i gdzie powinien trafić:",
+        "- **Sesje**: sesja w `MemoryStore` Expressa istnieje tylko na instancji, która ją utworzyła; następne żądanie trafia gdzie indziej i użytkownik jest wylogowany. Redis, DB albo samowystarczalne tokeny typu JWT.\n- **Cache**: lokalny LRU jest OK jako optymalizacja, ale dane wspólne muszą być w Redisie, żeby instancje się zgadzały.\n- **Blokady i liczniki rate limitu**: licznik w jednym procesie nie ogranicza pozostałych dziewięciu. Redis (atomowe `INCR`, `SET NX`).\n- **Uploady i wygenerowane pliki**: pliki na lokalnym dysku znikają przy wymianie kontenera. S3 lub inny object storage.\n- **Zadania cykliczne** (cron w procesie): odpalają się na każdej instancji naraz. Jeden scheduler albo rozproszona blokada.",
+        "Zysk: **każda instancja obsłuży każde żądanie**. Load balancer może rozdzielać ruch round-robin, a autoskalowanie może swobodnie dodawać i usuwać instancje. **Rolling deploy** wymienia instancje po kolei bez wylogowywania kogokolwiek. Gdy instancja padnie, reszta ją zastępuje bez utraty danych, bo nic ważnego nie żyło tylko na niej.",
+        "**Skalowanie pionowe** to większa maszyna (więcej CPU i RAM-u). Jest proste i nie wymaga zmian w kodzie, ale ma twardy sufit, koszty rosną stromo, a maszyna jest pojedynczym punktem awarii. **Skalowanie poziome** to więcej maszyn tego samego rozmiaru. Jest praktycznie nieograniczone i daje redundancję, ale wymaga bezstanowości.",
+        "Wyjątkiem są **WebSockety** (i SSE): połączenie to długo żyjący socket przypięty do jednej instancji, więc ta instancja z natury trzyma stan. Potrzebujesz **sticky sessions**, żeby klient przy upgrade lub ponownym połączeniu trafił na właściwy węzeł, oraz **wspólnego pub/sub** (Redis, NATS), żeby wiadomość wytworzona na instancji A dotarła do użytkownika podłączonego do instancji B. Dokładnie to robi adapter Redis dla Socket.IO."
       ]
     }
   },
@@ -2311,6 +3747,15 @@ const FLASHCARDS = [
         "AP: stay up, return possibly stale data, reconcile later (feeds, likes, catalogue)",
         "Eventual consistency: replicas converge if no new writes",
         "PACELC: even without partitions → latency vs consistency trade-off"
+      ],
+      more: [
+        "The **CAP theorem** is about distributed data stores, where the same data is copied to several nodes. It names three properties:",
+        "- **Consistency**: every read returns the latest write, as if there were a single copy (formally, linearizability).\n- **Availability**: every request to a non-failed node gets a non-error response.\n- **Partition tolerance**: the system keeps working when the network between nodes drops or delays messages.",
+        "The popular phrase \"pick 2 of 3\" is misleading. Network partitions will happen, so partition tolerance is not optional. The real statement is: **while a partition is happening**, you must choose between consistency and availability.",
+        "Picture two replicas that cannot talk to each other, and a write arrives at one of them. The other replica can either refuse or time out on reads, because it cannot confirm it has the latest value (**CP**), or answer with what it has, knowing it may be stale (**AP**). There is no third option, because the new data physically cannot reach it.",
+        "**CP** fits where a wrong answer is worse than no answer: account balances, inventory reservations, leader election, uniqueness of usernames. Examples are etcd, ZooKeeper, and a relational primary with synchronous replication. **AP** fits where staying up matters more than being exactly current: social feeds, like counters, product catalogues, shopping carts. Examples are Cassandra and DynamoDB with eventually consistent reads. The two sides reconcile after the partition heals, through last-write-wins, version vectors or CRDTs.",
+        "**Eventual consistency** is the guarantee AP systems usually give: if no new writes arrive, all replicas will **eventually converge** to the same value. It says nothing about how long that takes (usually milliseconds, sometimes longer), and in between different readers can see different values. Applications handle this with patterns like read-your-writes (route a user to the node they wrote to) and idempotent, commutative updates.",
+        "**PACELC** extends CAP to normal operation: if there is a **P**artition, choose **A** or **C**; **E**lse (no partition), choose **L**atency or **C**onsistency. Even on a healthy network, strong consistency means waiting for replicas to confirm, which adds latency, especially across regions. DynamoDB, for example, lets you choose per read: eventually consistent (faster, cheaper) or strongly consistent. That per-operation choice is what interviewers like to hear: real systems are not \"CP\" or \"AP\" as a whole; they make different choices for different data."
       ]
     },
     pl: {
@@ -2321,6 +3766,15 @@ const FLASHCARDS = [
         "AP: działaj dalej, zwracaj możliwie nieaktualne dane, uzgodnij później (feedy, lajki, katalog)",
         "Eventual consistency: repliki się zbiegają, gdy brak nowych zapisów",
         "PACELC: nawet bez partycji → kompromis opóźnienie vs spójność"
+      ],
+      more: [
+        "**Twierdzenie CAP** dotyczy rozproszonych magazynów danych, w których te same dane są skopiowane na kilka węzłów. Nazywa trzy własności:",
+        "- **Spójność** (Consistency): każdy odczyt zwraca ostatni zapis, jakby istniała jedna kopia (formalnie: linearyzowalność).\n- **Dostępność** (Availability): każde żądanie do działającego węzła dostaje odpowiedź, która nie jest błędem.\n- **Odporność na partycje** (Partition tolerance): system działa, gdy sieć między węzłami gubi lub opóźnia wiadomości.",
+        "Popularne „wybierz 2 z 3” jest mylące. Partycje sieci na pewno się zdarzą, więc odporność na nie nie jest opcjonalna. Prawdziwe twierdzenie brzmi: **w trakcie partycji** musisz wybrać między spójnością a dostępnością.",
+        "Wyobraź sobie dwie repliki, które nie mogą się ze sobą komunikować, i zapis trafiający do jednej z nich. Druga może albo odmawiać odczytów lub kończyć je timeoutem, bo nie potwierdzi, że ma najnowszą wartość (**CP**), albo odpowiadać tym, co ma, wiedząc, że to może być nieaktualne (**AP**). Trzeciej opcji nie ma, bo nowe dane fizycznie do niej nie dotrą.",
+        "**CP** pasuje tam, gdzie zła odpowiedź jest gorsza niż brak odpowiedzi: salda kont, rezerwacje magazynowe, wybór lidera, unikalność nazw użytkowników. Przykłady: etcd, ZooKeeper, relacyjny primary z replikacją synchroniczną. **AP** pasuje tam, gdzie ważniejsze jest działanie niż idealna aktualność: feedy, liczniki lajków, katalog produktów, koszyki. Przykłady: Cassandra, DynamoDB z odczytami eventually consistent. Po zakończeniu partycji obie strony się uzgadniają: last-write-wins, wektory wersji albo CRDT.",
+        "**Eventual consistency** (spójność ostateczna) to gwarancja, którą zwykle dają systemy AP: jeśli nie ma nowych zapisów, wszystkie repliki **w końcu się zbiegną** do tej samej wartości. Nie mówi nic o tym, ile to trwa (zwykle milisekundy, czasem dłużej), a w międzyczasie różni czytelnicy mogą widzieć różne wartości. Aplikacje radzą sobie z tym wzorcami takimi jak read-your-writes (kierowanie użytkownika do węzła, do którego pisał) oraz idempotentne, przemienne aktualizacje.",
+        "**PACELC** rozszerza CAP na normalną pracę: jeśli jest **P**artycja, wybierz **A** albo **C**; **E**lse (brak partycji) wybierz **L**atency (opóźnienie) albo **C**onsistency. Nawet w zdrowej sieci silna spójność oznacza czekanie na potwierdzenia replik, co dokłada opóźnienia, szczególnie między regionami. DynamoDB pozwala na przykład wybrać przy każdym odczycie: eventually consistent (szybciej, taniej) albo strongly consistent. Rekruterzy lubią słyszeć właśnie o takim wyborze per operacja: prawdziwe systemy nie są „CP” albo „AP” w całości, tylko dokonują różnych wyborów dla różnych danych."
       ]
     }
   },
@@ -2334,6 +3788,15 @@ const FLASHCARDS = [
         "Microservice costs: network failures, distributed data consistency, tracing, versioning, infra",
         "Start with clear module boundaries; split when team size, scaling or deploy cadence justify it",
         "Each service owns its data – no shared database"
+      ],
+      more: [
+        "A **monolith** is one deployable application containing all features. A **modular monolith** is still one deployable, but internally split into modules with clear boundaries (orders, billing, catalog), each with its own public interface and its own tables, and no reaching into another module's internals. **Microservices** split those modules into separately deployed services that talk over the network (HTTP/gRPC or messages), each owned by a team. What a monolith gives you for free:",
+        "- **one deploy** and one version to reason about;\n- **in-process calls**: nanoseconds, no network failures, no serialisation;\n- **ACID transactions** across the whole domain (create order and reserve stock in one `BEGIN ... COMMIT`);\n- **easy debugging**: one stack trace, one log stream, step through in a debugger.",
+        "What microservices buy you:",
+        "- **Independent deployment**: team A ships billing ten times a day without coordinating with team B.\n- **Independent scaling**: scale the image-processing service to 50 instances without scaling everything.\n- **Team ownership**: clear responsibility and fewer merge conflicts at 50+ engineers.\n- **Technology freedom**: one service in Go or Python where it fits.\n- **Fault isolation**: a memory leak in one service does not take down the others (if calls between them are resilient).",
+        "The costs are what the interviewer probes. Every call can now fail, time out or be slow, so you need timeouts, retries and circuit breakers. Data is split, so there are no cross-service transactions and you need sagas, eventual consistency and the outbox pattern. Debugging needs **distributed tracing** (OpenTelemetry) to follow one request across services. APIs must be **versioned** and kept backward compatible. And you need platform infrastructure: CI/CD per service, service discovery, monitoring, and many more moving parts. A split done too early, with wrong boundaries, produces a **distributed monolith**: all the costs, and services still have to be deployed together.",
+        "Pragmatic path: start with a modular monolith with strict boundaries. Split a module out when there is a concrete reason: a team large enough to need independent releases, a component with very different scaling or resource needs, or a different deploy cadence. Clean module boundaries make that later extraction cheap.",
+        "The rule **each service owns its data** means no other service reads or writes its tables directly. With a shared database, services are coupled through the schema: one team's migration breaks another's service, and nobody can change their own data model safely. Other services get data through the owner's API or by consuming its events and keeping a local read copy."
       ]
     },
     pl: {
@@ -2344,6 +3807,15 @@ const FLASHCARDS = [
         "Koszty mikroserwisów: awarie sieci, spójność rozproszonych danych, tracing, wersjonowanie, infrastruktura",
         "Zacznij od czytelnych granic modułów; dziel, gdy uzasadnia to wielkość zespołu, skalowanie lub tempo wdrożeń",
         "Każda usługa ma własne dane – bez wspólnej bazy"
+      ],
+      more: [
+        "**Monolit** to jedna wdrażalna aplikacja zawierająca wszystkie funkcje. **Modularny monolit** to nadal jedno wdrożenie, ale w środku podzielone na moduły z czytelnymi granicami (zamówienia, rozliczenia, katalog), każdy z własnym publicznym interfejsem i własnymi tabelami, bez sięgania do wnętrza innych modułów. **Mikroserwisy** wydzielają te moduły do osobno wdrażanych usług, które komunikują się przez sieć (HTTP/gRPC lub wiadomości), a każda należy do jakiegoś zespołu. Co monolit daje za darmo:",
+        "- **jedno wdrożenie** i jedną wersję do ogarnięcia;\n- **wywołania w procesie**: nanosekundy, brak awarii sieci, brak serializacji;\n- **transakcje ACID** na całej domenie (utworzenie zamówienia i rezerwacja towaru w jednym `BEGIN ... COMMIT`);\n- **łatwe debugowanie**: jeden stack trace, jeden strumień logów, krokowanie w debuggerze.",
+        "Co kupujesz mikroserwisami:",
+        "- **Niezależne wdrożenia**: zespół A wypuszcza rozliczenia dziesięć razy dziennie bez uzgadniania z zespołem B.\n- **Niezależne skalowanie**: usługa przetwarzania obrazów na 50 instancjach bez skalowania całości.\n- **Własność zespołów**: jasna odpowiedzialność i mniej konfliktów przy 50+ inżynierach.\n- **Swoboda technologii**: jedna usługa w Go albo Pythonie, gdy to ma sens.\n- **Izolacja awarii**: wyciek pamięci w jednej usłudze nie kładzie pozostałych (o ile wywołania między nimi są odporne).",
+        "O koszty rekruter dopytuje najbardziej. Każde wywołanie może teraz się nie udać, skończyć timeoutem albo trwać długo, więc potrzebujesz timeoutów, ponowień i circuit breakerów. Dane są rozdzielone, więc nie ma transakcji między usługami i potrzebujesz sag, eventual consistency i wzorca outbox. Debugowanie wymaga **rozproszonego tracingu** (OpenTelemetry), żeby prześledzić jedno żądanie przez wiele usług. API trzeba **wersjonować** i utrzymywać wsteczną zgodność. Do tego dochodzi infrastruktura platformowa: CI/CD per usługa, service discovery, monitoring i dużo więcej ruchomych części. Zbyt wczesny podział ze złymi granicami daje **rozproszony monolit**: wszystkie koszty, a usługi i tak trzeba wdrażać razem.",
+        "Pragmatyczna ścieżka: zacznij od modularnego monolitu ze ścisłymi granicami. Wydziel moduł, gdy pojawi się konkretny powód: zespół na tyle duży, że potrzebuje niezależnych wydań, komponent o zupełnie innych potrzebach skalowania lub zasobów albo inne tempo wdrożeń. Czyste granice modułów sprawiają, że późniejsze wydzielenie jest tanie.",
+        "Zasada **każda usługa ma własne dane** oznacza, że żadna inna usługa nie czyta ani nie pisze bezpośrednio do jej tabel. Przy wspólnej bazie usługi są sprzężone przez schemat: migracja jednego zespołu psuje usługę drugiego i nikt nie może bezpiecznie zmienić własnego modelu danych. Inne usługi dostają dane przez API właściciela albo konsumując jego zdarzenia i trzymając lokalną kopię do odczytu."
       ]
     }
   },
@@ -2357,6 +3829,15 @@ const FLASHCARDS = [
         "Orchestration: central coordinator (e.g. AWS Step Functions) – explicit flow, easier to monitor",
         "Every step idempotent; explicit states (`PENDING`, `CONFIRMED`, `CANCELLED`)",
         "Avoid 2PC in microservices – blocking and fragile"
+      ],
+      more: [
+        "In a monolith, \"create order, charge payment, reserve stock\" is one database transaction: all or nothing. With microservices, each step lives in a different service with its own database, so no single transaction can cover them. The textbook alternative is **2PC** (two-phase commit): a coordinator asks every participant to prepare, then tells all of them to commit. It is avoided in microservices because participants hold locks while waiting for the coordinator, a coordinator crash leaves them blocked, many modern stores and message brokers do not support it, and it couples services' availability together.",
+        "A **saga** replaces one big transaction with a **sequence of local transactions**, one per service, each committed immediately. If a later step fails, the saga runs **compensating actions** that semantically undo the earlier steps: refund the payment, release the stock, mark the order cancelled. Compensation is not a rollback. The intermediate states were visible to others for a while, which is why sagas give eventual consistency, not isolation.",
+        "Example for an order:",
+        "- Order service: create order as `PENDING`.\n- Payment service: charge the card. Compensation: refund.\n- Inventory service: reserve stock. If out of stock, fail, so the saga refunds the payment and sets the order to `CANCELLED`.\n- All steps succeed: order becomes `CONFIRMED`.",
+        "There are two ways to coordinate the steps:",
+        "- **Choreography**: no central brain. Each service listens for events and emits its own (`OrderCreated` → payment charges → `PaymentCompleted` → inventory reserves ...). Coupling is loose and it is easy to start, but the overall flow exists only implicitly across many codebases, so it is hard to see, test and debug as the number of steps grows.\n- **Orchestration**: a central **orchestrator** tells each service what to do and tracks the saga's state. AWS Step Functions, Temporal or a custom state machine can play this role. The flow is explicit in one place, easy to monitor, and timeouts and compensation are handled centrally. The orchestrator is one more component to run.",
+        "Messages get redelivered and steps get retried, so **every step must be idempotent**: charging twice for the same saga ID must not charge twice (use an idempotency key). Model **explicit states** (`PENDING`, `CONFIRMED`, `CANCELLED`) so the UI and other services know an order is in progress, not complete. To publish events reliably together with the local DB change, use the **transactional outbox**: write the event to an outbox table in the same transaction, and have a relay publish it to the broker."
       ]
     },
     pl: {
@@ -2367,6 +3848,15 @@ const FLASHCARDS = [
         "Orkiestracja: centralny koordynator (np. AWS Step Functions) – jawny przepływ, łatwiejszy monitoring",
         "Każdy krok idempotentny; jawne stany (`PENDING`, `CONFIRMED`, `CANCELLED`)",
         "Unikaj 2PC w mikroserwisach – blokujące i kruche"
+      ],
+      more: [
+        "W monolicie „utwórz zamówienie, pobierz płatność, zarezerwuj towar” to jedna transakcja w bazie: wszystko albo nic. W mikroserwisach każdy krok żyje w innej usłudze z własną bazą, więc żadna pojedyncza transakcja ich nie obejmie. Podręcznikowa alternatywa to **2PC** (two-phase commit): koordynator prosi uczestników o przygotowanie, a potem każe wszystkim zatwierdzić. W mikroserwisach się jej unika, bo uczestnicy trzymają blokady, czekając na koordynatora, awaria koordynatora zostawia ich zablokowanych, wiele nowoczesnych baz i brokerów wiadomości tego nie obsługuje, a dostępność usług zostaje ze sobą sprzężona.",
+        "**Saga** zastępuje jedną dużą transakcję **sekwencją lokalnych transakcji**, po jednej na usługę, z których każda jest od razu zatwierdzana. Jeśli późniejszy krok się nie powiedzie, saga uruchamia **akcje kompensujące**, które semantycznie cofają wcześniejsze kroki: zwrot płatności, zwolnienie towaru, oznaczenie zamówienia jako anulowanego. Kompensacja to nie rollback. Stany pośrednie przez chwilę były widoczne dla innych, dlatego sagi dają eventual consistency, a nie izolację.",
+        "Przykład dla zamówienia:",
+        "- Usługa zamówień: utwórz zamówienie jako `PENDING`.\n- Usługa płatności: obciąż kartę. Kompensacja: zwrot.\n- Usługa magazynu: zarezerwuj towar. Jeśli go brak, krok się nie udaje, więc saga zwraca płatność i ustawia zamówienie na `CANCELLED`.\n- Wszystkie kroki udane: zamówienie przechodzi w `CONFIRMED`.",
+        "Kroki można koordynować na dwa sposoby:",
+        "- **Choreografia**: bez centralnego mózgu. Każda usługa słucha zdarzeń i emituje własne (`OrderCreated` → płatności obciążają → `PaymentCompleted` → magazyn rezerwuje ...). Sprzężenie jest luźne i łatwo zacząć, ale cały przepływ istnieje tylko niejawnie w wielu repozytoriach, więc przy rosnącej liczbie kroków trudno go zobaczyć, przetestować i debugować.\n- **Orkiestracja**: centralny **orkiestrator** mówi każdej usłudze, co ma zrobić, i śledzi stan sagi. Tę rolę może pełnić AWS Step Functions, Temporal albo własna maszyna stanów. Przepływ jest jawny w jednym miejscu, łatwy do monitorowania, a timeouty i kompensacje obsługuje się centralnie. Orkiestrator to jednak kolejny komponent do utrzymania.",
+        "Wiadomości bywają dostarczane ponownie, a kroki ponawiane, więc **każdy krok musi być idempotentny**: dwukrotne obciążenie dla tego samego ID sagi nie może pobrać pieniędzy dwa razy (klucz idempotencji). Modeluj **jawne stany** (`PENDING`, `CONFIRMED`, `CANCELLED`), żeby UI i inne usługi wiedziały, że zamówienie jest w toku, a nie gotowe. Żeby niezawodnie publikować zdarzenia razem z lokalną zmianą w bazie, użyj **transactional outbox**: zapisz zdarzenie do tabeli outbox w tej samej transakcji, a osobny proces (relay) opublikuje je do brokera."
       ]
     }
   },
@@ -2381,6 +3871,15 @@ const FLASHCARDS = [
         "Bulkhead: separate pools/limits so one dependency cannot exhaust everything",
         "Fallbacks: cached/default data, graceful degradation",
         "Beware retry storms – retry at one layer only"
+      ],
+      more: [
+        "When your service calls another service, a database or a third-party API, that dependency will sometimes be slow or down. Without protection, a slow dependency is worse than a dead one: requests pile up waiting, each holding memory, sockets and pool connections, until your service also falls over. This is a **cascading failure**. The patterns below keep one bad dependency from taking everything down. **Timeouts** are the foundation. Many clients wait a very long time by default: Node's `fetch` has no overall request timeout, and a raw socket can hang indefinitely. Set a timeout on every outbound call, derived from the dependency's normal p99 and your own latency budget (if your endpoint must answer in 1 s, a downstream call cannot be allowed 30 s).",
+        "**Retries** help with **transient** errors (connection reset, 503, 429, timeout), not with permanent ones (400, 404, validation errors). Rules:",
+        "- **Exponential backoff**: wait 100 ms, 200 ms, 400 ms ... so a struggling service gets room to recover.\n- **Jitter**: randomise each wait, so thousands of clients do not retry in synchronised waves.\n- **Cap** attempts (for example 3) and total time.\n- Retry only **idempotent** operations (GET, PUT, or a POST with an idempotency key); retrying a non-idempotent \"charge card\" can charge twice.",
+        "A **circuit breaker** wraps calls to a dependency and tracks failures. **Closed**: calls pass through normally. When the failure rate crosses a threshold it goes **open**: calls fail immediately without touching the dependency, which saves your resources and gives the dependency time to recover. After a cooldown it goes **half-open** and lets a few probe calls through; if they succeed it closes again. In Node, `opossum` implements this.",
+        "```js\nimport CircuitBreaker from 'opossum';\nconst breaker = new CircuitBreaker(callPricingService, {\n  timeout: 2000,                 // treat slow calls as failures\n  errorThresholdPercentage: 50,  // open when half of calls fail\n  resetTimeout: 10000,           // try again (half-open) after 10 s\n});\nbreaker.fallback(() => cachedPrices());\nconst prices = await breaker.fire(productIds);\n```",
+        "A **bulkhead** (named after the watertight compartments in a ship) gives each dependency its own limited resources, such as a separate connection pool or a concurrency limit. A hung recommendation service can then exhaust only its own 10 slots, not every socket the checkout flow needs. A **fallback** decides what to return when a call fails: cached data, a default value, or a reduced response (hide the recommendations widget). This is **graceful degradation**.",
+        "The pitfall seniors are expected to know is the **retry storm**. If the frontend, the API gateway, service A and service B each retry 3 times, one failing call at the bottom becomes 3⁴ = 81 calls, hammering a service that is already struggling. Retry at **one layer only** (usually closest to the failing dependency), and let a circuit breaker stop retries completely when the dependency is clearly down."
       ]
     },
     pl: {
@@ -2392,6 +3891,15 @@ const FLASHCARDS = [
         "Bulkhead: osobne pule/limity, żeby jedna zależność nie wyczerpała wszystkiego",
         "Fallbacki: dane z cache/domyślne, łagodna degradacja",
         "Uwaga na burze ponowień – ponawiaj tylko w jednej warstwie"
+      ],
+      more: [
+        "Gdy twoja usługa woła inną usługę, bazę albo zewnętrzne API, ta zależność czasem będzie wolna albo niedostępna. Bez ochrony wolna zależność jest gorsza niż martwa: żądania się piętrzą w oczekiwaniu, każde trzyma pamięć, sockety i połączenia z puli, aż w końcu pada też twoja usługa. To **kaskadowa awaria**. Poniższe wzorce nie pozwalają, żeby jedna zła zależność położyła wszystko. Fundamentem są **timeouty**. Wiele klientów domyślnie czeka bardzo długo: `fetch` w Node nie ma ogólnego timeoutu żądania, a surowy socket potrafi wisieć bez końca. Ustaw timeout na każdym wywołaniu wychodzącym, wyliczony z normalnego p99 zależności i z własnego budżetu opóźnień (jeśli twój endpoint musi odpowiedzieć w 1 s, wywołanie w dół nie może dostać 30 s).",
+        "**Ponowienia** (retries) pomagają przy błędach **przejściowych** (zerwane połączenie, 503, 429, timeout), a nie trwałych (400, 404, błędy walidacji). Zasady:",
+        "- **Wykładniczy backoff**: czekaj 100 ms, 200 ms, 400 ms ..., żeby przeciążona usługa miała miejsce na powrót.\n- **Jitter**: losowy rozrzut czasu oczekiwania, żeby tysiące klientów nie ponawiały zsynchronizowanymi falami.\n- **Limit** prób (np. 3) i łącznego czasu.\n- Ponawiaj tylko operacje **idempotentne** (GET, PUT albo POST z kluczem idempotencji); ponowienie nieidempotentnego „obciąż kartę” może pobrać pieniądze dwa razy.",
+        "**Circuit breaker** (bezpiecznik) opakowuje wywołania zależności i liczy błędy. Stan **closed**: wywołania przechodzą normalnie. Gdy odsetek błędów przekroczy próg, przechodzi w **open**: wywołania kończą się błędem od razu, bez dotykania zależności, co oszczędza twoje zasoby i daje zależności czas na powrót. Po okresie ochłonięcia przechodzi w **half-open** i przepuszcza kilka próbnych wywołań; jeśli się udadzą, znowu się zamyka. W Node implementuje to `opossum`.",
+        "```js\nimport CircuitBreaker from 'opossum';\nconst breaker = new CircuitBreaker(callPricingService, {\n  timeout: 2000,                 // wolne wywołania traktuj jako błędy\n  errorThresholdPercentage: 50,  // otwórz, gdy połowa wywołań zawodzi\n  resetTimeout: 10000,           // spróbuj ponownie (half-open) po 10 s\n});\nbreaker.fallback(() => cachedPrices());\nconst prices = await breaker.fire(productIds);\n```",
+        "**Bulkhead** (od wodoszczelnych grodzi w statku) daje każdej zależności własne, ograniczone zasoby, np. osobną pulę połączeń albo limit współbieżności. Zawieszona usługa rekomendacji wyczerpie wtedy tylko swoje 10 slotów, a nie wszystkie sockety potrzebne ścieżce płatności. **Fallback** decyduje, co zwrócić, gdy wywołanie się nie uda: dane z cache, wartość domyślną albo okrojoną odpowiedź (ukryj widget rekomendacji). To właśnie **łagodna degradacja**.",
+        "Pułapka, którą senior powinien znać, to **burza ponowień** (retry storm). Jeśli frontend, API gateway, usługa A i usługa B ponawiają po 3 razy, jedno nieudane wywołanie na dole zamienia się w 3⁴ = 81 wywołań, które dobijają i tak już przeciążoną usługę. Ponawiaj **tylko w jednej warstwie** (zwykle najbliżej padającej zależności), a circuit breaker niech całkiem zatrzyma ponowienia, gdy zależność ewidentnie leży."
       ]
     }
   },
@@ -2406,6 +3914,14 @@ const FLASHCARDS = [
         "Workers: idempotent, limited concurrency, retries with backoff, DLQ",
         "Monitor queue depth and age of oldest message; autoscale workers on it",
         "Node options: SQS, BullMQ (Redis), RabbitMQ"
+      ],
+      more: [
+        "An HTTP request should do only what is needed to answer the user, and do it fast. Some work is better done **asynchronously**: the API puts a message (a **job**) on a **queue**, a durable buffer, and a separate **worker** process picks it up and does the work in the background. The API and the workers are decoupled. They scale independently, and if workers are down, jobs wait in the queue instead of being lost. Typical candidates: emails and notifications, PDF or report generation, image and video processing, syncing with external systems. Move work to a queue when it is:",
+        "- **slow**: more than a few seconds would keep the user waiting and tie up web server resources, and proxies or load balancers may time out (often at 30–60 s);\n- **bursty**: 10,000 jobs arriving at once are smoothed out; workers process at a steady rate instead of the API collapsing;\n- **retryable**: a flaky third-party call can be retried later without the user re-submitting;\n- **not needed for the response**: sending a welcome email does not have to finish before \"account created\" is returned.",
+        "The API then answers `202 Accepted` (\"received, not finished yet\") with a job ID. The client learns the result either by **polling** a status endpoint (`GET /jobs/:id` → `pending | done | failed`) or by being **pushed** a notification (WebSocket, SSE, email, mobile push) when the job completes. Workers must follow a few rules:",
+        "- **Idempotent**: most queues deliver **at least once**, so a job may run twice (a worker crashes after doing the work but before acknowledging). Running it twice must not send two emails or charge twice. Use an idempotency key or check state first.\n- **Limited concurrency**: process N jobs at a time per worker, so you do not overload the database or hit a provider's rate limit.\n- **Retries with backoff** for transient failures.\n- **DLQ** (dead-letter queue): after the maximum attempts, move the job to a separate queue for inspection instead of retrying forever or dropping it silently.",
+        "Monitor **queue depth** (how many messages are waiting) and especially the **age of the oldest message**: that is the delay users actually experience. Autoscale workers on these metrics, for example ECS scaling on SQS `ApproximateNumberOfMessagesVisible`. The common options in Node:",
+        "- **SQS**: fully managed by AWS, virtually unlimited throughput, built-in DLQ and visibility timeout; FIFO queues when order matters.\n- **BullMQ**: a job library built on Redis, with delays, priorities, repeatable (cron) jobs, rate limiting and a UI. Durability depends on your Redis setup.\n- **RabbitMQ**: a full message broker with flexible routing (exchanges, topics), acknowledgements and priorities.\n- **Kafka**: not a job queue but a replayable event log; the usual choice when many consumers read the same event stream."
       ]
     },
     pl: {
@@ -2417,6 +3933,14 @@ const FLASHCARDS = [
         "Workery: idempotentne, ograniczona współbieżność, ponowienia z backoffem, DLQ",
         "Monitoring długości kolejki i wieku najstarszej wiadomości; autoskalowanie workerów",
         "Opcje w Node: SQS, BullMQ (Redis), RabbitMQ"
+      ],
+      more: [
+        "Żądanie HTTP powinno robić tylko to, co jest potrzebne do odpowiedzi, i robić to szybko. Część pracy lepiej wykonać **asynchronicznie**: API wrzuca wiadomość (**zadanie**, job) do **kolejki**, czyli trwałego bufora, a osobny proces **worker** ją odbiera i wykonuje pracę w tle. API i workery są od siebie odsprzęgnięte. Skalują się niezależnie, a gdy workery leżą, zadania czekają w kolejce, zamiast przepadać. Typowi kandydaci: e-maile i powiadomienia, generowanie PDF-ów i raportów, przetwarzanie obrazów i wideo, synchronizacja z zewnętrznymi systemami. Przenieś pracę do kolejki, gdy jest:",
+        "- **wolna**: więcej niż kilka sekund każe użytkownikowi czekać i blokuje zasoby serwera, a proxy lub load balancer mogą uciąć żądanie (często po 30–60 s);\n- **skokowa**: 10 000 zadań naraz zostaje wygładzonych; workery przetwarzają je w stałym tempie, zamiast żeby API się położyło;\n- **możliwa do ponowienia**: niestabilne wywołanie zewnętrznego API można ponowić później bez ponownego wysyłania formularza przez użytkownika;\n- **niepotrzebna do odpowiedzi**: mail powitalny nie musi zostać wysłany, zanim zwrócisz „konto utworzone”.",
+        "API odpowiada wtedy `202 Accepted` („przyjęte, jeszcze nie skończone”) z ID zadania. Klient poznaje wynik, **odpytując** endpoint statusu (`GET /jobs/:id` → `pending | done | failed`) albo dostając **powiadomienie push** (WebSocket, SSE, e-mail, push mobilny), gdy zadanie się zakończy. Workery muszą trzymać się kilku zasad:",
+        "- **Idempotentność**: większość kolejek dostarcza **co najmniej raz** (at least once), więc zadanie może wykonać się dwa razy (worker pada po wykonaniu pracy, a przed potwierdzeniem). Dwukrotne wykonanie nie może wysłać dwóch maili ani pobrać pieniędzy dwa razy. Użyj klucza idempotencji albo najpierw sprawdź stan.\n- **Ograniczona współbieżność**: N zadań naraz na workera, żeby nie przeciążyć bazy ani nie wpaść w rate limit dostawcy.\n- **Ponowienia z backoffem** przy błędach przejściowych.\n- **DLQ** (dead-letter queue): po przekroczeniu limitu prób zadanie trafia do osobnej kolejki do analizy, zamiast być ponawiane w nieskończoność albo po cichu gubione.",
+        "Monitoruj **długość kolejki** (ile wiadomości czeka), a przede wszystkim **wiek najstarszej wiadomości**: to jest opóźnienie, które faktycznie odczuwa użytkownik. Na tych metrykach opieraj autoskalowanie workerów, np. skalowanie ECS po `ApproximateNumberOfMessagesVisible` z SQS. Popularne opcje w Node:",
+        "- **SQS**: w pełni zarządzany przez AWS, praktycznie nieograniczona przepustowość, wbudowane DLQ i visibility timeout; kolejki FIFO, gdy liczy się kolejność.\n- **BullMQ**: biblioteka zadań na Redisie, z opóźnieniami, priorytetami, zadaniami cyklicznymi (cron), rate limitem i UI. Trwałość zależy od konfiguracji Redisa.\n- **RabbitMQ**: pełny broker wiadomości z elastycznym routingiem (exchange, topiki), potwierdzeniami i priorytetami.\n- **Kafka**: nie kolejka zadań, tylko odtwarzalny log zdarzeń; zwykły wybór, gdy ten sam strumień zdarzeń czyta wielu konsumentów."
       ]
     }
   },
@@ -2431,6 +3955,14 @@ const FLASHCARDS = [
         "Upload results to S3; notify user (email/push) with a presigned link",
         "Retries + DLQ; progress tracked in DB",
         "Monitor throughput, failures, cost; reuse browser instances if using Puppeteer"
+      ],
+      more: [
+        "Rendering a PDF is CPU- and memory-heavy. With a headless browser such as Puppeteer or Playwright, one render can take hundreds of MB and several seconds. Doing that for 100,000 users inside API request handlers would starve the API of CPU, block the Node event loop, and exhaust memory, so normal traffic would slow down or fail. The design separates **accepting work** from **doing work**.",
+        "The API, or a scheduler (cron, EventBridge) for monthly statements, only **enqueues** jobs: one message per user, or per batch of users to cut per-message overhead. Enqueuing 100,000 small messages takes seconds. Messages go to a queue such as **SQS**, and a pool of **workers** consumes them. Workers can be ECS/Fargate tasks that autoscale on queue depth, or Lambda functions with **reserved concurrency** as a cap. The concurrency limit is deliberate: it protects the database and any downstream services the workers read from, and it keeps cost predictable.",
+        "Each job has an **idempotency key** such as `userId + period` (`user-42:2026-09`). Before rendering, the worker checks whether a result for that key already exists (a DB row with a unique constraint, or the S3 object key itself). Queues deliver at least once and jobs get retried, so without this key you would produce duplicates and possibly notify a user twice.",
+        "The worker uploads the finished file to **S3**, not to local disk (workers are ephemeral) and not to the database (large blobs). It then notifies the user by email or push with a **presigned URL**: a time-limited link signed with the service's credentials that lets the holder download that one private object directly from S3, without making the bucket public and without streaming the file through your API.",
+        "Failure handling: transient errors are retried with backoff. After N attempts the job goes to a **DLQ** for investigation. Progress is tracked in the DB (a job table with `pending / processing / done / failed` per user, plus batch counters), so you can answer \"how far along are we?\" and re-enqueue only the failed jobs.",
+        "Monitor throughput (PDFs per minute), failure rate, DLQ size, queue age and cost per PDF. With Puppeteer, launching Chromium per job is the main cost, so **reuse one browser instance** per worker and open a new page (or browser context) per job, and restart the browser periodically to contain memory leaks. Mentioning this is the kind of practical detail interviewers look for."
       ]
     },
     pl: {
@@ -2442,6 +3974,14 @@ const FLASHCARDS = [
         "Wyniki do S3; powiadomienie użytkownika (e-mail/push) z presigned linkiem",
         "Ponowienia + DLQ; postęp śledzony w DB",
         "Monitoring przepustowości, błędów, kosztów; przy Puppeteerze ponowne użycie instancji przeglądarki"
+      ],
+      more: [
+        "Renderowanie PDF-a jest ciężkie dla CPU i pamięci. Z przeglądarką headless, taką jak Puppeteer czy Playwright, jeden render może zająć setki MB i kilka sekund. Robienie tego dla 100 000 użytkowników w handlerach żądań API zagłodziłoby API z CPU, zablokowało event loop Node i wyczerpało pamięć, więc zwykły ruch zwolniłby albo zaczął padać. Projekt rozdziela **przyjmowanie pracy** od **wykonywania pracy**.",
+        "API albo scheduler (cron, EventBridge) przy comiesięcznych zestawieniach tylko **kolejkuje** zadania: jedna wiadomość na użytkownika albo na partię użytkowników, żeby zmniejszyć narzut na wiadomość. Zakolejkowanie 100 000 małych wiadomości trwa sekundy. Wiadomości trafiają do kolejki, np. **SQS**, a konsumuje je pula **workerów**. Mogą to być zadania ECS/Fargate autoskalowane po długości kolejki albo funkcje Lambda z **reserved concurrency** jako limitem. Limit współbieżności jest celowy: chroni bazę i usługi, z których workery czytają, i utrzymuje przewidywalne koszty.",
+        "Każde zadanie ma **klucz idempotencji**, np. `userId + okres` (`user-42:2026-09`). Przed renderowaniem worker sprawdza, czy wynik dla tego klucza już istnieje (wiersz w DB z ograniczeniem unikalności albo sam klucz obiektu w S3). Kolejki dostarczają co najmniej raz, a zadania są ponawiane, więc bez tego klucza powstawałyby duplikaty i użytkownik mógłby dostać powiadomienie dwa razy.",
+        "Worker wysyła gotowy plik do **S3**, a nie na lokalny dysk (workery są efemeryczne) ani do bazy (duże bloby). Następnie powiadamia użytkownika mailem lub pushem z **presigned URL**: ograniczonym w czasie linkiem podpisanym poświadczeniami usługi, który pozwala pobrać ten jeden prywatny obiekt prosto z S3, bez upubliczniania bucketu i bez przepuszczania pliku przez twoje API.",
+        "Obsługa błędów: błędy przejściowe są ponawiane z backoffem. Po N próbach zadanie trafia do **DLQ** do analizy. Postęp jest śledzony w DB (tabela zadań ze stanem `pending / processing / done / failed` per użytkownik plus liczniki partii), więc da się odpowiedzieć na pytanie „ile już zrobione?” i ponownie zakolejkować tylko nieudane zadania.",
+        "Monitoruj przepustowość (PDF-y na minutę), odsetek błędów, rozmiar DLQ, wiek wiadomości w kolejce i koszt na PDF. W Puppeteerze głównym kosztem jest uruchamianie Chromium dla każdego zadania, więc **używaj jednej instancji przeglądarki** na workera i otwieraj nową stronę (albo kontekst przeglądarki) na zadanie, a przeglądarkę co jakiś czas restartuj, żeby ograniczyć wycieki pamięci. Taki praktyczny detal rekruterzy lubią usłyszeć."
       ]
     }
   },
@@ -2456,6 +3996,15 @@ const FLASHCARDS = [
         "Collect invalid rows into an error report instead of failing everything",
         "Checkpoints for resume; idempotent writes (upsert by natural key)",
         "Status endpoint / notification when done"
+      ],
+      more: [
+        "Uploading a 2 GB CSV through your API server is fragile. The request can run for minutes, the file ties up memory or disk on one instance, and load balancers or API gateways often cap body size and request duration (API Gateway, for instance, caps payloads at 10 MB). Instead, the API issues a **presigned URL**, a short-lived signed permission to PUT one specific object into S3, and the client uploads **directly to S3**. For big files, **multipart upload** splits the file into parts (5 MB to 5 GB each) that upload in parallel and can be retried individually, so a dropped connection does not restart the whole upload.",
+        "When the upload completes, **S3 emits an event**, sent to SQS directly or via EventBridge. A worker consumes it, which decouples upload from processing and lets you retry and absorb bursts. At upload initiation the API also creates a **job record** in the DB (`uploaded → processing → completed / failed`, with row counts), which is what the UI and status endpoint read.",
+        "The worker must never load the whole file into memory. It **streams**: reads the S3 object as a stream, pipes it through a streaming CSV parser, and handles rows as they arrive, so memory stays flat whether the file has 1,000 rows or 50 million.",
+        "```ts\nconst { Body } = await s3.send(new GetObjectCommand({ Bucket, Key }));\nconst rows = (Body as Readable).pipe(parse({ columns: true }));\nlet batch: Row[] = [];\nfor await (const raw of rows) {\n  const r = schema.safeParse(raw);\n  if (!r.success) { errors.push({ raw, issues: r.error.issues }); continue; }\n  batch.push(r.data);\n  if (batch.length === 1000) { await upsertBatch(batch); batch = []; }\n}\nif (batch.length) await upsertBatch(batch);\n```",
+        "Each row is **validated** individually. Invalid rows go into an **error report** (row number, value, reason), which is saved to S3 and linked from the job, instead of aborting the whole import because row 48,211 has a bad date. Valid rows are written in **batches** (hundreds to thousands per multi-row `INSERT`), which is far faster than one round trip per row.",
+        "Long jobs fail midway: a worker is killed during a deploy or hits a timeout. **Checkpoints**, meaning periodically saving \"processed up to row N / byte offset\" in the job record, let a retry resume instead of starting over. Resuming or retrying re-processes some rows, so writes must be **idempotent**: an **upsert** keyed by a **natural key** (a business identifier such as SKU or email, rather than an auto-generated ID), e.g. Postgres `INSERT ... ON CONFLICT (sku) DO UPDATE`. Re-running the same rows then produces the same final state.",
+        "When the job finishes, the status endpoint shows `completed` with counts (imported, rejected) and a link to the error report, and the user can also get a notification (email, in-app, WebSocket)."
       ]
     },
     pl: {
@@ -2467,6 +4016,15 @@ const FLASHCARDS = [
         "Błędne wiersze do raportu błędów zamiast przerywania całości",
         "Punkty kontrolne do wznowienia; idempotentne zapisy (upsert po kluczu naturalnym)",
         "Endpoint statusu / powiadomienie po zakończeniu"
+      ],
+      more: [
+        "Wysyłanie 2 GB CSV przez serwer API jest kruche. Żądanie może trwać minutami, plik zajmuje pamięć lub dysk jednej instancji, a load balancery i API gatewaye często limitują rozmiar body i czas żądania (np. API Gateway ma limit 10 MB). Zamiast tego API wydaje **presigned URL**, krótko żyjące, podpisane uprawnienie do wykonania PUT jednego konkretnego obiektu w S3, a klient wysyła plik **prosto do S3**. Przy dużych plikach **multipart upload** dzieli plik na części (od 5 MB do 5 GB każda), które lecą równolegle i mogą być ponawiane pojedynczo, więc zerwane połączenie nie zaczyna całego uploadu od nowa.",
+        "Po zakończeniu uploadu **S3 emituje zdarzenie**, wysyłane bezpośrednio do SQS albo przez EventBridge. Worker je konsumuje, co oddziela upload od przetwarzania i pozwala ponawiać oraz amortyzować skoki ruchu. Przy inicjowaniu uploadu API tworzy też **rekord zadania** w DB (`uploaded → processing → completed / failed`, z licznikami wierszy), który czyta UI i endpoint statusu.",
+        "Worker nigdy nie może wczytać całego pliku do pamięci. **Przetwarza strumieniowo**: czyta obiekt z S3 jako strumień, przepuszcza go przez strumieniowy parser CSV i obsługuje wiersze w miarę napływania, więc zużycie pamięci jest stałe niezależnie od tego, czy plik ma 1000 wierszy, czy 50 milionów.",
+        "```ts\nconst { Body } = await s3.send(new GetObjectCommand({ Bucket, Key }));\nconst rows = (Body as Readable).pipe(parse({ columns: true }));\nlet batch: Row[] = [];\nfor await (const raw of rows) {\n  const r = schema.safeParse(raw);\n  if (!r.success) { errors.push({ raw, issues: r.error.issues }); continue; }\n  batch.push(r.data);\n  if (batch.length === 1000) { await upsertBatch(batch); batch = []; }\n}\nif (batch.length) await upsertBatch(batch);\n```",
+        "Każdy wiersz jest **walidowany** osobno. Błędne wiersze trafiają do **raportu błędów** (numer wiersza, wartość, powód), zapisanego w S3 i podlinkowanego w zadaniu, zamiast przerywać cały import, bo wiersz 48 211 ma złą datę. Poprawne wiersze są zapisywane **partiami** (od setek do tysięcy w jednym wielowierszowym `INSERT`), co jest dużo szybsze niż round trip na każdy wiersz.",
+        "Długie zadania padają w połowie: worker zostaje ubity przy deployu albo trafia na timeout. **Punkty kontrolne** (checkpointy), czyli okresowe zapisywanie w rekordzie zadania „przetworzono do wiersza N / offsetu bajtów”, pozwalają przy ponowieniu wznowić pracę zamiast zaczynać od zera. Wznowienie lub ponowienie przetwarza część wierszy drugi raz, więc zapisy muszą być **idempotentne**: **upsert** po **kluczu naturalnym** (identyfikatorze biznesowym, np. SKU lub e-mail, a nie autogenerowanym ID), np. w Postgresie `INSERT ... ON CONFLICT (sku) DO UPDATE`. Ponowne przetworzenie tych samych wierszy daje wtedy ten sam stan końcowy.",
+        "Po zakończeniu zadania endpoint statusu pokazuje `completed` z licznikami (zaimportowane, odrzucone) i linkiem do raportu błędów, a użytkownik może też dostać powiadomienie (e-mail, in-app, WebSocket)."
       ]
     }
   },
@@ -2481,6 +4039,15 @@ const FLASHCARDS = [
         "Dedupe by idempotency key; rate-limit per user and per provider; quiet hours",
         "Retries with backoff, DLQ, provider failover",
         "Store notification log + delivery status (in-app inbox, analytics)"
+      ],
+      more: [
+        "The goal is to deliver messages through several **channels**: mobile **push**, **email**, **SMS** and **in-app** (a bell icon with an inbox). It must work for millions of users, without spamming them, without losing messages, and without every feature team re-implementing it. The key design move is to make notifications a **separate service** fed by events, not something each feature calls synchronously.",
+        "Other services do not say \"send an email to X\". They publish **domain events**, facts about what happened (`OrderShipped { orderId, userId }`), to a bus such as SNS, EventBridge or Kafka. The notification service subscribes and decides what to send. Producers stay simple, and adding a new channel or changing wording does not touch the order service. For each event the notification service:",
+        "- **resolves recipients**: one user, or fan-out to followers or a whole segment (large fan-outs are processed in batches);\n- applies **preferences and opt-outs**: the user disabled marketing email, wants only push for shipping updates, or unsubscribed (legally required for email and SMS);\n- renders **templates** with **i18n**: localised text, formats and time zones per user and channel.",
+        "It then **fans out** to a queue per channel, for example an SNS topic feeding separate SQS queues for push, email and SMS. Channels are isolated: a slow SMS provider does not delay push. Each has **channel workers** that call the providers: **APNs** (Apple) and **FCM** (Firebase/Google) for push, **SES** or SendGrid for email, Twilio or another SMS gateway for SMS.",
+        "Protection:",
+        "- **Dedupe** with an **idempotency key** (event ID + user + channel), because upstream retries and at-least-once queues must not produce duplicate notifications.\n- **Rate-limit per user** (no more than N pushes an hour; collapse many similar events into a digest) and **per provider** (respect SES send rates and SMS throughput limits).\n- **Quiet hours**: hold non-urgent notifications until morning in the user's time zone.\n- **Retries** with backoff for transient provider errors, a **DLQ** for messages that keep failing, and **provider failover** (switch to a backup SMS or email provider when the primary is down).",
+        "Finally, store a **notification log** with **delivery status** per message (queued, sent, delivered, opened, failed; providers report some of this via webhooks). It powers the **in-app inbox** (read/unread), support investigations (\"did the user get it?\"), analytics such as open rates, and cleanup of invalid device tokens that APNs or FCM report as unregistered."
       ]
     },
     pl: {
@@ -2492,6 +4059,15 @@ const FLASHCARDS = [
         "Deduplikacja po kluczu idempotencji; rate limit per użytkownik i dostawca; godziny ciszy",
         "Ponowienia z backoffem, DLQ, przełączanie dostawców",
         "Log powiadomień + status dostarczenia (skrzynka in-app, analityka)"
+      ],
+      more: [
+        "Cel: dostarczać wiadomości przez kilka **kanałów**: mobilny **push**, **e-mail**, **SMS** i **in-app** (dzwoneczek ze skrzynką). Ma to działać dla milionów użytkowników, bez spamowania ich, bez gubienia wiadomości i bez tego, żeby każdy zespół implementował to od nowa. Kluczowa decyzja projektowa: powiadomienia to **osobna usługa** zasilana zdarzeniami, a nie coś, co każda funkcja woła synchronicznie.",
+        "Inne usługi nie mówią „wyślij maila do X”. Publikują **zdarzenia domenowe**, czyli fakty o tym, co się stało (`OrderShipped { orderId, userId }`), na szynę typu SNS, EventBridge czy Kafka. Usługa powiadomień je subskrybuje i sama decyduje, co wysłać. Producenci zostają prości, a dodanie kanału czy zmiana treści nie dotyka usługi zamówień. Dla każdego zdarzenia usługa powiadomień:",
+        "- **wyznacza odbiorców**: jeden użytkownik albo fan-out do obserwujących lub całego segmentu (duże fan-outy przetwarzane partiami);\n- stosuje **preferencje i wypisania**: użytkownik wyłączył maile marketingowe, chce tylko push przy wysyłce albo się wypisał (przy e-mailu i SMS-ach wymagane prawnie);\n- renderuje **szablony** z **i18n**: zlokalizowane teksty, formaty i strefy czasowe per użytkownik i kanał.",
+        "Następnie robi **fan-out** do kolejki per kanał, np. temat SNS zasilający osobne kolejki SQS dla push, e-maila i SMS-ów. Kanały są odizolowane: wolny dostawca SMS nie opóźnia pushy. Każdy kanał ma **workery**, które wołają dostawców: **APNs** (Apple) i **FCM** (Firebase/Google) dla push, **SES** albo SendGrid dla e-maili, Twilio lub inną bramkę SMS dla SMS-ów.",
+        "Zabezpieczenia:",
+        "- **Deduplikacja** po **kluczu idempotencji** (ID zdarzenia + użytkownik + kanał), bo ponowienia po stronie producenta i kolejki at-least-once nie mogą dawać zdublowanych powiadomień.\n- **Rate limit per użytkownik** (najwyżej N pushy na godzinę; wiele podobnych zdarzeń zwiń w podsumowanie) i **per dostawca** (szanuj limity wysyłki SES i przepustowość SMS).\n- **Godziny ciszy**: niepilne powiadomienia czekają do rana w strefie czasowej użytkownika.\n- **Ponowienia** z backoffem przy przejściowych błędach dostawcy, **DLQ** dla wiadomości, które ciągle padają, i **przełączanie dostawców** (zapasowy dostawca SMS lub e-mail, gdy główny leży).",
+        "Na koniec zapisuj **log powiadomień** ze **statusem dostarczenia** każdej wiadomości (w kolejce, wysłane, dostarczone, otwarte, błąd; część z tego dostawcy raportują webhookami). Z logu korzysta **skrzynka in-app** (przeczytane/nieprzeczytane), support przy dochodzeniach („czy użytkownik to dostał?”), analityka typu open rate oraz sprzątanie nieważnych tokenów urządzeń, które APNs lub FCM zgłaszają jako wyrejestrowane."
       ]
     }
   },
@@ -2506,6 +4082,15 @@ const FLASHCARDS = [
         "WebSockets: full-duplex, low latency – chat, collaboration, live games",
         "Scaling: stateful connections → sticky LB, shared pub/sub (Redis), connection limits",
         "Mobile push (APNs/FCM) when the app is closed"
+      ],
+      more: [
+        "HTTP is request–response: the client asks, the server answers. For live data (new messages, notifications, prices) the server needs a way to tell the client that something changed. There are four common techniques, which trade simplicity against latency and efficiency. **Polling**: the client calls `GET /updates` every N seconds. It is trivial to build and works with any infrastructure. But most responses are empty (wasted requests, bandwidth and server load), and updates arrive up to N seconds late. Shortening N makes the waste worse.",
+        "**Long polling**: the client sends a request, and the server **holds it open** until there is new data (or a timeout of ~30 s), then responds; the client immediately sends the next request. Updates are near-instant, and it works everywhere plain HTTP works. The cost is a held request per client and a new request after every message. Today it is mostly a **fallback** when better transports are blocked.",
+        "**SSE** (Server-Sent Events): the client opens one HTTP request with `EventSource`, and the server keeps the response open and streams `text/event-stream` messages down it. It is **one-way** (server → client; the client sends data with normal requests), **text only** (usually JSON), and the browser **reconnects automatically**, sending `Last-Event-ID` so the server can resume. Because it is plain HTTP, it passes through proxies and works with HTTP/2 multiplexing. It is a great fit for notifications, feeds, dashboards and streaming LLM responses.",
+        "**WebSockets**: an HTTP request is **upgraded** to a persistent TCP connection that is **full-duplex**: both sides can send text or binary frames at any time with minimal overhead. It is the right choice when the client also sends frequent messages with low latency: chat, collaborative editing, multiplayer games, trading UIs. You have to handle reconnection, heartbeats and message ordering yourself (or use a library like Socket.IO).",
+        "SSE and WebSockets are **stateful**: each connection lives on one server instance. Scaling therefore requires:",
+        "- a load balancer that supports long-lived connections, with **sticky sessions** where the protocol needs them;\n- a **shared pub/sub** (Redis, NATS) so that an event produced on instance A reaches a client connected to instance B;\n- attention to **connection limits**: file descriptors, memory per connection, and LB idle timeouts. Managed services like AWS API Gateway WebSockets or AppSync can take this off your hands.",
+        "None of these work when the mobile app is closed or backgrounded, because the OS kills the connection. For that you use **mobile push** through **APNs** (iOS) and **FCM** (Android), and the app fetches fresh data when opened."
       ]
     },
     pl: {
@@ -2517,6 +4102,15 @@ const FLASHCARDS = [
         "WebSockets: full-duplex, niskie opóźnienia – czat, współpraca, gry na żywo",
         "Skalowanie: stanowe połączenia → sticky LB, wspólny pub/sub (Redis), limity połączeń",
         "Push mobilny (APNs/FCM), gdy aplikacja jest zamknięta"
+      ],
+      more: [
+        "HTTP działa w trybie żądanie–odpowiedź: klient pyta, serwer odpowiada. Przy danych na żywo (nowe wiadomości, powiadomienia, ceny) serwer potrzebuje sposobu, żeby dać klientowi znać, że coś się zmieniło. Są cztery popularne techniki, które wymieniają prostotę na opóźnienie i wydajność. **Polling**: klient woła `GET /updates` co N sekund. Trywialne do zbudowania i działa z każdą infrastrukturą. Większość odpowiedzi jest jednak pusta (zmarnowane żądania, transfer i obciążenie serwera), a aktualizacje przychodzą z opóźnieniem do N sekund. Skracanie N zwiększa marnotrawstwo.",
+        "**Long polling**: klient wysyła żądanie, a serwer **trzyma je otwarte**, aż pojawią się dane (albo minie ok. 30 s timeoutu), i wtedy odpowiada; klient od razu wysyła następne żądanie. Aktualizacje są niemal natychmiastowe i działa to wszędzie, gdzie działa zwykłe HTTP. Kosztem jest trzymane żądanie na klienta i nowe żądanie po każdej wiadomości. Dziś to głównie **opcja zapasowa**, gdy lepsze transporty są zablokowane.",
+        "**SSE** (Server-Sent Events): klient otwiera jedno żądanie HTTP przez `EventSource`, a serwer trzyma odpowiedź otwartą i strumieniuje nią wiadomości `text/event-stream`. Kanał jest **jednokierunkowy** (serwer → klient; klient wysyła dane zwykłymi żądaniami), **tylko tekstowy** (zwykle JSON), a przeglądarka **sama się ponownie łączy** (auto-reconnect), wysyłając `Last-Event-ID`, żeby serwer mógł wznowić strumień. To zwykłe HTTP, więc przechodzi przez proxy i korzysta z multipleksowania HTTP/2. Świetnie pasuje do powiadomień, feedów, dashboardów i strumieniowania odpowiedzi LLM.",
+        "**WebSockets**: żądanie HTTP jest **upgrade'owane** do trwałego połączenia TCP w trybie **full-duplex**: obie strony mogą w dowolnej chwili wysyłać ramki tekstowe lub binarne z minimalnym narzutem. To dobry wybór, gdy klient też często wysyła wiadomości i liczy się niskie opóźnienie: czat, wspólna edycja, gry multiplayer, UI tradingowe. Ponowne łączenie, heartbeaty i kolejność wiadomości musisz obsłużyć sam (albo użyć biblioteki typu Socket.IO).",
+        "SSE i WebSockety są **stanowe**: każde połączenie żyje na jednej instancji serwera. Skalowanie wymaga więc:",
+        "- load balancera obsługującego długo żyjące połączenia, ze **sticky sessions** tam, gdzie wymaga tego protokół;\n- **wspólnego pub/sub** (Redis, NATS), żeby zdarzenie wytworzone na instancji A dotarło do klienta podłączonego do instancji B;\n- pilnowania **limitów połączeń**: deskryptory plików, pamięć na połączenie, idle timeouty LB. Usługi zarządzane, jak WebSockety w AWS API Gateway czy AppSync, mogą to od ciebie przejąć.",
+        "Żadna z tych technik nie działa, gdy aplikacja mobilna jest zamknięta albo w tle, bo system operacyjny zabija połączenie. Wtedy używa się **pusha mobilnego** przez **APNs** (iOS) i **FCM** (Android), a aplikacja po otwarciu pobiera świeże dane."
       ]
     }
   },
@@ -2531,6 +4125,14 @@ const FLASHCARDS = [
         "Handles auth/session for the client; owned by the frontend team",
         "Risk: duplicated logic across BFFs – keep business rules in domain services",
         "GraphQL is often used as a single flexible BFF"
+      ],
+      more: [
+        "In a system with many backend services (users, catalog, pricing, recommendations), different clients need very different things. A web app on a fast connection shows a rich page. A mobile app on 4G needs compact responses and fewer round trips. A smart-TV app has little memory and a slow CPU, and needs small payloads and TV-sized images. A single general-purpose API either over-serves everyone or makes every client stitch data together itself.",
+        "A **Backend-for-Frontend (BFF)** is a thin server-side layer built for **one specific client type**: a web BFF, a mobile BFF, a TV BFF. It sits between that client and the domain services and exposes exactly the endpoints the client's screens need, for example `GET /home-screen`.",
+        "**Aggregation**: to render the home screen, the BFF calls user, catalog, pricing and recommendation services **in parallel** inside the data centre (fast, low-latency network) and returns one combined response. The client makes one round trip instead of five over a slow mobile or TV network, and does not need to know how the backend is split into services.",
+        "**Payload shaping**: the BFF returns only the fields that client displays, in the format it wants. For a TV it can pick lower-resolution image URLs, trim descriptions, and flatten nested structures. Changing what the TV app shows then means changing the TV BFF, not every domain service.",
+        "**Auth and session**: the BFF often handles client-specific security. For a browser, it can keep OAuth tokens on the server and give the browser only an `HttpOnly` session cookie, so tokens are never exposed to JavaScript; this is the BFF pattern recommended for SPAs. Because the BFF exists to serve one frontend, it is usually **owned by that frontend team**, who can change it at the pace of their UI.",
+        "The main risk is **duplicated logic**: if the web and mobile BFFs each compute discounts or permissions, they will drift apart and produce inconsistent results. Keep BFFs thin (orchestration, mapping, formatting) and keep **business rules in the domain services**. **GraphQL** is often used as a single flexible BFF: each client asks for exactly the fields it needs in one query, and resolvers aggregate the underlying services. That removes the need for a separate BFF per device, at the cost of GraphQL's own complexity (query cost limits, N+1 in resolvers, caching)."
       ]
     },
     pl: {
@@ -2542,6 +4144,14 @@ const FLASHCARDS = [
         "Obsługuje auth/sesję klienta; należy do zespołu frontendu",
         "Ryzyko: zduplikowana logika w wielu BFF – reguły biznesowe w usługach domenowych",
         "GraphQL często jako jeden elastyczny BFF"
+      ],
+      more: [
+        "W systemie z wieloma usługami backendowymi (użytkownicy, katalog, ceny, rekomendacje) różni klienci potrzebują bardzo różnych rzeczy. Aplikacja webowa na szybkim łączu pokazuje bogatą stronę. Aplikacja mobilna na 4G potrzebuje zwięzłych odpowiedzi i mniejszej liczby round tripów. Aplikacja na smart TV ma mało pamięci i słaby procesor, więc potrzebuje małych odpowiedzi i obrazów w rozmiarze pod telewizor. Jedno ogólne API albo daje wszystkim za dużo, albo każe każdemu klientowi samemu sklejać dane.",
+        "**Backend-for-Frontend (BFF)** to cienka warstwa po stronie serwera zbudowana dla **jednego konkretnego typu klienta**: BFF dla weba, BFF dla mobile, BFF dla TV. Stoi między tym klientem a usługami domenowymi i wystawia dokładnie te endpointy, których potrzebują ekrany klienta, np. `GET /home-screen`.",
+        "**Agregacja**: żeby wyrenderować ekran główny, BFF woła usługi użytkowników, katalogu, cen i rekomendacji **równolegle** wewnątrz data center (szybka sieć o niskim opóźnieniu) i zwraca jedną połączoną odpowiedź. Klient robi jeden round trip zamiast pięciu przez wolną sieć mobilną czy telewizyjną i nie musi wiedzieć, jak backend jest podzielony na usługi.",
+        "**Dopasowanie odpowiedzi**: BFF zwraca tylko pola, które klient wyświetla, i w formacie, którego oczekuje. Dla TV może wybrać adresy obrazów w niższej rozdzielczości, przyciąć opisy i spłaszczyć zagnieżdżone struktury. Zmiana tego, co pokazuje aplikacja TV, oznacza wtedy zmianę BFF dla TV, a nie każdej usługi domenowej.",
+        "**Auth i sesja**: BFF często obsługuje bezpieczeństwo specyficzne dla klienta. Dla przeglądarki może trzymać tokeny OAuth po stronie serwera i dawać przeglądarce tylko ciasteczko sesji `HttpOnly`, więc tokeny nigdy nie są dostępne dla JavaScriptu; to wzorzec BFF zalecany dla SPA. BFF istnieje po to, żeby obsłużyć jeden frontend, więc zwykle **należy do zespołu tego frontendu**, który może go zmieniać w tempie swojego UI.",
+        "Główne ryzyko to **zduplikowana logika**: jeśli BFF webowy i mobilny osobno liczą rabaty czy uprawnienia, z czasem się rozjadą i dadzą niespójne wyniki. BFF-y mają być cienkie (orkiestracja, mapowanie, formatowanie), a **reguły biznesowe zostają w usługach domenowych**. **GraphQL** jest często używany jako jeden elastyczny BFF: każdy klient w jednym zapytaniu prosi dokładnie o potrzebne pola, a resolvery agregują usługi pod spodem. Znika wtedy potrzeba osobnego BFF na urządzenie, kosztem złożoności samego GraphQL (limity kosztu zapytań, N+1 w resolverach, cache)."
       ]
     }
   },
@@ -2557,6 +4167,13 @@ const FLASHCARDS = [
         "Pros: loose coupling, easy to add consumers, absorbs spikes, async scaling",
         "Cons: eventual consistency, harder debugging/tracing, duplicate & out-of-order messages",
         "Needs: schema contracts, correlation IDs, idempotent consumers, DLQs"
+      ],
+      more: [
+        "In a classic request/response system, service A calls service B directly and waits for the answer. In an **event-driven architecture (EDA)** the flow is inverted: when something meaningful happens, a service publishes an **event** – an immutable fact in the past tense, such as `UserRegistered` or `OrderPaid` – to a broker (Kafka, SQS/SNS, EventBridge, RabbitMQ). Any number of **consumers** subscribe and react on their own schedule. The publisher does not know who listens, and does not wait for them.",
+        "The distinction between an **event** and a **command** matters. A command (`SendWelcomeEmail`) is a request addressed to exactly one handler that may reject it; the sender expects it to be done. An event (`UserRegistered`) just states what already happened; zero, one or ten services may care. Naming things as events keeps the producer ignorant of downstream logic – that is where the loose coupling comes from.",
+        "Why teams adopt it:\n- **Loose coupling** – the registration service does not change when marketing adds a new consumer for `UserRegistered`.\n- **Extensibility** – new features plug in by subscribing, without touching the producer.\n- **Spike absorption** – the broker buffers bursts; consumers work through the backlog at their own pace.\n- **Independent scaling** – each consumer scales on its own queue depth or lag.",
+        "The price: the system becomes **eventually consistent** – right after the user registers, the CRM may not know about them yet, and the UI must tolerate that. A single business flow is now spread across several services and asynchronous hops, so debugging needs **distributed tracing** and a **correlation ID** carried in every event's metadata. Brokers typically deliver **at least once** and not always in order, so consumers see duplicates and out-of-order messages.",
+        "What a production-grade setup needs: explicit **schema contracts** (JSON Schema, Avro or Protobuf, often with a schema registry) so producers cannot silently break consumers; **idempotent consumers** that can process the same event twice safely; **dead-letter queues (DLQs)** where messages that keep failing are parked for inspection instead of blocking the stream; plus monitoring of consumer lag. An interviewer usually probes whether you understand that EDA trades simplicity and immediate consistency for decoupling and resilience – it is not free, and a simple synchronous call is often the right choice."
       ]
     },
     pl: {
@@ -2567,6 +4184,13 @@ const FLASHCARDS = [
         "Zalety: luźne powiązania, łatwe dodawanie konsumentów, amortyzacja skoków, asynchroniczne skalowanie",
         "Wady: eventual consistency, trudniejsze debugowanie/tracing, duplikaty i zła kolejność",
         "Potrzebne: kontrakty schematów, correlation ID, idempotentni konsumenci, DLQ"
+      ],
+      more: [
+        "W klasycznym modelu request/response usługa A woła usługę B bezpośrednio i czeka na odpowiedź. W **architekturze sterowanej zdarzeniami (event-driven architecture, EDA)** przepływ jest odwrócony: gdy wydarzy się coś istotnego, usługa publikuje **zdarzenie** – niezmienny fakt w czasie przeszłym, np. `UserRegistered` albo `OrderPaid` – do brokera (Kafka, SQS/SNS, EventBridge, RabbitMQ). Dowolna liczba **konsumentów** subskrybuje je i reaguje we własnym tempie. Wydawca nie wie, kto słucha, i na nikogo nie czeka.",
+        "Ważne jest rozróżnienie **zdarzenia** i **komendy**. Komenda (`SendWelcomeEmail`) to polecenie skierowane do dokładnie jednego handlera, który może je odrzucić; nadawca oczekuje wykonania. Zdarzenie (`UserRegistered`) tylko stwierdza, co już się stało – może interesować zero, jedną albo dziesięć usług. Modelowanie komunikacji jako zdarzeń sprawia, że producent nie zna logiki odbiorców – stąd biorą się luźne powiązania.",
+        "Dlaczego zespoły to wybierają:\n- **Luźne powiązania** – serwis rejestracji się nie zmienia, gdy marketing dopina nowego konsumenta `UserRegistered`.\n- **Rozszerzalność** – nowe funkcje podłącza się przez subskrypcję, bez ruszania producenta.\n- **Amortyzacja skoków** – broker buforuje nagłe piki, a konsumenci przerabiają zaległości we własnym tempie.\n- **Niezależne skalowanie** – każdy konsument skaluje się wg głębokości własnej kolejki lub lagu.",
+        "Cena: system staje się **ostatecznie spójny (eventual consistency)** – tuż po rejestracji CRM może jeszcze nie wiedzieć o użytkowniku i UI musi to znieść. Jeden proces biznesowy jest rozsmarowany na kilka usług i asynchronicznych kroków, więc debugowanie wymaga **rozproszonego tracingu** i **correlation ID** przekazywanego w metadanych każdego zdarzenia. Brokery zwykle dostarczają **co najmniej raz (at-least-once)** i nie zawsze w kolejności, więc konsumenci widzą duplikaty i wiadomości w złej kolejności.",
+        "Co jest potrzebne na produkcji: jawne **kontrakty schematów** (JSON Schema, Avro lub Protobuf, często ze schema registry), żeby producent nie mógł po cichu zepsuć konsumentów; **idempotentni konsumenci**, którzy bezpiecznie przetworzą to samo zdarzenie dwa razy; **kolejki DLQ (dead-letter queue)**, do których trafiają wiadomości stale kończące się błędem, zamiast blokować strumień; do tego monitoring lagu konsumentów. Rekruter zwykle sprawdza, czy rozumiesz, że EDA wymienia prostotę i natychmiastową spójność na niezależność i odporność – to nie jest darmowe i często zwykłe synchroniczne wywołanie jest lepszym wyborem."
       ]
     }
   },
@@ -2580,6 +4204,14 @@ const FLASHCARDS = [
         "Exactly-once end-to-end is practically impossible across systems",
         "Real answer: at-least-once + idempotent consumer = effectively-once",
         "Idempotency: processed-message table with unique ID, upserts, conditional writes"
+      ],
+      more: [
+        "When a broker hands a message to a consumer, two things must happen: the consumer does the work, and it tells the broker \"done\" – an **acknowledgement (ack)**, called a delete in SQS or an offset commit in Kafka. Either step can be interrupted by a crash or network failure. The order in which you do them decides your **delivery semantics**.",
+        "- **At-most-once**: ack first, then process. If the consumer crashes mid-processing, the broker already considers the message handled – it is **lost**. Acceptable only for data you can afford to drop (metrics samples, some telemetry).\n- **At-least-once**: process first, then ack. If the consumer crashes after the side effect but before the ack, the broker redelivers – the message is processed **twice**. This is the default for SQS Standard, SNS, EventBridge and a typical Kafka consumer.\n- **Exactly-once**: every message has its effect precisely once.",
+        "Why exactly-once is \"practically impossible\" end to end: the side effect (charging a card, writing to Postgres, sending an email) and the ack live in different systems, and you cannot commit both atomically without a distributed transaction. Kafka's \"exactly-once semantics\" (idempotent producer + transactions) is real, but only for read-from-Kafka → write-to-Kafka pipelines; the moment you call an external API, you are back to at-least-once. SQS FIFO deduplication also only covers a 5-minute window on the send side.",
+        "So the practical answer is **at-least-once + idempotent consumer = effectively-once**. **Idempotency** means processing the same message twice has the same result as processing it once. Common techniques: a **processed-messages table** with the message ID as a unique key, inserted in the same DB transaction as the business change; **upserts** (`INSERT ... ON CONFLICT`) instead of blind inserts; **conditional writes** (\"update only if version = 7\", DynamoDB `ConditionExpression`); and passing an idempotency key to external APIs (Stripe supports this).",
+        "```ts\nawait db.tx(async (t) => {\n  const r = await t.query(\n    'INSERT INTO processed_messages(id) VALUES ($1) ON CONFLICT DO NOTHING',\n    [msg.id]);\n  if (r.rowCount === 0) return;          // duplicate – already handled\n  await t.query('UPDATE accounts SET balance = balance + $1 WHERE id = $2',\n    [msg.amount, msg.accountId]);\n});\nawait queue.ack(msg);                    // ack only after commit\n```",
+        "Pitfall interviewers look for: using a naturally non-idempotent operation (`balance = balance + 10`, sending an email) without a dedupe guard, or deduplicating in memory, which does not survive restarts or multiple consumer instances."
       ]
     },
     pl: {
@@ -2590,6 +4222,14 @@ const FLASHCARDS = [
         "Exactly-once end-to-end między systemami praktycznie niemożliwe",
         "Właściwa odpowiedź: at-least-once + idempotentny konsument = effectively-once",
         "Idempotencja: tabela przetworzonych wiadomości z unikalnym ID, upserty, zapisy warunkowe"
+      ],
+      more: [
+        "Gdy broker przekazuje wiadomość konsumentowi, muszą się stać dwie rzeczy: konsument wykonuje pracę i mówi brokerowi „gotowe” – to **potwierdzenie (ack)**; w SQS to usunięcie wiadomości, w Kafce commit offsetu. Każdy z tych kroków może przerwać crash albo awaria sieci. Kolejność, w jakiej je wykonasz, wyznacza **semantykę dostarczania**.",
+        "- **At-most-once (co najwyżej raz)**: najpierw ack, potem przetwarzanie. Jeśli konsument padnie w trakcie, broker uważa wiadomość za obsłużoną – jest **zgubiona**. Akceptowalne tylko dla danych, które można stracić (próbki metryk, część telemetrii).\n- **At-least-once (co najmniej raz)**: najpierw przetwarzanie, potem ack. Jeśli konsument padnie po efekcie ubocznym, a przed ackiem, broker dostarczy ponownie – wiadomość zostanie przetworzona **dwa razy**. To domyślne zachowanie SQS Standard, SNS, EventBridge i typowego konsumenta Kafki.\n- **Exactly-once (dokładnie raz)**: każda wiadomość ma efekt dokładnie raz.",
+        "Dlaczego exactly-once end-to-end jest „praktycznie niemożliwe”: efekt uboczny (obciążenie karty, zapis w Postgresie, wysłanie maila) i ack żyją w różnych systemach, a nie da się ich zatwierdzić atomowo bez transakcji rozproszonej. „Exactly-once semantics” w Kafce (idempotentny producent + transakcje) istnieje naprawdę, ale tylko dla potoków czytaj-z-Kafki → pisz-do-Kafki; gdy tylko wołasz zewnętrzne API, wracasz do at-least-once. Deduplikacja w SQS FIFO też obejmuje tylko 5-minutowe okno po stronie wysyłki.",
+        "Praktyczna odpowiedź to więc **at-least-once + idempotentny konsument = effectively-once**. **Idempotencja** oznacza, że dwukrotne przetworzenie tej samej wiadomości daje ten sam wynik co jednokrotne. Typowe techniki: **tabela przetworzonych wiadomości** z ID wiadomości jako unikalnym kluczem, zapisywana w tej samej transakcji co zmiana biznesowa; **upserty** (`INSERT ... ON CONFLICT`) zamiast ślepych insertów; **zapisy warunkowe** („aktualizuj tylko jeśli version = 7”, `ConditionExpression` w DynamoDB); oraz przekazywanie klucza idempotencji do zewnętrznych API (wspiera to np. Stripe).",
+        "```ts\nawait db.tx(async (t) => {\n  const r = await t.query(\n    'INSERT INTO processed_messages(id) VALUES ($1) ON CONFLICT DO NOTHING',\n    [msg.id]);\n  if (r.rowCount === 0) return;          // duplikat – już obsłużony\n  await t.query('UPDATE accounts SET balance = balance + $1 WHERE id = $2',\n    [msg.amount, msg.accountId]);\n});\nawait queue.ack(msg);                    // ack dopiero po commicie\n```",
+        "Pułapka, której szuka rekruter: operacja z natury nieidempotentna (`balance = balance + 10`, wysyłka maila) bez zabezpieczenia przed duplikatem albo deduplikacja w pamięci procesu, która nie przetrwa restartu ani kilku instancji konsumenta."
       ]
     }
   },
@@ -2604,6 +4244,15 @@ const FLASHCARDS = [
         "Consumer down/slow → backlog; monitor lag and age of oldest message",
         "Schema changes → backward-compatible, versioned events (schema registry)",
         "Lost events on publish → transactional outbox"
+      ],
+      more: [
+        "Asynchronous messaging moves failures out of the request path, but it does not remove them – it changes their shape. A senior engineer is expected to list the typical failure modes up front and have a standard answer for each, rather than discovering them in production.",
+        "**Duplicates.** Brokers deliver at least once, producers retry on timeouts, and consumers crash before acking. Every consumer must therefore be **idempotent**: dedupe by event ID in a processed-messages table, use upserts, or conditional writes.",
+        "**Out-of-order delivery.** Retries, parallel consumers and multiple partitions mean `OrderShipped` may arrive before `OrderPaid`. Mitigations: route all events of one entity through the same **ordering key** (Kafka partition key, SQS FIFO `MessageGroupId`), carry a monotonically increasing **version** per entity and ignore events older than what you have stored, or design consumers to tolerate any order (e.g. state machines that park early events).",
+        "**Poison messages.** A malformed or bug-triggering message fails every time; with infinite retries it blocks the queue or partition and burns resources. Standard answer: a limited number of retries with backoff, then move it to a **dead-letter queue (DLQ)**, fire an alert, and have **replay/redrive tooling** to push it back once the bug is fixed.",
+        "**Slow or dead consumers.** Messages keep arriving, so a **backlog** builds up silently – nothing errors, users just see stale data. Monitor **consumer lag** (Kafka) or **age of the oldest message** (SQS `ApproximateAgeOfOldestMessage`); age is often a better alert than count because it reflects user-visible delay. Autoscale consumers on these metrics.",
+        "**Schema evolution.** Producers and consumers deploy independently, so an event format change can break consumers that are still on old code. Make changes **backward-compatible** (add optional fields, never rename/remove in place), version events (`OrderPlaced.v2`), and enforce compatibility in CI via a **schema registry** (Confluent, AWS Glue, EventBridge).",
+        "**Lost events on publish.** If the service commits to its DB and then crashes before publishing (or publishing fails), the event never exists. The fix is the **transactional outbox**: write the event to an outbox table in the same transaction and publish it asynchronously."
       ]
     },
     pl: {
@@ -2615,6 +4264,15 @@ const FLASHCARDS = [
         "Konsument padł/wolny → zaległości; monitoring lagu i wieku najstarszej wiadomości",
         "Zmiany schematu → zgodne wstecz, wersjonowane zdarzenia (schema registry)",
         "Utracone zdarzenia przy publikacji → transactional outbox"
+      ],
+      more: [
+        "Asynchroniczna komunikacja wyprowadza awarie ze ścieżki żądania, ale ich nie usuwa – zmienia tylko ich kształt. Od seniora oczekuje się, że wymieni typowe scenariusze awarii z góry i dla każdego ma standardową odpowiedź, zamiast odkrywać je na produkcji.",
+        "**Duplikaty.** Brokery dostarczają co najmniej raz, producenci ponawiają przy timeoutach, a konsumenci padają przed ackiem. Każdy konsument musi więc być **idempotentny**: deduplikacja po ID zdarzenia w tabeli przetworzonych wiadomości, upserty albo zapisy warunkowe.",
+        "**Zła kolejność.** Ponowienia, równolegli konsumenci i wiele partycji sprawiają, że `OrderShipped` może przyjść przed `OrderPaid`. Zaradzamy temu, kierując wszystkie zdarzenia jednej encji przez ten sam **klucz porządkujący** (klucz partycji w Kafce, `MessageGroupId` w SQS FIFO), dodając do encji rosnący **numer wersji** i ignorując zdarzenia starsze niż zapisany stan, albo projektując konsumenta odpornego na dowolną kolejność (np. maszyna stanów odkładająca zbyt wczesne zdarzenia).",
+        "**Trujące wiadomości (poison messages).** Wiadomość zniekształcona albo trafiająca w bug kończy się błędem za każdym razem; przy nieskończonych ponowieniach blokuje kolejkę lub partycję i pali zasoby. Standard: ograniczona liczba ponowień z backoffem, potem przeniesienie do **DLQ**, alert i **narzędzia do replay/redrive**, żeby po poprawce wrzucić ją z powrotem.",
+        "**Wolny lub martwy konsument.** Wiadomości wciąż napływają, więc po cichu rosną **zaległości (backlog)** – nic nie rzuca błędów, użytkownicy po prostu widzą nieaktualne dane. Monitoruj **lag konsumenta** (Kafka) albo **wiek najstarszej wiadomości** (`ApproximateAgeOfOldestMessage` w SQS); wiek jest często lepszym alertem niż liczba, bo odpowiada opóźnieniu odczuwanemu przez użytkownika. Na tych metrykach opieraj autoskalowanie.",
+        "**Ewolucja schematu.** Producent i konsumenci wdrażają się niezależnie, więc zmiana formatu zdarzenia może zepsuć konsumenta działającego jeszcze na starym kodzie. Zmiany muszą być **zgodne wstecz** (dodawaj pola opcjonalne, nie zmieniaj nazw i nie usuwaj w miejscu), zdarzenia wersjonuj (`OrderPlaced.v2`), a zgodność wymuszaj w CI przez **schema registry** (Confluent, AWS Glue, EventBridge).",
+        "**Utracone zdarzenia przy publikacji.** Jeśli usługa zrobi commit w bazie i padnie przed publikacją (albo publikacja się nie uda), zdarzenie nigdy nie powstanie. Rozwiązaniem jest **transactional outbox**: zapis zdarzenia do tabeli outbox w tej samej transakcji i asynchroniczna publikacja."
       ]
     }
   },
@@ -2628,6 +4286,14 @@ const FLASHCARDS = [
         "Relay publishes outbox rows to the broker (polling or CDC, e.g. Debezium), marks them sent",
         "Gives at-least-once publishing → consumers must be idempotent",
         "Inbox pattern on the consumer side for dedupe"
+      ],
+      more: [
+        "The problem is called **dual write**. A typical handler does two things: save the order to Postgres and publish `OrderPlaced` to Kafka/SQS. These are two separate systems with no shared transaction. If the DB commit succeeds and the publish fails (broker down, process killed), the order exists but nobody downstream hears about it. If you publish first and the DB commit then fails, consumers react to an order that does not exist. Retrying or reordering the calls only moves the gap; it never closes it.",
+        "The **transactional outbox** closes it by using the one thing that *is* atomic – a local database transaction. Alongside the business row, you insert the event into an `outbox` table in the **same transaction**. Either both are committed or neither is. Publishing becomes a separate, retryable step.",
+        "```ts\nawait db.tx(async (t) => {\n  await t.query('INSERT INTO orders(id, total) VALUES ($1, $2)', [id, total]);\n  await t.query(\n    'INSERT INTO outbox(id, type, payload) VALUES ($1, $2, $3)',\n    [randomUUID(), 'OrderPlaced', JSON.stringify({ id, total })]);\n});\n// no broker call here – the relay publishes later\n```",
+        "A **relay** (message relay) moves rows from the outbox to the broker. Two variants:\n- **Polling publisher** – a worker periodically selects unsent rows (`SELECT ... FOR UPDATE SKIP LOCKED` lets several workers share the work), publishes them, then marks them sent or deletes them. Simple, adds some latency and DB load.\n- **CDC (change data capture)** – a tool like **Debezium** tails the database's replication log (Postgres WAL, MySQL binlog) and streams new outbox rows to Kafka. Lower latency, no polling queries, but more infrastructure. On AWS, DynamoDB Streams plays the same role.",
+        "Crucially, the relay can crash after publishing but before marking the row sent, so it will publish again: the outbox gives **at-least-once** publishing, never exactly-once. Consumers must therefore be idempotent – which is why the event carries a stable unique ID from the outbox row.",
+        "The mirror image on the consumer side is the **inbox pattern**: the consumer records each received message ID in an `inbox` table in the same transaction as its own state change, and skips IDs it has already seen. Outbox + inbox together give reliable, effectively-once processing between services without distributed transactions (2PC). Also remember housekeeping: prune sent outbox rows, and preserve per-entity ordering if consumers depend on it."
       ]
     },
     pl: {
@@ -2638,6 +4304,14 @@ const FLASHCARDS = [
         "Relay publikuje wiersze outbox do brokera (polling lub CDC, np. Debezium) i oznacza jako wysłane",
         "Daje publikację at-least-once → konsumenci muszą być idempotentni",
         "Wzorzec inbox po stronie konsumenta do deduplikacji"
+      ],
+      more: [
+        "Problem nazywa się **podwójnym zapisem (dual write)**. Typowy handler robi dwie rzeczy: zapisuje zamówienie w Postgresie i publikuje `OrderPlaced` do Kafki/SQS. To dwa osobne systemy bez wspólnej transakcji. Jeśli commit w bazie się uda, a publikacja nie (broker leży, proces ubity), zamówienie istnieje, ale nikt dalej się o nim nie dowie. Jeśli najpierw opublikujesz, a potem commit się nie uda, konsumenci zareagują na nieistniejące zamówienie. Ponawianie czy zamiana kolejności wywołań tylko przesuwa tę lukę – nigdy jej nie zamyka.",
+        "**Transactional outbox** zamyka ją, korzystając z jedynej rzeczy, która *jest* atomowa – lokalnej transakcji bazodanowej. Obok wiersza biznesowego wstawiasz zdarzenie do tabeli `outbox` w **tej samej transakcji**. Albo zatwierdzone jest jedno i drugie, albo nic. Publikacja staje się osobnym krokiem, który można ponawiać.",
+        "```ts\nawait db.tx(async (t) => {\n  await t.query('INSERT INTO orders(id, total) VALUES ($1, $2)', [id, total]);\n  await t.query(\n    'INSERT INTO outbox(id, type, payload) VALUES ($1, $2, $3)',\n    [randomUUID(), 'OrderPlaced', JSON.stringify({ id, total })]);\n});\n// tu nie ma wywołania brokera – relay opublikuje później\n```",
+        "**Relay** (przekaźnik) przenosi wiersze z outboxa do brokera. Dwa warianty:\n- **Polling** – worker co chwilę wybiera niewysłane wiersze (`SELECT ... FOR UPDATE SKIP LOCKED` pozwala kilku workerom dzielić pracę), publikuje je i oznacza jako wysłane albo usuwa. Proste, ale dodaje trochę opóźnienia i obciąża bazę.\n- **CDC (change data capture)** – narzędzie takie jak **Debezium** czyta log replikacji bazy (WAL w Postgresie, binlog w MySQL) i strumieniuje nowe wiersze outboxa do Kafki. Mniejsze opóźnienie, brak zapytań pollingowych, ale więcej infrastruktury. W AWS podobną rolę pełni DynamoDB Streams.",
+        "Kluczowe: relay może paść po publikacji, a przed oznaczeniem wiersza, więc opublikuje go ponownie – outbox daje publikację **at-least-once**, nigdy exactly-once. Konsumenci muszą więc być idempotentni i dlatego zdarzenie niesie stabilne, unikalne ID z wiersza outboxa.",
+        "Lustrzanym odbiciem po stronie konsumenta jest **wzorzec inbox**: konsument zapisuje ID każdej odebranej wiadomości w tabeli `inbox` w tej samej transakcji co zmianę własnego stanu i pomija ID, które już widział. Outbox + inbox razem dają niezawodne, effectively-once przetwarzanie między usługami bez transakcji rozproszonych (2PC). Pamiętaj też o sprzątaniu – usuwaniu wysłanych wierszy outboxa – i o zachowaniu kolejności per encja, jeśli konsumenci na niej polegają."
       ]
     }
   },
@@ -2651,6 +4325,14 @@ const FLASHCARDS = [
         "SQS FIFO: `MessageGroupId`; ordered within group, deduplication ID (5-min window)",
         "Parallelism = number of partitions / message groups",
         "Consumers can also check entity version and drop stale events"
+      ],
+      more: [
+        "Ordering sounds like a simple requirement, but it conflicts directly with scaling. To guarantee that message N is processed before N+1, only one consumer can work on that sequence at a time, and it must wait for N to finish (including retries) before starting N+1. A single globally ordered stream therefore means a single-threaded consumer – it does not scale.",
+        "The way out is to notice that the business almost never needs **global** order. It needs order **per entity**: the events of order #42 must be applied in sequence, but order #42 and order #43 are independent. So you pick an **ordering key** (order ID, user ID, account ID) and guarantee order only among messages that share it, while different keys are processed in parallel.",
+        "**Kafka**: a topic is split into **partitions**; the producer hashes the message key to choose one, so the same key always lands in the same partition. Each partition is an ordered log and, within a **consumer group**, is assigned to exactly one consumer. Result: per-key ordering with parallelism equal to the number of partitions. Watch out – increasing the partition count changes the key→partition mapping, and a producer with retries needs the idempotent producer enabled (default in modern clients) to avoid reordering.",
+        "**SQS FIFO**: every message carries a `MessageGroupId`. Messages in one group are delivered strictly in order, and while one is in flight the rest of that group is held back; different groups flow in parallel. FIFO also deduplicates: messages with the same `MessageDeduplicationId` (or identical body, with content-based deduplication) sent within a **5-minute window** are accepted only once. SQS Standard gives no ordering at all.",
+        "In both cases **parallelism = number of partitions / active message groups**. A \"hot\" key (one huge customer) becomes a bottleneck, and one poison message blocks its whole partition or group until it is moved to a DLQ.",
+        "A complementary, broker-agnostic defence: put a monotonically increasing **version** (or sequence number) on each event, store the last applied version per entity, and have the consumer drop anything stale – e.g. `UPDATE ... WHERE id = $1 AND version < $2`. This also protects you when events are replayed or arrive via a different path."
       ]
     },
     pl: {
@@ -2661,6 +4343,14 @@ const FLASHCARDS = [
         "SQS FIFO: `MessageGroupId`; kolejność w grupie, deduplication ID (okno 5 min)",
         "Równoległość = liczba partycji / grup wiadomości",
         "Konsument może też sprawdzać wersję encji i odrzucać stare zdarzenia"
+      ],
+      more: [
+        "Kolejność brzmi jak prosty wymóg, ale wprost kłóci się ze skalowaniem. Żeby zagwarantować, że wiadomość N zostanie przetworzona przed N+1, nad tą sekwencją może naraz pracować tylko jeden konsument i musi on poczekać na zakończenie N (łącznie z ponowieniami), zanim zacznie N+1. Jeden globalnie uporządkowany strumień oznacza więc jednowątkowego konsumenta – to się nie skaluje.",
+        "Wyjściem jest zauważenie, że biznes prawie nigdy nie potrzebuje kolejności **globalnej**. Potrzebuje kolejności **per encja**: zdarzenia zamówienia #42 muszą być zastosowane po kolei, ale zamówienia #42 i #43 są od siebie niezależne. Wybierasz więc **klucz porządkujący** (ID zamówienia, użytkownika, konta) i gwarantujesz kolejność tylko w obrębie wiadomości o tym samym kluczu, a różne klucze przetwarzasz równolegle.",
+        "**Kafka**: topic jest podzielony na **partycje**; producent hashuje klucz wiadomości, żeby wybrać partycję, więc ten sam klucz zawsze trafia do tej samej. Każda partycja to uporządkowany log i w ramach **grupy konsumentów** jest przypisana dokładnie jednemu konsumentowi. Efekt: kolejność per klucz, a równoległość równa liczbie partycji. Uwaga – zwiększenie liczby partycji zmienia mapowanie klucz→partycja, a producent z ponowieniami potrzebuje włączonego idempotent producera (domyślnie w nowych klientach), żeby nie przestawiać wiadomości.",
+        "**SQS FIFO**: każda wiadomość ma `MessageGroupId`. Wiadomości w jednej grupie są dostarczane ściśle po kolei, a dopóki jedna jest w obróbce, reszta grupy czeka; różne grupy płyną równolegle. FIFO również deduplikuje: wiadomości z tym samym `MessageDeduplicationId` (albo identyczną treścią przy content-based deduplication) wysłane w **oknie 5 minut** są przyjmowane tylko raz. SQS Standard nie daje żadnej gwarancji kolejności.",
+        "W obu przypadkach **równoległość = liczba partycji / aktywnych grup wiadomości**. „Gorący” klucz (jeden ogromny klient) staje się wąskim gardłem, a jedna trująca wiadomość blokuje całą partycję lub grupę, dopóki nie trafi do DLQ.",
+        "Uzupełniająca, niezależna od brokera obrona: każde zdarzenie niesie rosnący **numer wersji** (lub sekwencji), przechowujesz ostatnio zastosowaną wersję per encja, a konsument odrzuca wszystko, co starsze – np. `UPDATE ... WHERE id = $1 AND version < $2`. Chroni to także przy replayu zdarzeń albo gdy przychodzą inną ścieżką."
       ]
     }
   },
@@ -2674,6 +4364,13 @@ const FLASHCARDS = [
         "Kafka: replay history, very high throughput, ordering per partition; more ops (MSK helps)",
         "RabbitMQ: flexible routing (exchanges), priorities, low latency",
         "SQS: fully managed, near-zero ops, visibility timeout, DLQ built in"
+      ],
+      more: [
+        "These tools look similar – producers send messages, consumers receive them – but they are built on two different models, and the model matters more than the brand.",
+        "A **message queue** (SQS, RabbitMQ classic/quorum queues) is a to-do list. A message is delivered to one of the competing consumers, and once that consumer acknowledges it, the message is **deleted**. The queue's job is **work distribution**: spread tasks across workers, retry failures, and forget about them when done. If a second, independent service also needs the same messages, you need a second queue (hence SNS → multiple SQS fan-out, or RabbitMQ exchanges binding to several queues).",
+        "A **log** (Kafka, Amazon Kinesis) is an **append-only**, ordered sequence of records that is **retained** for a configured time (days, forever) regardless of whether anyone read it. Consumers don't delete anything; each **consumer group** just remembers its **offset** – its position in the log. Ten groups can read the same topic independently, each at its own speed, and any group can rewind its offset to **replay** history, e.g. to rebuild a read model or backfill a new service.",
+        "Practical trade-offs:\n- **Kafka**: very high throughput, ordering per partition, replay, stream processing (Kafka Streams, Flink). Costs: partitions, rebalancing and retention to operate; parallelism capped by partition count. Managed options (Amazon MSK, Confluent Cloud) remove much of the ops. Since Kafka 4.0 ZooKeeper is gone (KRaft only), and \"share groups\" (KIP-932) are adding queue-style consumption.\n- **RabbitMQ**: a smart broker – **exchanges** (direct, topic, fanout, headers) route messages flexibly to queues, plus priorities, per-message TTL and low latency. You run it yourself (or Amazon MQ).\n- **SQS**: fully managed, scales without capacity planning, near-zero ops; built-in **visibility timeout** for retries and **DLQ**. No replay, no fan-out on its own, limited ordering (FIFO only).",
+        "How to choose in an interview: tasks/jobs that should be done once by some worker → queue (SQS on AWS by default). A stream of facts that many independent consumers need, possibly with replay or high volume → log (Kafka/MSK, Kinesis). Complex routing with a self-hosted broker → RabbitMQ."
       ]
     },
     pl: {
@@ -2684,6 +4381,13 @@ const FLASHCARDS = [
         "Kafka: odtwarzanie historii, bardzo duża przepustowość, kolejność per partycja; więcej utrzymania (MSK pomaga)",
         "RabbitMQ: elastyczny routing (exchange'e), priorytety, niskie opóźnienia",
         "SQS: w pełni zarządzany, prawie zero utrzymania, visibility timeout, wbudowane DLQ"
+      ],
+      more: [
+        "Te narzędzia wyglądają podobnie – producenci wysyłają wiadomości, konsumenci je odbierają – ale opierają się na dwóch różnych modelach i to model jest ważniejszy niż marka.",
+        "**Kolejka wiadomości** (SQS, klasyczne/quorum kolejki RabbitMQ) to lista zadań. Wiadomość trafia do jednego z konkurujących konsumentów, a gdy ten ją potwierdzi, jest **usuwana**. Zadaniem kolejki jest **dystrybucja pracy**: rozłożyć zadania na workery, ponowić nieudane i zapomnieć o zakończonych. Jeśli drugi, niezależny serwis też potrzebuje tych samych wiadomości, potrzebujesz drugiej kolejki (stąd fan-out SNS → wiele SQS albo exchange w RabbitMQ podpięty pod kilka kolejek).",
+        "**Log** (Kafka, Amazon Kinesis) to uporządkowana sekwencja rekordów, do której **tylko się dopisuje** i która jest **przechowywana** przez skonfigurowany czas (dni, bezterminowo) niezależnie od tego, czy ktoś ją przeczytał. Konsumenci niczego nie usuwają; każda **grupa konsumentów** pamięta tylko swój **offset** – pozycję w logu. Dziesięć grup może czytać ten sam topic niezależnie, każda we własnym tempie, a każda może cofnąć offset i **odtworzyć (replay)** historię, np. żeby odbudować model odczytu albo zasilić nową usługę.",
+        "Praktyczne kompromisy:\n- **Kafka**: bardzo duża przepustowość, kolejność per partycja, replay, przetwarzanie strumieni (Kafka Streams, Flink). Koszt: partycje, rebalancing i retencja do utrzymania; równoległość ograniczona liczbą partycji. Wersje zarządzane (Amazon MSK, Confluent Cloud) zdejmują większość utrzymania. Od Kafki 4.0 nie ma już ZooKeepera (tylko KRaft), a „share groups” (KIP-932) wprowadzają konsumpcję w stylu kolejki.\n- **RabbitMQ**: inteligentny broker – **exchange'e** (direct, topic, fanout, headers) elastycznie routują wiadomości do kolejek, do tego priorytety, TTL per wiadomość i niskie opóźnienia. Utrzymujesz go sam (albo Amazon MQ).\n- **SQS**: w pełni zarządzany, skaluje się bez planowania pojemności, prawie zero utrzymania; wbudowany **visibility timeout** do ponowień i **DLQ**. Brak replayu, brak fan-outu sam z siebie, ograniczona kolejność (tylko FIFO).",
+        "Jak wybierać na rozmowie: zadania, które ma raz wykonać jakiś worker → kolejka (na AWS domyślnie SQS). Strumień faktów potrzebny wielu niezależnym konsumentom, z replayem albo dużym wolumenem → log (Kafka/MSK, Kinesis). Złożony routing i własny broker → RabbitMQ."
       ]
     }
   },
@@ -2697,6 +4401,14 @@ const FLASHCARDS = [
         "Event sourcing: store the sequence of events as the source of truth; state = replay",
         "Pros: full audit history, temporal queries, rebuildable projections",
         "Cons: complexity, eventual consistency, event versioning – use only where it pays off"
+      ],
+      more: [
+        "These are two separate patterns that are often used together, but you can adopt one without the other.",
+        "**CQRS (Command Query Responsibility Segregation)** starts from an observation: the model that is good for *changing* data is rarely the one that is good for *reading* it. Writes need validation, invariants and normalised tables; reads need denormalised, pre-joined, filterable views – often several different ones (a search page, a dashboard, a mobile feed). CQRS splits the application into a **write model** that handles **commands** (`PlaceOrder`, `CancelOrder`) and one or more **read models** that serve **queries**, each shaped and stored for its purpose. At its lightest, this is just separate code paths over one database; at its heaviest, separate datastores.",
+        "When the stores are separate, the read models are usually updated from **events** emitted by the write side: `OrderPlaced` is consumed by a projector that updates an Elasticsearch index for search and a Redis hash for the order-status widget. Such a derived view is called a **projection**. Because it is updated asynchronously, reads are **eventually consistent** – right after placing an order, the list may not show it yet, which the UI has to handle (optimistic UI, read-your-writes from the write model).",
+        "**Event sourcing** changes what the write side stores. Instead of the current state (`balance = 70`), you persist the full sequence of **events** as the **source of truth** (`AccountOpened`, `Deposited 100`, `Withdrew 30`). Current state is computed by **replaying** (folding) the events, often accelerated by periodic **snapshots**. The event store is append-only; you never update or delete history.",
+        "What you gain: a complete, tamper-evident **audit trail**; **temporal queries** (\"what was the balance on 1 March?\"); the ability to **rebuild projections** or create brand-new ones by replaying history; natural fit with event-driven integration. What you pay: significant conceptual and operational **complexity**, eventual consistency everywhere, **event versioning** (old events are immutable, so code must understand every schema that ever existed – upcasters), awkward handling of GDPR deletion, and harder ad-hoc queries.",
+        "The nuance interviewers look for: apply these patterns selectively to a bounded context that truly benefits – finance ledgers, auditing-heavy domains, complex collaborative workflows – not across the whole system. A CRUD admin panel built with event sourcing is a classic over-engineering story."
       ]
     },
     pl: {
@@ -2707,6 +4419,14 @@ const FLASHCARDS = [
         "Event sourcing: sekwencja zdarzeń jako źródło prawdy; stan = odtworzenie",
         "Zalety: pełna historia audytowa, zapytania w czasie, odbudowywalne projekcje",
         "Wady: złożoność, eventual consistency, wersjonowanie zdarzeń – tylko gdzie się opłaca"
+      ],
+      more: [
+        "To dwa osobne wzorce, często stosowane razem, ale można przyjąć jeden bez drugiego.",
+        "**CQRS (Command Query Responsibility Segregation)** wychodzi od obserwacji: model dobry do *zmieniania* danych rzadko jest dobry do ich *czytania*. Zapisy potrzebują walidacji, niezmienników i znormalizowanych tabel; odczyty – zdenormalizowanych, wstępnie złączonych, filtrowalnych widoków, często kilku różnych (wyszukiwarka, dashboard, feed mobilny). CQRS dzieli aplikację na **model zapisu**, obsługujący **komendy** (`PlaceOrder`, `CancelOrder`), oraz jeden lub więcej **modeli odczytu**, obsługujących **zapytania**, z których każdy jest ukształtowany i przechowywany pod swój cel. W najlżejszej wersji to tylko osobne ścieżki kodu nad jedną bazą; w najcięższej – osobne magazyny danych.",
+        "Gdy magazyny są rozdzielone, modele odczytu zwykle aktualizuje się na podstawie **zdarzeń** emitowanych przez stronę zapisu: `OrderPlaced` konsumuje projektor, który aktualizuje indeks Elasticsearch dla wyszukiwarki i hash w Redisie dla widżetu statusu zamówienia. Taki pochodny widok nazywa się **projekcją**. Ponieważ jest aktualizowany asynchronicznie, odczyty są **ostatecznie spójne (eventual consistency)** – tuż po złożeniu zamówienia lista może go jeszcze nie pokazywać i UI musi to obsłużyć (optimistic UI, read-your-writes z modelu zapisu).",
+        "**Event sourcing** zmienia to, co przechowuje strona zapisu. Zamiast bieżącego stanu (`balance = 70`) zapisujesz pełną sekwencję **zdarzeń** jako **źródło prawdy** (`AccountOpened`, `Deposited 100`, `Withdrew 30`). Bieżący stan wylicza się, **odtwarzając** (składając) zdarzenia, często przyspieszając to okresowymi **snapshotami**. Event store jest append-only – historii nigdy się nie aktualizuje ani nie usuwa.",
+        "Co zyskujesz: pełną, odporną na manipulację **historię audytową**; **zapytania w czasie** („jakie było saldo 1 marca?”); możliwość **odbudowy projekcji** albo tworzenia zupełnie nowych przez replay historii; naturalne dopasowanie do integracji przez zdarzenia. Co płacisz: dużą **złożoność** koncepcyjną i operacyjną, eventual consistency wszędzie, **wersjonowanie zdarzeń** (stare zdarzenia są niezmienne, więc kod musi rozumieć każdy schemat, jaki kiedykolwiek istniał – upcastery), niewygodną obsługę usuwania danych pod RODO i trudniejsze zapytania ad hoc.",
+        "Niuans, na który czeka rekruter: stosuj te wzorce wybiórczo, w bounded contexcie, który naprawdę na tym zyskuje – księgi finansowe, domeny z silnym audytem, złożone współdzielone workflow – a nie w całym systemie. Panel admina typu CRUD zbudowany na event sourcingu to klasyczna historia przeinżynierowania."
       ]
     }
   },
@@ -2744,6 +4464,12 @@ const FLASHCARDS = [
         "Edge/networking: CloudFront, Route 53, ALB, API Gateway, VPC",
         "Security: IAM, Secrets Manager, KMS, Cognito, WAF",
         "Ops: CloudWatch (logs, metrics, alarms), X-Ray, CloudFormation/CDK"
+      ],
+      more: [
+        "AWS has 200+ services, but a typical web backend uses a small, stable core. The interviewer wants to see that you can map each layer of an application to the right managed service and explain what it replaces.",
+        "- **Compute** – where your Node code runs. **EC2** = virtual machines you manage. **ECS** = AWS's own container orchestrator; with **Fargate** you don't manage the servers underneath. **EKS** = managed Kubernetes. **Lambda** = functions invoked per event, no servers at all.\n- **Storage & databases** – **S3** for files/objects (uploads, static assets, backups). **RDS** = managed Postgres/MySQL (backups, patching, failover handled); **Aurora** = AWS's re-engineered, faster and more elastic Postgres/MySQL-compatible engine. **DynamoDB** = serverless key-value/document NoSQL. **ElastiCache** = managed Redis/Valkey/Memcached for cache and sessions.\n- **Messaging** – **SQS** (queues), **SNS** (pub/sub push), **EventBridge** (event bus with routing rules and a scheduler), **Kinesis** or **MSK** (managed Kafka) for streams.",
+        "- **Edge & networking** – **VPC** is your private network. **ALB** (Application Load Balancer) spreads HTTP traffic across containers and does health checks. **API Gateway** is a managed API front door (auth, throttling), common in front of Lambda. **CloudFront** is the CDN; **Route 53** is DNS.\n- **Security** – **IAM** controls who can call which AWS API. **Secrets Manager** stores DB passwords and API keys with rotation. **KMS** manages encryption keys. **Cognito** handles end-user sign-up/login (OIDC). **WAF** filters malicious HTTP traffic at CloudFront/ALB.\n- **Operations** – **CloudWatch** for logs, metrics, alarms and dashboards; **X-Ray** (increasingly via OpenTelemetry) for distributed tracing; **CloudFormation** or **CDK** to define all of the above as code.",
+        "A good way to present it: walk a request through the stack – DNS in Route 53 → CloudFront/WAF → ALB → ECS Fargate tasks in private subnets → RDS and ElastiCache, files in S3, async work via SQS, secrets from Secrets Manager, everything observed in CloudWatch and created with CDK. That narrative shows understanding rather than a memorised list, and makes it easy to draw parallels to what you already know (Kubernetes ≈ EKS/ECS, Postgres ≈ RDS, RabbitMQ ≈ SQS/SNS)."
       ]
     },
     pl: {
@@ -2755,6 +4481,12 @@ const FLASHCARDS = [
         "Brzeg/sieć: CloudFront, Route 53, ALB, API Gateway, VPC",
         "Bezpieczeństwo: IAM, Secrets Manager, KMS, Cognito, WAF",
         "Operacje: CloudWatch (logi, metryki, alarmy), X-Ray, CloudFormation/CDK"
+      ],
+      more: [
+        "AWS ma ponad 200 usług, ale typowy backend webowy korzysta z małego, stabilnego rdzenia. Rekruter chce zobaczyć, że umiesz przypisać każdą warstwę aplikacji do właściwej usługi zarządzanej i wyjaśnić, co ona zastępuje.",
+        "- **Obliczenia (compute)** – gdzie działa Twój kod w Node. **EC2** = maszyny wirtualne, którymi zarządzasz. **ECS** = własny orkiestrator kontenerów AWS; z **Fargate** nie zarządzasz serwerami pod spodem. **EKS** = zarządzany Kubernetes. **Lambda** = funkcje wywoływane per zdarzenie, bez żadnych serwerów.\n- **Dane** – **S3** na pliki/obiekty (uploady, statyczne zasoby, backupy). **RDS** = zarządzany Postgres/MySQL (backupy, łatki, failover po stronie AWS); **Aurora** = przebudowany przez AWS, szybszy i bardziej elastyczny silnik zgodny z Postgresem/MySQL. **DynamoDB** = serverlessowa baza NoSQL klucz-wartość/dokumentowa. **ElastiCache** = zarządzany Redis/Valkey/Memcached na cache i sesje.\n- **Komunikacja** – **SQS** (kolejki), **SNS** (pub/sub typu push), **EventBridge** (szyna zdarzeń z regułami routingu i schedulerem), **Kinesis** albo **MSK** (zarządzana Kafka) do strumieni.",
+        "- **Brzeg i sieć** – **VPC** to Twoja prywatna sieć. **ALB** (Application Load Balancer) rozkłada ruch HTTP na kontenery i robi health checki. **API Gateway** to zarządzane „drzwi wejściowe” API (autoryzacja, throttling), często przed Lambdą. **CloudFront** to CDN, **Route 53** – DNS.\n- **Bezpieczeństwo** – **IAM** decyduje, kto może wołać które API AWS. **Secrets Manager** przechowuje hasła do baz i klucze API z rotacją. **KMS** zarządza kluczami szyfrowania. **Cognito** obsługuje rejestrację/logowanie użytkowników końcowych (OIDC). **WAF** filtruje złośliwy ruch HTTP na CloudFront/ALB.\n- **Operacje** – **CloudWatch** na logi, metryki, alarmy i dashboardy; **X-Ray** (coraz częściej przez OpenTelemetry) do rozproszonego tracingu; **CloudFormation** lub **CDK**, by zdefiniować to wszystko jako kod.",
+        "Dobry sposób prezentacji: przeprowadź żądanie przez cały stos – DNS w Route 53 → CloudFront/WAF → ALB → taski ECS Fargate w prywatnych podsieciach → RDS i ElastiCache, pliki w S3, praca asynchroniczna przez SQS, sekrety z Secrets Managera, wszystko monitorowane w CloudWatch i stworzone w CDK. Taka narracja pokazuje zrozumienie zamiast wykutej listy i ułatwia porównania z tym, co już znasz (Kubernetes ≈ EKS/ECS, Postgres ≈ RDS, RabbitMQ ≈ SQS/SNS)."
       ]
     }
   },
@@ -2768,6 +4500,14 @@ const FLASHCARDS = [
         "EKS: managed Kubernetes – when you need K8s ecosystem/portability (Helm charts)",
         "Lambda: event-driven functions, pay per request, scales to zero; limits apply",
         "Long-running, steady traffic → containers; spiky/event glue → Lambda"
+      ],
+      more: [
+        "All four options run your code; they differ in **how much of the stack you manage** versus AWS, and therefore in control, operational effort and pricing model. Think of it as a ladder from \"you own everything\" to \"you own only the function\".",
+        "**EC2** gives you raw virtual machines. You choose the instance type, install the OS packages and Node runtime, patch the OS, configure an **Auto Scaling group** and deploy your app somehow. Maximum control – GPUs, custom kernels, special networking, licensed software – but also maximum toil. Today it is rarely the first choice for a plain Node API.",
+        "**ECS on Fargate** runs **containers** without servers. You write a **task definition** (image, CPU/memory, env vars, IAM role, ports), and an ECS **service** keeps N tasks running behind a load balancer, replaces unhealthy ones and scales them. Fargate means AWS provides the underlying compute per task – no nodes to patch or bin-pack. It is simpler than Kubernetes and deeply integrated with AWS (IAM roles per task, ALB, CloudWatch), which is why it is a sensible **default for Node APIs**. (ECS can also run on EC2 instances you manage, which is cheaper at scale.)",
+        "**EKS** is managed Kubernetes: AWS runs the control plane; you run workloads with the standard K8s API, Helm charts, operators and the CNCF ecosystem. Choose it when the organisation already standardises on Kubernetes, needs portability across clouds, or relies on K8s tooling (service mesh, Argo CD). It costs more in expertise and per-cluster fees; options like Fargate profiles or EKS Auto Mode reduce node management.",
+        "**Lambda** runs a function per event (HTTP request via API Gateway, SQS message, S3 upload, schedule). It scales automatically from zero to thousands of concurrent executions and you pay per request and per GB-second of execution. Limits apply: 15-minute max runtime, cold starts, no in-process state between invocations, connection-management care with relational DBs.",
+        "Rule of thumb: **steady, long-running traffic** (an API busy all day, WebSocket servers, background workers) → containers, where cost per request is lower and there are no runtime limits. **Spiky, bursty or event-glue workloads** (webhooks, S3 thumbnailing, nightly jobs, low-traffic internal APIs) → Lambda, where scale-to-zero and zero ops win. Many real systems mix both."
       ]
     },
     pl: {
@@ -2778,6 +4518,14 @@ const FLASHCARDS = [
         "EKS: zarządzany Kubernetes – gdy potrzebny ekosystem K8s/przenośność (charty Helm)",
         "Lambda: funkcje sterowane zdarzeniami, płatność za wywołanie, skalowanie do zera; są limity",
         "Długotrwały, stały ruch → kontenery; skoki/klej zdarzeń → Lambda"
+      ],
+      more: [
+        "Wszystkie cztery opcje uruchamiają Twój kod; różnią się tym, **jak dużą część stosu zarządzasz Ty**, a jak dużą AWS – a więc kontrolą, wysiłkiem operacyjnym i modelem cenowym. Traktuj to jak drabinę od „odpowiadasz za wszystko” do „odpowiadasz tylko za funkcję”.",
+        "**EC2** daje surowe maszyny wirtualne. Wybierasz typ instancji, instalujesz pakiety systemowe i runtime Node, łatasz system, konfigurujesz **Auto Scaling group** i jakoś wdrażasz aplikację. Maksimum kontroli – GPU, własne jądra, specjalna sieć, licencjonowane oprogramowanie – ale też maksimum żmudnej pracy. Dziś rzadko jest pierwszym wyborem dla zwykłego API w Node.",
+        "**ECS na Fargate** uruchamia **kontenery** bez serwerów. Piszesz **task definition** (obraz, CPU/pamięć, zmienne środowiskowe, rola IAM, porty), a **usługa (service)** ECS utrzymuje N tasków za load balancerem, wymienia niezdrowe i je skaluje. Fargate oznacza, że AWS dostarcza moc obliczeniową per task – nie ma węzłów do łatania ani upychania. Jest prostszy niż Kubernetes i mocno zintegrowany z AWS (rola IAM per task, ALB, CloudWatch), dlatego to rozsądny **domyślny wybór dla API w Node**. (ECS może też działać na zarządzanych przez Ciebie instancjach EC2, co przy dużej skali jest tańsze.)",
+        "**EKS** to zarządzany Kubernetes: AWS utrzymuje control plane, a Ty uruchamiasz obciążenia standardowym API K8s, chartami Helm, operatorami i całym ekosystemem CNCF. Wybierasz go, gdy organizacja już ustandaryzowała się na Kubernetesie, potrzebuje przenośności między chmurami albo polega na narzędziach K8s (service mesh, Argo CD). Kosztuje więcej wiedzy i opłat za klaster; opcje takie jak profile Fargate czy EKS Auto Mode zmniejszają zarządzanie węzłami.",
+        "**Lambda** uruchamia funkcję per zdarzenie (żądanie HTTP przez API Gateway, wiadomość SQS, upload do S3, harmonogram). Skaluje się automatycznie od zera do tysięcy równoległych wykonań, a płacisz za wywołania i GB-sekundy działania. Są limity: maks. 15 minut działania, cold starty, brak stanu w procesie między wywołaniami, ostrożne zarządzanie połączeniami do relacyjnych baz.",
+        "Reguła kciuka: **stały, długotrwały ruch** (API obciążone cały dzień, serwery WebSocket, workery w tle) → kontenery, bo koszt na żądanie jest niższy i nie ma limitów runtime'u. **Skokowe, zrywowe obciążenia lub „klej” między zdarzeniami** (webhooki, miniatury z S3, nocne joby, mało używane wewnętrzne API) → Lambda, bo wygrywa skalowanie do zera i brak utrzymania. Wiele realnych systemów łączy oba podejścia."
       ]
     }
   },
@@ -2792,6 +4540,15 @@ const FLASHCARDS = [
         "DB connections explode with concurrency → RDS Proxy or DynamoDB",
         "Stateless; `/tmp` is ephemeral",
         "Triggers: API Gateway, SQS (batch, partial failures), S3, EventBridge, schedules"
+      ],
+      more: [
+        "AWS Lambda runs your handler inside an **execution environment** – a lightweight microVM (Firecracker) with your code and the Node runtime. The first request that needs a new environment triggers an **init phase**: download the code, start the runtime, run everything at module top level. That is a **cold start**. Afterwards the environment is kept warm and reused for subsequent invocations, **one invocation at a time per environment**; more parallel requests mean more environments.",
+        "Hard limits worth knowing:\n- **Timeout** max **15 minutes** – not for long batch jobs (use ECS tasks or Step Functions).\n- **Memory** 128 MB – **10 GB**; **CPU is allocated proportionally to memory**, so raising memory often makes a function faster and not more expensive.\n- **Payload**: **6 MB** request/response for synchronous invocation (API Gateway adds its own limits); async events are much smaller.\n- **`/tmp`**: 512 MB by default, configurable up to 10 GB, **ephemeral** – it may survive between warm invocations but can vanish at any time.",
+        "**Cold-start mitigation**: keep the deployment bundle small (tree-shake with esbuild, avoid the whole AWS SDK), create SDK clients and DB connections **outside the handler** so warm invocations reuse them, and for latency-critical paths use **provisioned concurrency** (pre-initialised environments, billed while idle).",
+        "```ts\nimport { DynamoDBClient } from '@aws-sdk/client-dynamodb';\nconst ddb = new DynamoDBClient({});   // init phase: once per environment\n\nexport const handler = async (event: SQSEvent) => {\n  const failures = [];\n  for (const r of event.Records) {\n    try { await process(r, ddb); }\n    catch { failures.push({ itemIdentifier: r.messageId }); }\n  }\n  return { batchItemFailures: failures }; // retry only the failed ones\n};\n```",
+        "**Concurrency**: every account has a per-region concurrency limit (1,000 by default, raisable). All functions share it, so one runaway function can starve the others. **Reserved concurrency** guarantees a function a slice – and also caps it, which is a useful way to protect a downstream system.",
+        "**Database connections**: 500 concurrent environments means 500 Postgres connections, which exhausts RDS quickly. Use **RDS Proxy** (pools connections), or a datastore built for this, like **DynamoDB** (HTTP API, no connections). Since the function is **stateless**, keep sessions and caches in Redis/DynamoDB, not memory.",
+        "**Triggers**: API Gateway or Function URLs (HTTP), **SQS** (Lambda polls and delivers batches; enable `ReportBatchItemFailures` so a single bad message doesn't retry the whole batch – as in the code above), S3 events, EventBridge rules and EventBridge Scheduler (cron), DynamoDB/Kinesis streams."
       ]
     },
     pl: {
@@ -2803,6 +4560,15 @@ const FLASHCARDS = [
         "Połączenia DB rosną ze współbieżnością → RDS Proxy lub DynamoDB",
         "Bezstanowa; `/tmp` jest ulotne",
         "Wyzwalacze: API Gateway, SQS (partie, częściowe błędy), S3, EventBridge, harmonogramy"
+      ],
+      more: [
+        "AWS Lambda uruchamia Twój handler w **środowisku wykonawczym (execution environment)** – lekkiej mikro-VM (Firecracker) z Twoim kodem i runtime'em Node. Pierwsze żądanie, które wymaga nowego środowiska, uruchamia **fazę init**: pobranie kodu, start runtime'u, wykonanie wszystkiego na najwyższym poziomie modułu. To właśnie **cold start**. Potem środowisko jest trzymane „na ciepło” i używane ponownie przy kolejnych wywołaniach, **po jednym wywołaniu naraz na środowisko**; więcej równoległych żądań oznacza więcej środowisk.",
+        "Twarde limity, które warto znać:\n- **Timeout** maks. **15 minut** – nie nadaje się do długich jobów wsadowych (użyj tasków ECS albo Step Functions).\n- **Pamięć** od 128 MB do **10 GB**; **CPU przydzielane jest proporcjonalnie do pamięci**, więc zwiększenie pamięci często przyspiesza funkcję, nie podnosząc kosztu.\n- **Payload**: **6 MB** żądania/odpowiedzi przy wywołaniu synchronicznym (API Gateway ma swoje limity); zdarzenia asynchroniczne są dużo mniejsze.\n- **`/tmp`**: domyślnie 512 MB, konfigurowalne do 10 GB, **ulotne** – może przetrwać między ciepłymi wywołaniami, ale może zniknąć w każdej chwili.",
+        "**Łagodzenie cold startów**: mały bundle (tree-shaking przez esbuild, bez całego AWS SDK), tworzenie klientów SDK i połączeń do bazy **poza handlerem**, żeby ciepłe wywołania je reużywały, a dla ścieżek krytycznych pod kątem opóźnień – **provisioned concurrency** (wstępnie zainicjalizowane środowiska, płatne również w bezczynności).",
+        "```ts\nimport { DynamoDBClient } from '@aws-sdk/client-dynamodb';\nconst ddb = new DynamoDBClient({});   // faza init: raz na środowisko\n\nexport const handler = async (event: SQSEvent) => {\n  const failures = [];\n  for (const r of event.Records) {\n    try { await process(r, ddb); }\n    catch { failures.push({ itemIdentifier: r.messageId }); }\n  }\n  return { batchItemFailures: failures }; // ponów tylko nieudane\n};\n```",
+        "**Współbieżność (concurrency)**: każde konto ma limit współbieżności per region (domyślnie 1000, można podnieść). Dzielą go wszystkie funkcje, więc jedna rozpędzona funkcja może zagłodzić pozostałe. **Reserved concurrency** gwarantuje funkcji wydzieloną pulę – i jednocześnie ją ogranicza, co przydaje się do ochrony systemu downstream.",
+        "**Połączenia do bazy**: 500 równoległych środowisk to 500 połączeń do Postgresa, co szybko wyczerpuje RDS. Użyj **RDS Proxy** (pula połączeń) albo magazynu stworzonego do tego, np. **DynamoDB** (API po HTTP, bez połączeń). Funkcja jest **bezstanowa**, więc sesje i cache trzymaj w Redisie/DynamoDB, nie w pamięci.",
+        "**Wyzwalacze**: API Gateway lub Function URL (HTTP), **SQS** (Lambda sama odpytuje kolejkę i dostarcza partie; włącz `ReportBatchItemFailures`, żeby jedna zła wiadomość nie powodowała ponowienia całej partii – jak w kodzie wyżej), zdarzenia S3, reguły EventBridge i EventBridge Scheduler (cron), strumienie DynamoDB/Kinesis."
       ]
     }
   },
@@ -2816,6 +4582,15 @@ const FLASHCARDS = [
         "SNS → multiple SQS = classic fan-out with durable buffers per consumer",
         "EventBridge: event bus with content-based routing rules, schema registry, SaaS/AWS events, scheduler",
         "Kinesis: ordered stream with shards and replay – high-volume telemetry/analytics"
+      ],
+      more: [
+        "All four move messages between components, but they answer different questions: *who pulls vs who gets pushed*, *one consumer vs many*, *is the message kept after reading*, and *how is routing decided*.",
+        "**SQS (Simple Queue Service)** is a **pull-based queue**. Consumers poll for messages; each message is processed by one of the competing workers and deleted after success. While being processed it is hidden by the **visibility timeout**; failures reappear and, after too many attempts, move to a **DLQ**. **Standard** queues give near-unlimited throughput with at-least-once delivery and best-effort order; **FIFO** queues give ordering per message group and deduplication at lower throughput. Use it to buffer work and decouple producers from slower workers.",
+        "**SNS (Simple Notification Service)** is **push-based pub/sub**. A publisher sends to a **topic**; SNS immediately pushes a copy to every **subscriber** – SQS queues, Lambda functions, HTTP endpoints, email, SMS, mobile push. Subscription **filter policies** let a subscriber receive only messages with matching attributes. SNS doesn't store messages for later reading; if a subscriber is down, delivery is retried for a while and then dropped or sent to a DLQ.",
+        "**SNS → multiple SQS** is the classic **fan-out** pattern: one `OrderPlaced` published to a topic lands in a separate queue for billing, shipping and analytics. Each consumer gets its own durable buffer, retries and DLQ, and can be slow or down without affecting the others.",
+        "**EventBridge** is an **event bus** with **content-based routing**: **rules** match on any field of the JSON event (e.g. `detail.amount > 1000`, `source = \"orders\"`) and forward to targets (Lambda, SQS, Step Functions, API destinations). It natively receives events from AWS services and SaaS partners, offers a **schema registry**, **archive & replay**, **Pipes** (source → filter → enrich → target) and **EventBridge Scheduler** for cron and one-off timed jobs. Good as the integration backbone between bounded contexts; not designed for very high-volume streams or strict ordering.",
+        "**Kinesis Data Streams** is a **log/stream** like Kafka: records go into **shards** by partition key, are ordered within a shard, and are **retained** (24 h by default, up to a year) so multiple consumers can read and **replay** independently. Fits high-volume telemetry, clickstreams and analytics feeding Firehose/Flink. If you need Kafka APIs specifically, use MSK instead.",
+        "Quick chooser: job queue → SQS; notify many → SNS (+SQS); route by content across teams/SaaS → EventBridge; ordered high-volume stream with replay → Kinesis/MSK."
       ]
     },
     pl: {
@@ -2826,6 +4601,15 @@ const FLASHCARDS = [
         "SNS → wiele SQS = klasyczny fan-out z trwałym buforem per konsument",
         "EventBridge: szyna zdarzeń z regułami routingu po treści, schema registry, zdarzenia SaaS/AWS, scheduler",
         "Kinesis: uporządkowany strumień z shardami i replay – duże wolumeny telemetrii/analityki"
+      ],
+      more: [
+        "Wszystkie cztery przenoszą wiadomości między komponentami, ale odpowiadają na inne pytania: *kto pobiera, a do kogo się wypycha*, *jeden konsument czy wielu*, *czy wiadomość zostaje po odczycie* i *jak podejmowana jest decyzja o routingu*.",
+        "**SQS (Simple Queue Service)** to **kolejka typu pull**. Konsumenci odpytują ją o wiadomości; każdą przetwarza jeden z konkurujących workerów i usuwa po sukcesie. W trakcie obróbki wiadomość jest ukryta przez **visibility timeout**; nieudane wracają, a po zbyt wielu próbach trafiają do **DLQ**. Kolejki **Standard** dają praktycznie nieograniczoną przepustowość z dostarczaniem at-least-once i kolejnością „best effort”; kolejki **FIFO** – kolejność per grupa wiadomości i deduplikację przy mniejszej przepustowości. Służy do buforowania pracy i oddzielenia producentów od wolniejszych workerów.",
+        "**SNS (Simple Notification Service)** to **pub/sub typu push**. Wydawca wysyła do **topicu**, a SNS natychmiast wypycha kopię do każdego **subskrybenta** – kolejek SQS, funkcji Lambda, endpointów HTTP, e-maila, SMS, push mobilnego. **Filter policies** subskrypcji pozwalają odbierać tylko wiadomości z pasującymi atrybutami. SNS nie przechowuje wiadomości do późniejszego odczytu; jeśli subskrybent leży, dostarczenie jest przez jakiś czas ponawiane, a potem porzucane albo kierowane do DLQ.",
+        "**SNS → wiele SQS** to klasyczny wzorzec **fan-out**: jedno `OrderPlaced` opublikowane w topicu ląduje w osobnych kolejkach dla rozliczeń, wysyłki i analityki. Każdy konsument ma własny trwały bufor, ponowienia i DLQ, i może być wolny albo niedostępny bez wpływu na pozostałych.",
+        "**EventBridge** to **szyna zdarzeń (event bus)** z **routingiem po treści**: **reguły** dopasowują dowolne pole zdarzenia JSON (np. `detail.amount > 1000`, `source = \"orders\"`) i przekazują je do celów (Lambda, SQS, Step Functions, API destinations). Natywnie odbiera zdarzenia z usług AWS i partnerów SaaS, oferuje **schema registry**, **archiwum i replay**, **Pipes** (źródło → filtr → wzbogacenie → cel) oraz **EventBridge Scheduler** do crona i jednorazowych zadań w czasie. Dobry jako szkielet integracji między bounded contextami; nie jest projektowany pod bardzo duże wolumeny ani ścisłą kolejność.",
+        "**Kinesis Data Streams** to **log/strumień** jak Kafka: rekordy trafiają do **shardów** według klucza partycji, są uporządkowane w obrębie sharda i **przechowywane** (domyślnie 24 h, do roku), więc wielu konsumentów może czytać i **odtwarzać** niezależnie. Pasuje do dużych wolumenów telemetrii, clickstreamów i analityki zasilającej Firehose/Flink. Jeśli potrzebujesz konkretnie API Kafki, wybierz MSK.",
+        "Szybka ściąga: kolejka zadań → SQS; powiadom wielu → SNS (+SQS); routing po treści między zespołami/SaaS → EventBridge; uporządkowany strumień o dużym wolumenie z replayem → Kinesis/MSK."
       ]
     }
   },
@@ -2840,6 +4624,14 @@ const FLASHCARDS = [
         "Visibility timeout > processing time (extend for long jobs)",
         "`maxReceiveCount` exceeded → moved to DLQ; redrive after fix",
         "Scale workers on `ApproximateNumberOfMessagesVisible` / `ApproximateAgeOfOldestMessage`"
+      ],
+      more: [
+        "SQS never pushes messages to you; a consumer asks for them with `ReceiveMessage`. Setting `WaitTimeSeconds` (up to **20 s**) enables **long polling**: the call waits until a message arrives instead of returning empty immediately, which cuts cost and latency. Each call returns up to **10 messages** (`MaxNumberOfMessages`), so workers usually process small batches.",
+        "Receiving a message does **not** remove it. Instead, SQS hides it from other consumers for the **visibility timeout** (default 30 s, max 12 h). This is the core of SQS's reliability model:\n- If processing succeeds, the consumer calls `DeleteMessage` with the message's receipt handle – only now is it gone.\n- If the consumer crashes, throws, or simply doesn't delete in time, the timeout expires and the message becomes **visible again** – another worker receives it, i.e. an automatic **retry**.",
+        "```ts\nconst { Messages = [] } = await sqs.send(new ReceiveMessageCommand({\n  QueueUrl, MaxNumberOfMessages: 10, WaitTimeSeconds: 20 }));\nfor (const m of Messages) {\n  await handle(JSON.parse(m.Body!));          // must be idempotent\n  await sqs.send(new DeleteMessageCommand({\n    QueueUrl, ReceiptHandle: m.ReceiptHandle }));\n}\n```",
+        "This implies a sizing rule: the **visibility timeout must exceed your processing time**. If a job takes 60 s and the timeout is 30 s, the message reappears while still being processed and a second worker starts on it – duplicate work. For jobs of variable length, call `ChangeMessageVisibility` periodically as a heartbeat to extend it. Because redelivery is normal, consumers must be idempotent.",
+        "A message that fails every time (a **poison message**) would otherwise loop forever. A **redrive policy** on the queue sets `maxReceiveCount`; once a message has been received more times than that, SQS moves it to the configured **dead-letter queue (DLQ)**. Alarm on DLQ depth > 0, investigate, fix the bug, then use **DLQ redrive** (console or `StartMessageMoveTask`) to move messages back to the source queue.",
+        "**Scaling workers**: the useful CloudWatch metrics are `ApproximateNumberOfMessagesVisible` (backlog size) and `ApproximateAgeOfOldestMessage` (how stale the oldest work is – closest to user-visible delay). ECS services can target-track a \"backlog per task\" metric; with Lambda as the consumer, the SQS event source mapping scales pollers for you. Also remember retention: messages expire after the retention period (default 4 days, max 14), so a long outage plus a DLQ that nobody watches means silent data loss."
       ]
     },
     pl: {
@@ -2851,6 +4643,14 @@ const FLASHCARDS = [
         "Visibility timeout > czas przetwarzania (wydłużanie przy długich zadaniach)",
         "Przekroczone `maxReceiveCount` → trafia do DLQ; redrive po naprawie",
         "Skalowanie workerów wg `ApproximateNumberOfMessagesVisible` / `ApproximateAgeOfOldestMessage`"
+      ],
+      more: [
+        "SQS nigdy nie wypycha wiadomości; konsument sam o nie prosi przez `ReceiveMessage`. Ustawienie `WaitTimeSeconds` (do **20 s**) włącza **long polling**: wywołanie czeka, aż pojawi się wiadomość, zamiast od razu wracać z pustymi rękami, co obniża koszt i opóźnienie. Jedno wywołanie zwraca do **10 wiadomości** (`MaxNumberOfMessages`), więc workery zwykle przetwarzają małe partie.",
+        "Odebranie wiadomości jej **nie** usuwa. SQS ukrywa ją przed innymi konsumentami na czas **visibility timeout** (domyślnie 30 s, maks. 12 h). To serce modelu niezawodności SQS:\n- Jeśli przetwarzanie się uda, konsument wywołuje `DeleteMessage` z receipt handle wiadomości – dopiero wtedy znika.\n- Jeśli konsument padnie, rzuci wyjątek albo po prostu nie usunie jej na czas, timeout mija i wiadomość znów staje się **widoczna** – odbiera ją inny worker, czyli automatyczne **ponowienie**.",
+        "```ts\nconst { Messages = [] } = await sqs.send(new ReceiveMessageCommand({\n  QueueUrl, MaxNumberOfMessages: 10, WaitTimeSeconds: 20 }));\nfor (const m of Messages) {\n  await handle(JSON.parse(m.Body!));          // musi być idempotentne\n  await sqs.send(new DeleteMessageCommand({\n    QueueUrl, ReceiptHandle: m.ReceiptHandle }));\n}\n```",
+        "Wynika z tego zasada doboru: **visibility timeout musi być dłuższy niż czas przetwarzania**. Jeśli zadanie trwa 60 s, a timeout to 30 s, wiadomość wróci w trakcie obróbki i drugi worker zacznie ją równolegle – zdublowana praca. Przy zadaniach o zmiennej długości wywołuj cyklicznie `ChangeMessageVisibility` jako heartbeat, który go wydłuża. Ponieważ ponowne dostarczenie jest czymś normalnym, konsumenci muszą być idempotentni.",
+        "Wiadomość, która zawsze kończy się błędem (**trująca wiadomość, poison message**), krążyłaby w nieskończoność. **Redrive policy** kolejki ustawia `maxReceiveCount`; gdy wiadomość zostanie odebrana więcej razy, SQS przenosi ją do skonfigurowanej **kolejki DLQ (dead-letter queue)**. Ustaw alarm na głębokość DLQ > 0, zbadaj problem, popraw bug i użyj **DLQ redrive** (konsola lub `StartMessageMoveTask`), żeby przenieść wiadomości z powrotem do kolejki źródłowej.",
+        "**Skalowanie workerów**: przydatne metryki CloudWatch to `ApproximateNumberOfMessagesVisible` (wielkość zaległości) i `ApproximateAgeOfOldestMessage` (jak stara jest najstarsza praca – najbliższe opóźnieniu odczuwanemu przez użytkownika). Usługi ECS mogą skalować się target trackingiem na metryce „zaległości na task”; gdy konsumentem jest Lambda, event source mapping SQS sam skaluje pollery. Pamiętaj też o retencji: wiadomości wygasają po okresie retencji (domyślnie 4 dni, maks. 14), więc długa awaria plus DLQ, na które nikt nie patrzy, to cicha utrata danych."
       ]
     }
   },
@@ -2865,6 +4665,15 @@ const FLASHCARDS = [
         "Event notifications → SQS/SNS/Lambda/EventBridge for processing pipelines",
         "Storage classes + lifecycle rules (Standard → IA → Glacier)",
         "Block public access; serve via CloudFront (Origin Access Control)"
+      ],
+      more: [
+        "**S3 (Simple Storage Service)** is **object storage**. You create a **bucket** (globally unique name, lives in one region) and put **objects** into it, each identified by a **key** such as `users/42/avatar.png` plus metadata. Despite the slashes, there are no real directories: the key is just a string, and \"folders\" are a prefix convention used for listing. You cannot append to or edit part of an object – you replace the whole thing. Since December 2020 S3 is **strongly consistent**: after a successful write or delete, subsequent reads and listings see it immediately.",
+        "**Presigned URLs** are the key pattern for uploads and downloads. Instead of streaming a 200 MB video through your Node API, the backend (using its IAM role) signs a URL that grants one specific operation – e.g. `PUT` on one key – for a limited time. The browser then talks to S3 directly. Your API stays small and cheap, and the bucket stays private.",
+        "```ts\nimport { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';\nimport { getSignedUrl } from '@aws-sdk/s3-request-presigner';\n\nconst url = await getSignedUrl(new S3Client({}),\n  new PutObjectCommand({ Bucket: 'uploads', Key: `u/${userId}/${fileId}`,\n    ContentType: 'image/png' }),\n  { expiresIn: 300 });          // valid for 5 minutes\n// return url to the client, which PUTs the file directly\n```",
+        "**Multipart upload** splits a large object into parts (5 MiB – 5 GiB each, up to 10,000 parts) uploaded in parallel and retried individually, then assembled. A single `PUT` is limited to 5 GB, so multipart is **required above 5 GB** and recommended from ~100 MB. Add a lifecycle rule to abort incomplete multipart uploads, otherwise orphaned parts keep costing money.",
+        "**Event notifications**: S3 can emit an event on `ObjectCreated`/`ObjectRemoved` to SQS, SNS, Lambda or EventBridge – the basis of processing pipelines (upload → thumbnail generation, virus scan, indexing). Delivery is at least once, so processors must be idempotent.",
+        "**Storage classes** trade retrieval cost/latency for storage price: Standard; Intelligent-Tiering (moves objects automatically); Standard-IA (infrequent access, retrieval fee); Glacier Instant / Flexible Retrieval / Deep Archive for archives. **Lifecycle rules** automate transitions and expiry (e.g. to IA after 30 days, delete after 1 year).",
+        "**Security**: keep **Block Public Access** on (it is the default for new buckets) and never make a bucket public to serve a website. Instead put **CloudFront** in front and use **Origin Access Control (OAC)** so only your distribution can read the bucket – you also gain caching, HTTPS on your domain and WAF. Encryption at rest is on by default (SSE-S3), with SSE-KMS when you need key control."
       ]
     },
     pl: {
@@ -2876,6 +4685,15 @@ const FLASHCARDS = [
         "Powiadomienia o zdarzeniach → SQS/SNS/Lambda/EventBridge dla potoków przetwarzania",
         "Klasy przechowywania + reguły cyklu życia (Standard → IA → Glacier)",
         "Blokada dostępu publicznego; serwowanie przez CloudFront (Origin Access Control)"
+      ],
+      more: [
+        "**S3 (Simple Storage Service)** to **magazyn obiektowy (object storage)**. Tworzysz **bucket** (nazwa unikalna globalnie, żyje w jednym regionie) i wkładasz do niego **obiekty**, każdy identyfikowany **kluczem**, np. `users/42/avatar.png`, plus metadanymi. Mimo ukośników nie ma prawdziwych katalogów: klucz to po prostu string, a „foldery” to konwencja prefiksów używana przy listowaniu. Nie da się dopisać ani edytować fragmentu obiektu – podmieniasz całość. Od grudnia 2020 S3 jest **silnie spójny**: po udanym zapisie lub usunięciu kolejne odczyty i listowania od razu to widzą.",
+        "**Presigned URL** to kluczowy wzorzec dla uploadów i pobrań. Zamiast przepychać 200-megabajtowe wideo przez API w Node, backend (używając swojej roli IAM) podpisuje URL, który pozwala na jedną konkretną operację – np. `PUT` na jeden klucz – przez ograniczony czas. Przeglądarka rozmawia wtedy bezpośrednio z S3. API zostaje lekkie i tanie, a bucket prywatny.",
+        "```ts\nimport { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';\nimport { getSignedUrl } from '@aws-sdk/s3-request-presigner';\n\nconst url = await getSignedUrl(new S3Client({}),\n  new PutObjectCommand({ Bucket: 'uploads', Key: `u/${userId}/${fileId}`,\n    ContentType: 'image/png' }),\n  { expiresIn: 300 });          // ważny 5 minut\n// zwróć url klientowi, który wyśle plik bezpośrednio PUT-em\n```",
+        "**Multipart upload** dzieli duży obiekt na części (od 5 MiB do 5 GiB, maks. 10 000 części), wysyłane równolegle i ponawiane pojedynczo, a potem składane. Pojedynczy `PUT` jest ograniczony do 5 GB, więc multipart jest **wymagany powyżej 5 GB** i zalecany już od ok. 100 MB. Dodaj regułę cyklu życia przerywającą niedokończone uploady multipart, inaczej osierocone części będą kosztować.",
+        "**Powiadomienia o zdarzeniach**: S3 może emitować zdarzenie przy `ObjectCreated`/`ObjectRemoved` do SQS, SNS, Lambdy lub EventBridge – to podstawa potoków przetwarzania (upload → generowanie miniatur, skan antywirusowy, indeksowanie). Dostarczanie jest at-least-once, więc procesory muszą być idempotentne.",
+        "**Klasy przechowywania** wymieniają koszt/opóźnienie odczytu na cenę składowania: Standard; Intelligent-Tiering (przenosi obiekty automatycznie); Standard-IA (rzadki dostęp, opłata za odczyt); Glacier Instant / Flexible Retrieval / Deep Archive do archiwów. **Reguły cyklu życia (lifecycle rules)** automatyzują przejścia i wygasanie (np. do IA po 30 dniach, usunięcie po roku).",
+        "**Bezpieczeństwo**: trzymaj włączone **Block Public Access** (domyślne dla nowych bucketów) i nigdy nie upubliczniaj bucketu, żeby serwować stronę. Zamiast tego postaw przed nim **CloudFront** i użyj **Origin Access Control (OAC)**, żeby tylko Twoja dystrybucja mogła czytać bucket – przy okazji zyskujesz cache, HTTPS na własnej domenie i WAF. Szyfrowanie w spoczynku jest domyślnie włączone (SSE-S3), a SSE-KMS stosuje się, gdy potrzebujesz kontroli nad kluczem."
       ]
     }
   },
@@ -2889,6 +4707,15 @@ const FLASHCARDS = [
         "Services use roles, not access keys (ECS task role, Lambda execution role, IRSA on EKS)",
         "Least privilege: specific actions on specific resource ARNs",
         "No long-lived keys; SSO for humans; MFA; CloudTrail audit"
+      ],
+      more: [
+        "**IAM (Identity and Access Management)** decides, for every single AWS API call, whether it is allowed. Two building blocks: **principals** – who is calling – and **policies** – what they may do.",
+        "Principals are **IAM users** (long-lived identities with passwords/access keys – now largely discouraged) and **IAM roles**. A **role** has no permanent credentials; someone or something **assumes** it and receives **temporary credentials** from STS that expire automatically. Services, CI pipelines and people logging in via SSO all use roles.",
+        "A **policy** is a JSON document of statements. Each statement has an **Effect** (`Allow`/`Deny`), **Action** (API operations like `s3:GetObject`), **Resource** (the **ARN** – Amazon Resource Name – of what it applies to) and optionally a **Condition** (source VPC, tags, MFA present, time, encryption).",
+        "```json\n{\n  \"Effect\": \"Allow\",\n  \"Action\": [\"s3:GetObject\", \"s3:PutObject\"],\n  \"Resource\": \"arn:aws:s3:::acme-uploads/users/*\"\n}\n```",
+        "**Evaluation logic**: everything is **denied by default**. A request is allowed only if some applicable policy explicitly allows it, and **an explicit deny anywhere always wins** over any allow. Other layers can narrow permissions further: **resource-based policies** (e.g. a bucket policy or SQS queue policy – also needed for cross-account access), **permission boundaries**, and organisation-wide **SCPs**. When debugging \"AccessDenied\", check every layer.",
+        "**Roles for workloads**: application code should never contain access keys. An **ECS task role** gives each container its own permissions; a **Lambda execution role** does the same for a function; on EKS, **IRSA** (IAM Roles for Service Accounts) or the newer **EKS Pod Identity** map a Kubernetes service account to a role. The AWS SDK picks up the temporary credentials automatically and refreshes them.",
+        "Best practices:\n- **Least privilege** – specific actions on specific resource ARNs, not `s3:*` on `*`. Start narrow and use IAM Access Analyzer to refine from actual usage.\n- **No long-lived keys** – humans sign in via **IAM Identity Center (SSO)** with **MFA**; CI uses OIDC federation (e.g. GitHub Actions assuming a role) instead of stored keys.\n- Lock away the root account (MFA, no keys).\n- **CloudTrail** records who called what and when – your audit log and first stop in incident investigation."
       ]
     },
     pl: {
@@ -2899,6 +4726,15 @@ const FLASHCARDS = [
         "Usługi używają ról, nie kluczy dostępu (ECS task role, Lambda execution role, IRSA na EKS)",
         "Najmniejsze uprawnienia: konkretne akcje na konkretnych ARN",
         "Brak długo żyjących kluczy; SSO dla ludzi; MFA; audyt w CloudTrail"
+      ],
+      more: [
+        "**IAM (Identity and Access Management)** decyduje przy każdym pojedynczym wywołaniu API AWS, czy jest ono dozwolone. Dwa klocki: **podmioty (principals)** – kto woła – oraz **polityki (policies)** – co wolno.",
+        "Podmioty to **użytkownicy IAM** (długo żyjące tożsamości z hasłem/kluczami dostępu – obecnie raczej odradzane) oraz **role IAM**. **Rola** nie ma stałych poświadczeń; ktoś lub coś ją **przyjmuje (assume)** i dostaje z STS **tymczasowe poświadczenia**, które wygasają automatycznie. Z ról korzystają usługi, pipeline'y CI i ludzie logujący się przez SSO.",
+        "**Polityka** to dokument JSON złożony z instrukcji (statements). Każda ma **Effect** (`Allow`/`Deny`), **Action** (operacje API, np. `s3:GetObject`), **Resource** (**ARN** – Amazon Resource Name – zasobu, którego dotyczy) i opcjonalnie **Condition** (źródłowe VPC, tagi, obecność MFA, czas, szyfrowanie).",
+        "```json\n{\n  \"Effect\": \"Allow\",\n  \"Action\": [\"s3:GetObject\", \"s3:PutObject\"],\n  \"Resource\": \"arn:aws:s3:::acme-uploads/users/*\"\n}\n```",
+        "**Logika ewaluacji**: wszystko jest **domyślnie zabronione**. Żądanie przechodzi tylko wtedy, gdy któraś pasująca polityka jawnie na nie pozwala, a **jawna odmowa (explicit deny) gdziekolwiek zawsze wygrywa** z każdym allow. Inne warstwy mogą dodatkowo zawężać uprawnienia: **polityki zasobowe (resource-based)** (np. bucket policy albo polityka kolejki SQS – potrzebne też przy dostępie między kontami), **permission boundaries** i organizacyjne **SCP**. Debugując „AccessDenied”, sprawdź każdą warstwę.",
+        "**Role dla obciążeń**: kod aplikacji nigdy nie powinien zawierać kluczy dostępu. **ECS task role** daje każdemu kontenerowi własne uprawnienia; **Lambda execution role** robi to samo dla funkcji; na EKS **IRSA** (IAM Roles for Service Accounts) albo nowsze **EKS Pod Identity** mapują service account Kubernetesa na rolę. AWS SDK sam pobiera tymczasowe poświadczenia i je odświeża.",
+        "Dobre praktyki:\n- **Najmniejsze uprawnienia (least privilege)** – konkretne akcje na konkretnych ARN-ach, a nie `s3:*` na `*`. Zacznij wąsko i doprecyzuj na podstawie faktycznego użycia w IAM Access Analyzer.\n- **Brak długo żyjących kluczy** – ludzie logują się przez **IAM Identity Center (SSO)** z **MFA**; CI korzysta z federacji OIDC (np. GitHub Actions przyjmuje rolę) zamiast przechowywanych kluczy.\n- Zabezpiecz konto root (MFA, zero kluczy).\n- **CloudTrail** zapisuje, kto co i kiedy wywołał – to Twój log audytowy i pierwszy przystanek przy analizie incydentu."
       ]
     }
   },
@@ -2913,6 +4749,13 @@ const FLASHCARDS = [
         "Security groups: stateful, instance-level allow rules (e.g. DB only from app SG)",
         "NACLs: stateless, subnet-level",
         "Spread across ≥ 2 AZs for high availability"
+      ],
+      more: [
+        "A **VPC (Virtual Private Cloud)** is your own isolated network inside an AWS region, defined by an IP range such as `10.0.0.0/16`. Nothing gets in or out unless you configure routes and rules for it. A region consists of several **Availability Zones (AZs)** – physically separate data centres with independent power and networking. You carve the VPC into **subnets**, and **each subnet lives in exactly one AZ**.",
+        "Whether a subnet is \"public\" or \"private\" is decided purely by its **route table**:\n- **Public subnet** – has a route `0.0.0.0/0 → Internet Gateway (IGW)`. Resources with public IPs can be reached from, and reach, the internet. Put only internet-facing entry points here: the **load balancer**, maybe a bastion or NAT gateway.\n- **Private subnet** – no route to the IGW, so nothing on the internet can initiate a connection to it. Your **application containers and databases** live here. When they need outbound access (calling Stripe, pulling images), traffic goes through a **NAT Gateway** placed in a public subnet – it allows outgoing connections and their replies but not incoming ones. NAT is billed per hour and per GB, so **VPC endpoints** (free gateway endpoints for S3/DynamoDB, interface endpoints for ECR, Secrets Manager, etc.) are used to keep AWS traffic private and cheaper.",
+        "**Security groups (SGs)** are virtual firewalls attached to each network interface (EC2 instance, ECS task, RDS instance, load balancer). They contain only **allow** rules and are **stateful**: if an inbound request is allowed, its response is automatically allowed back out. Their killer feature is referencing other security groups instead of IPs – e.g. the DB SG allows port 5432 **only from the app SG**, and the app SG allows port 3000 only from the ALB SG. That expresses the architecture directly and survives scaling and IP changes.",
+        "**Network ACLs (NACLs)** are a second, coarser layer applied at the **subnet** boundary. They are **stateless** – return traffic must be explicitly allowed (including ephemeral ports) – and support both allow and **deny** rules, evaluated in numbered order. Most teams leave NACLs at the default allow-all and do real work in security groups; NACLs are useful for blanket denies (blocking an IP range).",
+        "**High availability**: an AZ can fail. Create a public and a private subnet in **at least two AZs**, run app tasks in each, make the ALB span them, and use RDS Multi-AZ. A common trap is a single NAT Gateway in one AZ – if that AZ goes down, private subnets in the other AZ lose outbound access; production setups use one NAT per AZ."
       ]
     },
     pl: {
@@ -2924,6 +4767,13 @@ const FLASHCARDS = [
         "Security groups: stanowe reguły allow na poziomie instancji (np. DB tylko z SG aplikacji)",
         "NACL: bezstanowe, na poziomie podsieci",
         "Rozłożenie na ≥ 2 AZ dla wysokiej dostępności"
+      ],
+      more: [
+        "**VPC (Virtual Private Cloud)** to Twoja własna, odizolowana sieć w regionie AWS, zdefiniowana zakresem adresów IP, np. `10.0.0.0/16`. Nic nie wchodzi ani nie wychodzi, dopóki nie skonfigurujesz tras i reguł. Region składa się z kilku **stref dostępności (Availability Zones, AZ)** – fizycznie oddzielnych centrów danych z niezależnym zasilaniem i siecią. VPC dzielisz na **podsieci (subnets)**, a **każda podsieć żyje w dokładnie jednej AZ**.",
+        "O tym, czy podsieć jest „publiczna” czy „prywatna”, decyduje wyłącznie jej **tablica routingu**:\n- **Podsieć publiczna** – ma trasę `0.0.0.0/0 → Internet Gateway (IGW)`. Zasoby z publicznym IP są osiągalne z internetu i mogą do niego wychodzić. Umieszczasz tu tylko punkty wejścia od strony internetu: **load balancer**, ewentualnie bastion albo NAT Gateway.\n- **Podsieć prywatna** – brak trasy do IGW, więc nikt z internetu nie zainicjuje do niej połączenia. Tu żyją **kontenery aplikacji i bazy danych**. Gdy potrzebują ruchu wychodzącego (wywołanie Stripe, pobranie obrazów), idzie on przez **NAT Gateway** stojący w podsieci publicznej – przepuszcza połączenia wychodzące i odpowiedzi na nie, ale nie przychodzące. NAT jest płatny za godzinę i za GB, więc stosuje się **VPC endpoints** (darmowe gateway endpoints dla S3/DynamoDB, interface endpoints dla ECR, Secrets Managera itd.), żeby ruch do AWS był prywatny i tańszy.",
+        "**Security groups (SG)** to wirtualne firewalle przypięte do każdego interfejsu sieciowego (instancja EC2, task ECS, instancja RDS, load balancer). Zawierają wyłącznie reguły **allow** i są **stanowe**: jeśli żądanie przychodzące jest dozwolone, odpowiedź automatycznie może wyjść. Ich największa zaleta to odwoływanie się do innych security groups zamiast adresów IP – np. SG bazy wpuszcza port 5432 **tylko z SG aplikacji**, a SG aplikacji wpuszcza port 3000 tylko z SG ALB. To wprost wyraża architekturę i przetrwa skalowanie oraz zmiany IP.",
+        "**Network ACL (NACL)** to druga, bardziej zgrubna warstwa działająca na granicy **podsieci**. Są **bezstanowe** – ruch powrotny trzeba jawnie dopuścić (łącznie z portami efemerycznymi) – i obsługują zarówno reguły allow, jak i **deny**, sprawdzane w kolejności numerów. Większość zespołów zostawia NACL na domyślnym „allow all” i właściwą pracę robi w security groups; NACL przydają się do globalnych blokad (np. zakres IP).",
+        "**Wysoka dostępność**: strefa AZ może paść. Utwórz podsieć publiczną i prywatną w **co najmniej dwóch AZ**, uruchamiaj taski aplikacji w każdej, niech ALB obejmuje je wszystkie, a RDS działa w trybie Multi-AZ. Typowa pułapka to jeden NAT Gateway w jednej AZ – gdy ta strefa padnie, podsieci prywatne w drugiej tracą dostęp na zewnątrz; produkcyjne konfiguracje mają NAT w każdej AZ."
       ]
     }
   },
@@ -2938,6 +4788,14 @@ const FLASHCARDS = [
         "GSIs for other access patterns (eventually consistent)",
         "Single-table design: multiple entity types, generic `PK`/`SK` keys",
         "Conditional writes for idempotency/optimistic locking; TTL for expiry; Streams for CDC"
+      ],
+      more: [
+        "**DynamoDB** is AWS's serverless key-value/document database. It gives single-digit-millisecond latency at practically any scale, with no servers or connections to manage (it is an HTTP API). The catch: it has no joins and no ad-hoc query planner – you can efficiently fetch data **only by its keys**. So design is inverted compared to SQL: you **start from access patterns** (\"get a user's orders newest first\", \"find an order by ID\") and shape keys to serve them, rather than normalising entities first and querying later.",
+        "Every item has a **primary key**:\n- **Partition key (PK)** – hashed to decide which physical **partition** stores the item. It spreads data and load.\n- Optional **sort key (SK)** – items sharing a PK are stored sorted by SK, enabling `Query` with conditions like `begins_with`, `between`, `>`, and ordered results (e.g. `SK = ORDER#2026-09-28#123`).\n`Query` (by PK, optionally SK range) is cheap; `Scan` reads the whole table and should be avoided in hot paths. Items are limited to 400 KB.",
+        "**Hot partitions**: each partition has a throughput ceiling (roughly 3,000 reads and 1,000 writes per second). If many requests hit the same PK – e.g. `PK = \"2026-09-28\"` for all of today's events, or one celebrity user – that partition throttles even though the table has spare capacity. Choose **high-cardinality** keys (user ID, order ID) and, if necessary, add a shard suffix to spread writes. Adaptive capacity helps but doesn't fix a fundamentally skewed key.",
+        "**Global secondary indexes (GSIs)** support additional access patterns: a copy of selected attributes re-keyed by a different PK/SK (e.g. orders by `status`). They are updated asynchronously, so reads from a GSI are **eventually consistent**. (Local secondary indexes share the table's PK, must be defined at table creation and are rarely used.)",
+        "**Single-table design** stores multiple entity types in one table with generic key names `PK`/`SK`, so related items live together and one `Query` returns a user and their orders:\n- `PK = USER#42, SK = PROFILE` → user profile\n- `PK = USER#42, SK = ORDER#2026-09-28#123` → an order\nIt minimises round trips but makes the schema harder to read and evolve; many teams use it selectively.",
+        "Useful features: **conditional writes** (`ConditionExpression`, e.g. `attribute_not_exists(PK)` to make a create idempotent, or `version = :expected` for **optimistic locking**); **transactions** across up to 100 items; **TTL** – an epoch-seconds attribute after which items are deleted automatically (typically within a few days, free); **DynamoDB Streams** – an ordered change log per item, consumed by Lambda for CDC, outbox relays or syncing to search. Choose on-demand capacity for unpredictable traffic, provisioned with autoscaling for steady, cost-optimised loads."
       ]
     },
     pl: {
@@ -2949,6 +4807,14 @@ const FLASHCARDS = [
         "GSI dla innych wzorców dostępu (eventually consistent)",
         "Single-table design: wiele typów encji, ogólne klucze `PK`/`SK`",
         "Zapisy warunkowe dla idempotencji/optimistic locking; TTL do wygasania; Streams jako CDC"
+      ],
+      more: [
+        "**DynamoDB** to serverlessowa baza klucz-wartość/dokumentowa od AWS. Daje opóźnienia rzędu pojedynczych milisekund w praktycznie dowolnej skali, bez serwerów i połączeń do zarządzania (to API po HTTP). Haczyk: nie ma joinów ani planera zapytań ad hoc – wydajnie pobierzesz dane **tylko po kluczach**. Projektowanie jest więc odwrócone względem SQL: **zaczynasz od wzorców dostępu** („pobierz zamówienia użytkownika od najnowszych”, „znajdź zamówienie po ID”) i kształtujesz klucze pod nie, zamiast najpierw normalizować encje, a potem pisać zapytania.",
+        "Każdy element (item) ma **klucz główny**:\n- **Klucz partycji (partition key, PK)** – hashowany, żeby wybrać fizyczną **partycję**, na której leży element. Rozkłada dane i obciążenie.\n- Opcjonalny **klucz sortowania (sort key, SK)** – elementy o tym samym PK są przechowywane posortowane po SK, co umożliwia `Query` z warunkami typu `begins_with`, `between`, `>` i uporządkowane wyniki (np. `SK = ORDER#2026-09-28#123`).\n`Query` (po PK, opcjonalnie z zakresem SK) jest tanie; `Scan` czyta całą tabelę i nie powinien trafiać na gorące ścieżki. Element może mieć maks. 400 KB.",
+        "**Gorące partycje**: każda partycja ma sufit przepustowości (ok. 3000 odczytów i 1000 zapisów na sekundę). Jeśli wiele żądań trafia w ten sam PK – np. `PK = \"2026-09-28\"` dla wszystkich dzisiejszych zdarzeń albo jeden użytkownik-celebryta – ta partycja jest throttlowana, choć tabela ma wolną pojemność. Wybieraj klucze o **dużej kardynalności** (ID użytkownika, ID zamówienia), a w razie potrzeby dodaj sufiks shardu, by rozłożyć zapisy. Adaptive capacity pomaga, ale nie naprawi z gruntu krzywego klucza.",
+        "**Globalne indeksy wtórne (GSI)** obsługują dodatkowe wzorce dostępu: to kopia wybranych atrybutów z innym PK/SK (np. zamówienia po `status`). Są aktualizowane asynchronicznie, więc odczyty z GSI są **ostatecznie spójne (eventually consistent)**. (Lokalne indeksy wtórne, LSI, dzielą PK z tabelą, trzeba je zdefiniować przy tworzeniu tabeli i rzadko się ich używa.)",
+        "**Single-table design** trzyma wiele typów encji w jednej tabeli z ogólnymi nazwami kluczy `PK`/`SK`, dzięki czemu powiązane elementy leżą razem, a jedno `Query` zwraca użytkownika i jego zamówienia:\n- `PK = USER#42, SK = PROFILE` → profil użytkownika\n- `PK = USER#42, SK = ORDER#2026-09-28#123` → zamówienie\nMinimalizuje to liczbę zapytań, ale utrudnia czytanie i ewolucję schematu; wiele zespołów stosuje to wybiórczo.",
+        "Przydatne funkcje: **zapisy warunkowe** (`ConditionExpression`, np. `attribute_not_exists(PK)`, by tworzenie było idempotentne, albo `version = :expected` dla **optimistic locking**); **transakcje** obejmujące do 100 elementów; **TTL** – atrybut z czasem epoch w sekundach, po którym elementy są usuwane automatycznie (zwykle w ciągu kilku dni, bez opłat); **DynamoDB Streams** – uporządkowany log zmian per element, konsumowany przez Lambdę jako CDC, relay outboxa albo synchronizacja do wyszukiwarki. Tryb on-demand wybierz przy nieprzewidywalnym ruchu, provisioned z autoskalowaniem – przy stałym obciążeniu, gdy liczy się koszt."
       ]
     }
   },
@@ -2963,6 +4829,15 @@ const FLASHCARDS = [
         "Config via env vars, secrets from Secrets Manager / SSM; task role for AWS access",
         "Autoscaling on CPU / request count; rolling or blue/green deploy (CodeDeploy)",
         "CloudWatch logs + alarms (or Datadog agent); infrastructure as code (CDK/Terraform)"
+      ],
+      more: [
+        "This question checks whether you can assemble the individual services into a coherent, production-ready path from `git push` to a running, observable, scalable API. A good answer walks through build, runtime, data, config, scaling/deploys and operations.",
+        "**Build & registry**: the CI pipeline (GitHub Actions, GitLab CI, CodePipeline) runs tests, builds a Docker image (multi-stage, slim Node base, non-root user), tags it with the commit SHA, and pushes it to **ECR** (Elastic Container Registry). CI authenticates to AWS via OIDC by assuming a role – no stored access keys. ECR can scan images for vulnerabilities.",
+        "**Runtime**: an **ECS service on Fargate** runs N copies (**tasks**) of the image, defined by a **task definition** (image tag, CPU/memory, port, env, roles, log config). Tasks run in **private subnets** across **at least two AZs**. An **ALB** in public subnets terminates TLS (certificate from ACM), routes to the tasks and performs **health checks** against an endpoint such as `/health`; unhealthy tasks are drained and replaced. The app must handle `SIGTERM` gracefully to finish in-flight requests.",
+        "**Data**: **RDS Postgres Multi-AZ** (synchronous standby with automatic failover) or Aurora; **ElastiCache Redis** for cache, sessions, rate limiting; **S3** for user files via presigned URLs. Security groups allow the DB only from the app's SG.",
+        "**Config & secrets**: follow twelve-factor – non-secret config via environment variables in the task definition; secrets (DB password, API keys) referenced from **Secrets Manager** or **SSM Parameter Store** and injected at start. Note the two roles: the **task execution role** lets ECS pull the image and read those secrets; the **task role** is what your Node code uses to call AWS (S3, SQS) through the SDK.",
+        "**Scaling & deploys**: ECS **Service Auto Scaling** with target tracking on CPU or ALB **request count per target**. Deployments are **rolling** by default (start new tasks, wait for health, stop old ones; the deployment circuit breaker rolls back automatically on failure). For **blue/green** (switch traffic to a fully-deployed new version, instant rollback), ECS now supports it natively, or historically via **CodeDeploy**. Run DB migrations as a separate one-off task before shifting traffic, and keep them backward compatible.",
+        "**Operations**: container logs go to **CloudWatch Logs** (awslogs driver) or to Datadog via an agent/FireLens sidecar; alarms on 5xx rate, p99 latency, CPU/memory, DB connections. All of this is defined as **infrastructure as code** with CDK or Terraform so every environment is reproducible."
       ]
     },
     pl: {
@@ -2974,6 +4849,15 @@ const FLASHCARDS = [
         "Konfiguracja przez zmienne środowiskowe, sekrety z Secrets Manager / SSM; task role do dostępu do AWS",
         "Autoskalowanie wg CPU / liczby żądań; rolling lub blue/green (CodeDeploy)",
         "Logi + alarmy w CloudWatch (lub agent Datadog); infrastruktura jako kod (CDK/Terraform)"
+      ],
+      more: [
+        "To pytanie sprawdza, czy potrafisz złożyć pojedyncze usługi w spójną, produkcyjną ścieżkę od `git push` do działającego, obserwowalnego i skalowalnego API. Dobra odpowiedź przechodzi przez build, runtime, dane, konfigurację, skalowanie/wdrożenia i operacje.",
+        "**Build i rejestr**: pipeline CI (GitHub Actions, GitLab CI, CodePipeline) odpala testy, buduje obraz Docker (multi-stage, odchudzony obraz bazowy Node, użytkownik bez roota), taguje go SHA commita i wysyła do **ECR** (Elastic Container Registry). CI uwierzytelnia się w AWS przez OIDC, przyjmując rolę – bez przechowywanych kluczy. ECR potrafi skanować obrazy pod kątem podatności.",
+        "**Runtime**: **usługa ECS na Fargate** uruchamia N kopii obrazu (**tasków**) zdefiniowanych w **task definition** (tag obrazu, CPU/pamięć, port, zmienne, role, konfiguracja logów). Taski działają w **prywatnych podsieciach** w **co najmniej dwóch AZ**. **ALB** w podsieciach publicznych terminuje TLS (certyfikat z ACM), kieruje ruch do tasków i wykonuje **health checki** na endpoincie typu `/health`; niezdrowe taski są wygaszane i wymieniane. Aplikacja musi łagodnie obsłużyć `SIGTERM`, żeby dokończyć trwające żądania.",
+        "**Dane**: **RDS Postgres Multi-AZ** (synchroniczna replika standby z automatycznym failoverem) albo Aurora; **ElastiCache Redis** na cache, sesje, rate limiting; **S3** na pliki użytkowników przez presigned URL. Security groups wpuszczają ruch do bazy tylko z SG aplikacji.",
+        "**Konfiguracja i sekrety**: zgodnie z twelve-factor – niepoufna konfiguracja przez zmienne środowiskowe w task definition; sekrety (hasło do bazy, klucze API) wskazywane z **Secrets Managera** lub **SSM Parameter Store** i wstrzykiwane przy starcie. Zwróć uwagę na dwie role: **task execution role** pozwala ECS pobrać obraz i odczytać te sekrety, a **task role** to rola, której Twój kod w Node używa do wołania AWS (S3, SQS) przez SDK.",
+        "**Skalowanie i wdrożenia**: **Service Auto Scaling** w ECS z target trackingiem na CPU albo na **liczbie żądań na target** z ALB. Wdrożenia są domyślnie **rolling** (uruchom nowe taski, poczekaj na zdrowie, zatrzymaj stare; deployment circuit breaker automatycznie cofa nieudane wdrożenie). **Blue/green** (przełączenie ruchu na w pełni wdrożoną nową wersję, natychmiastowy rollback) ECS obsługuje dziś natywnie, a historycznie przez **CodeDeploy**. Migracje bazy uruchamiaj jako osobny, jednorazowy task przed przełączeniem ruchu i utrzymuj je zgodne wstecz.",
+        "**Operacje**: logi kontenerów trafiają do **CloudWatch Logs** (sterownik awslogs) albo do Datadoga przez agenta/sidecar FireLens; alarmy na odsetek 5xx, opóźnienie p99, CPU/pamięć, połączenia do bazy. Całość jest zdefiniowana jako **infrastruktura jako kod** w CDK lub Terraformie, dzięki czemu każde środowisko jest odtwarzalne."
       ]
     }
   },
@@ -2987,6 +4871,15 @@ const FLASHCARDS = [
         "CDK: CloudFormation generated from TypeScript – natural fit for a TS team",
         "Terraform: multi-cloud, state file, `plan` → `apply`",
         "Avoid manual console changes (drift)"
+      ],
+      more: [
+        "**Infrastructure as Code (IaC)** means describing your cloud resources – VPCs, databases, queues, IAM roles, ECS services – in text files kept in Git, and letting a tool create and update the real infrastructure to match. Most IaC tools are **declarative**: you state the desired end state (\"a Postgres instance of this size, in these subnets\"), and the tool computes what to create, change or delete.",
+        "Why it matters:\n- **Reviewable** – infrastructure changes go through pull requests like application code, with a diff of what will change.\n- **Repeatable** – dev, staging and prod are built from the same code with different parameters, so they don't mysteriously differ.\n- **Recoverable** – you can rebuild an environment or a whole region from scratch.\n- **Auditable** – Git history shows who changed what and why.",
+        "**CloudFormation** is AWS's native engine. You write templates in YAML/JSON; AWS deploys them as **stacks**, tracks state for you server-side, and **rolls back** automatically if an update fails. Change sets preview modifications. Downsides: verbose templates and AWS-only.",
+        "**AWS CDK (Cloud Development Kit)** lets you define infrastructure in TypeScript (or Python, Java…) using high-level **constructs**; `cdk synth` generates CloudFormation, and `cdk deploy` runs it. A few lines can produce a whole best-practice setup, and you get types, loops, IDE autocompletion and unit tests – a natural fit for a TypeScript team.",
+        "```ts\nconst vpc = new ec2.Vpc(this, 'Vpc', { maxAzs: 2 });\nconst cluster = new ecs.Cluster(this, 'Cluster', { vpc });\nnew ecsPatterns.ApplicationLoadBalancedFargateService(this, 'Api', {\n  cluster, desiredCount: 2,\n  taskImageOptions: { image: ecs.ContainerImage.fromAsset('.'), containerPort: 3000 },\n});\n```",
+        "**Terraform** (and its open-source fork **OpenTofu**) uses HCL and providers for AWS, GCP, Azure, Cloudflare, Datadog and more – useful when infrastructure spans vendors. It keeps a **state file** mapping code to real resource IDs; in teams it lives remotely (e.g. S3 with locking) so two people cannot apply at once. Workflow: `terraform plan` shows the exact diff, `terraform apply` executes it. Pulumi is a similar multi-cloud tool using general-purpose languages.",
+        "The main enemy is **drift**: someone \"quickly fixes\" a security group in the console, the real infrastructure no longer matches the code, and the next deploy either silently reverts the fix or fails. Treat the console as read-only for managed resources, apply changes only through the pipeline, and use drift detection (CloudFormation drift detection, scheduled `terraform plan`) to catch deviations."
       ]
     },
     pl: {
@@ -2997,6 +4890,15 @@ const FLASHCARDS = [
         "CDK: CloudFormation generowany z TypeScriptu – naturalny wybór dla zespołu TS",
         "Terraform: multi-cloud, plik stanu, `plan` → `apply`",
         "Unikać ręcznych zmian w konsoli (drift)"
+      ],
+      more: [
+        "**Infrastructure as Code (IaC)** oznacza opisywanie zasobów chmurowych – VPC, baz, kolejek, ról IAM, usług ECS – w plikach tekstowych trzymanych w Gicie i pozwolenie narzędziu, by tworzyło i aktualizowało prawdziwą infrastrukturę zgodnie z nimi. Większość narzędzi IaC jest **deklaratywna**: opisujesz docelowy stan („instancja Postgresa tej wielkości, w tych podsieciach”), a narzędzie wylicza, co utworzyć, zmienić lub usunąć.",
+        "Dlaczego to ważne:\n- **Review** – zmiany infrastruktury przechodzą przez pull requesty jak kod aplikacji, z diffem tego, co się zmieni.\n- **Powtarzalność** – dev, staging i prod powstają z tego samego kodu z różnymi parametrami, więc nie różnią się w tajemniczy sposób.\n- **Odtwarzalność** – możesz postawić środowisko albo cały region od zera.\n- **Audyt** – historia w Gicie pokazuje, kto, co i dlaczego zmienił.",
+        "**CloudFormation** to natywny silnik AWS. Piszesz szablony w YAML/JSON, a AWS wdraża je jako **stosy (stacks)**, sam przechowuje stan po swojej stronie i automatycznie **wycofuje (rollback)** nieudaną aktualizację. Change sety pokazują podgląd zmian. Wady: rozwlekłe szablony i tylko AWS.",
+        "**AWS CDK (Cloud Development Kit)** pozwala definiować infrastrukturę w TypeScripcie (albo Pythonie, Javie…) za pomocą wysokopoziomowych **konstruktów (constructs)**; `cdk synth` generuje CloudFormation, a `cdk deploy` go uruchamia. Kilka linijek potrafi wygenerować cały zestaw zgodny z dobrymi praktykami, a do tego masz typy, pętle, podpowiedzi w IDE i testy jednostkowe – naturalny wybór dla zespołu TS.",
+        "```ts\nconst vpc = new ec2.Vpc(this, 'Vpc', { maxAzs: 2 });\nconst cluster = new ecs.Cluster(this, 'Cluster', { vpc });\nnew ecsPatterns.ApplicationLoadBalancedFargateService(this, 'Api', {\n  cluster, desiredCount: 2,\n  taskImageOptions: { image: ecs.ContainerImage.fromAsset('.'), containerPort: 3000 },\n});\n```",
+        "**Terraform** (i jego otwartoźródłowy fork **OpenTofu**) używa języka HCL i providerów dla AWS, GCP, Azure, Cloudflare, Datadoga i innych – przydatne, gdy infrastruktura obejmuje wielu dostawców. Trzyma **plik stanu (state)**, który mapuje kod na prawdziwe ID zasobów; w zespole leży on zdalnie (np. w S3 z blokadą), żeby dwie osoby nie robiły apply jednocześnie. Przepływ: `terraform plan` pokazuje dokładny diff, `terraform apply` go wykonuje. Pulumi to podobne narzędzie multi-cloud oparte na językach ogólnego przeznaczenia.",
+        "Głównym wrogiem jest **drift** (rozjazd): ktoś „na szybko” poprawia security group w konsoli, rzeczywista infrastruktura przestaje odpowiadać kodowi, a kolejny deploy albo po cichu cofa poprawkę, albo się wywala. Traktuj konsolę jako tylko do odczytu dla zarządzanych zasobów, wprowadzaj zmiany wyłącznie przez pipeline i używaj wykrywania driftu (drift detection w CloudFormation, cykliczny `terraform plan`), żeby łapać odchylenia."
       ]
     }
   },
@@ -3010,6 +4912,13 @@ const FLASHCARDS = [
         "Fast, isolated, reproducible environments; easy local deps via Compose",
         "Container vs VM: shares host kernel → lighter, faster start; weaker isolation",
         "Does not solve: orchestration, scaling, secrets, observability, architecture"
+      ],
+      more: [
+        "**Docker** packages an application together with everything it needs to run - the language runtime (e.g. Node.js), system libraries, OS-level packages and your `node_modules` - into an **image**: an immutable, versioned artefact. A **container** is a running instance of that image. The classic problem it solves is \"works on my machine\": instead of every developer, CI runner and server installing its own slightly different Node version and native libraries, everyone runs the exact same image, built once in CI and promoted unchanged from dev to staging to production.",
+        "How it works: a container is not a virtual machine. It is an ordinary Linux process that the kernel isolates using **namespaces** (its own view of processes, network, filesystem, hostname) and limits using **cgroups** (CPU, memory). Because it **shares the host kernel**, a container starts in milliseconds and adds almost no overhead, while a **VM** boots a whole guest OS on a hypervisor. The trade-off is isolation: a kernel exploit can escape a container, so for untrusted multi-tenant code you still want VMs or sandboxed runtimes (gVisor, Firecracker microVMs). On macOS and Windows, Docker Desktop actually runs a small Linux VM under the hood.",
+        "What a team gains day to day:",
+        "- Reproducible builds: the image tag or digest identifies exactly what is running.\n- Fast onboarding: `docker compose up` gives a new dev Postgres, Redis and a fake AWS without installing anything.\n- Clean isolation between projects that need different versions of the same tool.\n- The same artefact for tests in CI and for deployment, so CI actually tests what ships.",
+        "What Docker does **not** solve - the part interviewers probe for: it runs containers on one host but does not decide where to run them across many machines, restart them on another node, roll out new versions or scale on load - that is **orchestration** (Kubernetes, ECS). It does not manage **secrets** safely (baking them into images is a classic leak), give you **observability** (logs, metrics, traces must still be designed), or fix a bad **architecture** - a tangled monolith in a container is still a tangled monolith. Docker is packaging and runtime isolation, not a platform."
       ]
     },
     pl: {
@@ -3019,6 +4928,13 @@ const FLASHCARDS = [
         "Szybkie, izolowane, powtarzalne środowiska; łatwe lokalne zależności przez Compose",
         "Kontener vs VM: współdzieli jądro hosta → lżejszy, szybszy start; słabsza izolacja",
         "Nie rozwiązuje: orkiestracji, skalowania, sekretów, obserwowalności, architektury"
+      ],
+      more: [
+        "**Docker** pakuje aplikację razem ze wszystkim, czego potrzebuje do działania - runtime'em języka (np. Node.js), bibliotekami systemowymi, pakietami OS i Twoim `node_modules` - w **obraz** (image): niezmienny, wersjonowany artefakt. **Kontener** to uruchomiona instancja tego obrazu. Klasyczny problem, który rozwiązuje, to \"u mnie działa\": zamiast tego, żeby każdy developer, runner CI i serwer miał trochę inną wersję Node i bibliotek natywnych, wszyscy uruchamiają dokładnie ten sam obraz - zbudowany raz w CI i promowany bez zmian z dev przez staging na produkcję.",
+        "Jak to działa: kontener to nie maszyna wirtualna. To zwykły proces Linuksa, który jądro izoluje za pomocą **namespaces** (własny widok procesów, sieci, systemu plików, hostname) i ogranicza przez **cgroups** (CPU, pamięć). Ponieważ **współdzieli jądro hosta**, kontener startuje w milisekundy i prawie nie dodaje narzutu, podczas gdy **VM** uruchamia cały system gościa na hypervisorze. Ceną jest izolacja: exploit jądra może \"uciec\" z kontenera, więc dla niezaufanego kodu wielu klientów nadal stosuje się VM-y albo sandboksowane runtime'y (gVisor, mikro-VM-y Firecracker). Na macOS i Windows Docker Desktop i tak uruchamia pod spodem małą maszynę wirtualną z Linuksem.",
+        "Co zespół zyskuje na co dzień:",
+        "- Powtarzalne buildy: tag lub digest obrazu dokładnie identyfikuje, co działa.\n- Szybki onboarding: `docker compose up` daje nowej osobie Postgresa, Redisa i lokalny AWS bez instalowania czegokolwiek.\n- Czysta izolacja projektów, które potrzebują różnych wersji tego samego narzędzia.\n- Ten sam artefakt w testach CI i na produkcji - CI testuje to, co faktycznie wychodzi.",
+        "Czego Docker **nie** rozwiązuje - i o to zwykle dopytuje rekruter: uruchamia kontenery na jednym hoście, ale nie decyduje, gdzie je uruchomić w klastrze wielu maszyn, nie przenosi ich na inny węzeł po awarii, nie robi rolloutów ani skalowania - to **orkiestracja** (Kubernetes, ECS). Nie zarządza bezpiecznie **sekretami** (wpisanie ich do obrazu to klasyczny wyciek), nie daje **obserwowalności** (logi, metryki, trace'y trzeba zaprojektować) i nie naprawi złej **architektury** - splątany monolit w kontenerze nadal jest splątanym monolitem. Docker to pakowanie i izolacja uruchomieniowa, a nie cała platforma."
       ]
     }
   },
@@ -3032,6 +4948,14 @@ const FLASHCARDS = [
         "Change in one layer invalidates all following layers",
         "So copy `package.json` + lockfile and `npm ci` before copying source code",
         "Containers are ephemeral – persistent data in volumes / external storage"
+      ],
+      more: [
+        "An **image** is a read-only template built as a stack of **layers**. Each layer is a filesystem diff: \"these files were added, changed or deleted\" compared to the layer below. A **container** is what you get when you run an image: the runtime stacks the image layers with a union filesystem (overlayfs) and adds one thin **writable layer** on top. When the process modifies a file from the image, the file is copied up into the writable layer first (**copy-on-write**), so many containers can share the same image layers on disk and in memory.",
+        "Where layers come from: every Dockerfile instruction produces a build step; `RUN`, `COPY` and `ADD` create filesystem layers, while `ENV`, `CMD`, `EXPOSE` only change image metadata. The builder (BuildKit) caches each step. A step is reused from cache if its instruction text and its parent are unchanged and, for `COPY`/`ADD`, the checksums of the copied files are identical. As soon as one step misses the cache, **every step after it is rebuilt**, because each layer is defined relative to the one beneath it.",
+        "That is why instruction order matters so much. Put the things that change rarely first and the things that change on every commit last:",
+        "```dockerfile\nFROM node:22-alpine\nWORKDIR /app\n# changes rarely -> the expensive install stays cached\nCOPY package.json package-lock.json ./\nRUN npm ci\n# changes on every commit -> only this and later steps rebuild\nCOPY . .\nRUN npm run build\n```",
+        "If you wrote `COPY . .` before `npm ci`, editing a single line of source would invalidate the cache and reinstall all dependencies on every build - minutes instead of seconds. A `.dockerignore` helps too: without it, a changed `.git` folder or local `node_modules` changes the build context checksum and busts the cache.",
+        "Finally, containers are **ephemeral**: the writable layer lives and dies with the container, and every new deploy starts from a fresh one. Anything that must survive - database files, uploads - belongs in a **volume** (storage managed outside the container lifecycle) or in external storage such as S3 or a managed database. Writing state to the container filesystem is a classic bug that only shows up on the first redeploy or when a second replica is added."
       ]
     },
     pl: {
@@ -3042,6 +4966,14 @@ const FLASHCARDS = [
         "Zmiana w jednej warstwie unieważnia wszystkie kolejne",
         "Dlatego najpierw `package.json` + lockfile i `npm ci`, potem kod źródłowy",
         "Kontenery są ulotne – trwałe dane w wolumenach / zewnętrznym magazynie"
+      ],
+      more: [
+        "**Obraz** (image) to szablon tylko do odczytu zbudowany jako stos **warstw**. Każda warstwa to różnica w systemie plików: \"te pliki dodano, zmieniono lub usunięto\" względem warstwy niżej. **Kontener** powstaje, gdy uruchamiasz obraz: runtime nakłada warstwy obrazu za pomocą union filesystem (overlayfs) i dokłada na wierzch jedną cienką **warstwę zapisywalną**. Gdy proces modyfikuje plik z obrazu, plik jest najpierw kopiowany do warstwy zapisywalnej (**copy-on-write**), dzięki czemu wiele kontenerów współdzieli te same warstwy obrazu na dysku i w pamięci.",
+        "Skąd biorą się warstwy: każda instrukcja Dockerfile to krok builda; `RUN`, `COPY` i `ADD` tworzą warstwy systemu plików, a `ENV`, `CMD`, `EXPOSE` zmieniają tylko metadane obrazu. Builder (BuildKit) cache'uje każdy krok. Krok jest brany z cache, jeśli treść instrukcji i warstwa rodzica się nie zmieniły, a w przypadku `COPY`/`ADD` - jeśli sumy kontrolne kopiowanych plików są identyczne. Gdy tylko jeden krok nie trafi w cache, **wszystkie kolejne są budowane od nowa**, bo każda warstwa jest zdefiniowana względem tej pod nią.",
+        "Dlatego kolejność instrukcji ma takie znaczenie. Na początek to, co zmienia się rzadko, na koniec to, co zmienia się przy każdym commicie:",
+        "```dockerfile\nFROM node:22-alpine\nWORKDIR /app\n# zmienia się rzadko -> kosztowna instalacja zostaje w cache\nCOPY package.json package-lock.json ./\nRUN npm ci\n# zmienia się przy każdym commicie -> przebudowa tylko od tego miejsca\nCOPY . .\nRUN npm run build\n```",
+        "Gdyby `COPY . .` stało przed `npm ci`, zmiana jednej linijki kodu unieważniałaby cache i przy każdym buildzie instalowała wszystkie zależności od zera - minuty zamiast sekund. Pomaga też `.dockerignore`: bez niego zmieniony katalog `.git` albo lokalne `node_modules` zmieniają sumę kontrolną kontekstu builda i psują cache.",
+        "Na koniec: kontenery są **ulotne** (ephemeral). Warstwa zapisywalna żyje i umiera razem z kontenerem, a każde wdrożenie startuje od świeżej. Wszystko, co ma przetrwać - pliki bazy danych, uploady - trzymamy w **wolumenie** (magazyn zarządzany poza cyklem życia kontenera) albo w zewnętrznym storage'u, np. S3 lub zarządzanej bazie. Zapisywanie stanu w systemie plików kontenera to klasyczny błąd, który wychodzi dopiero przy pierwszym redeployu albo po dodaniu drugiej repliki."
       ]
     }
   },
@@ -3056,6 +4988,13 @@ const FLASHCARDS = [
         "Run as non-root: `USER node`",
         "`NODE_ENV=production`; exec form `CMD [\"node\", \"dist/main.js\"]` so SIGTERM reaches Node",
         "No secrets in the image; `HEALTHCHECK` or orchestrator probes"
+      ],
+      more: [
+        "A \"production-ready\" Dockerfile optimises for four things: a **small image** (faster pulls, smaller attack surface), **reproducibility** (same inputs, same output), **security** (least privilege, no secrets) and **correct runtime behaviour** (clean shutdown, health reporting).",
+        "**Multi-stage builds** are the core technique. The first stage has everything needed to build - dev dependencies, the TypeScript compiler `tsc`, bundlers. The final stage starts from a clean base and copies in only the compiled `dist` folder and production dependencies. Build tools never reach production, so the image is often several times smaller.",
+        "```dockerfile\nFROM node:22-alpine AS build\nWORKDIR /app\nCOPY package*.json ./\nRUN npm ci\nCOPY . .\nRUN npm run build && npm prune --omit=dev\nFROM node:22-alpine\nWORKDIR /app\nCOPY --from=build /app/node_modules ./node_modules\nCOPY --from=build /app/dist ./dist\nUSER node\nCMD [\"node\", \"dist/main.js\"]\n```",
+        "The details that make it production-grade (add `ENV NODE_ENV=production` in the runtime stage as well - many libraries such as Express switch off debug behaviour with it):",
+        "- **Pinned, small base image**: `node:22-alpine` pins the Node major version; pin a minor version or an image digest (`@sha256:...`) for full reproducibility. Alpine uses musl libc, which occasionally breaks native modules - `-slim` (Debian) is the safer default; **distroless** images have no shell or package manager at all.\n- `npm ci` installs exactly what the lockfile says and fails if `package.json` and the lockfile disagree; `--omit=dev` skips dev dependencies. `.dockerignore` keeps `node_modules`, `.git` and `.env` out of the build context - smaller, faster, and no leaked local secrets.\n- **Non-root**: the official Node images ship a `node` user. If an attacker gets code execution, they are not root inside the container.\n- **Exec form** `CMD [\"node\", ...]` runs Node directly as PID 1. Shell form (`CMD node dist/main.js`) wraps it in `/bin/sh -c`, which does not forward SIGTERM, so the orchestrator waits out its grace period and then SIGKILLs the app mid-request. Also avoid `CMD npm start`. Note that as PID 1, Node ignores SIGTERM unless you register a handler - so implement graceful shutdown or run with an init such as `tini` (`docker run --init`).\n- **No secrets in the image**: anything in `ENV`, `ARG` or a copied file is readable by whoever can pull the image, and stays in layer history even if deleted later. Inject secrets at runtime; for build-time tokens (private npm registry) use BuildKit's `RUN --mount=type=secret`.\n- **Health**: `HEALTHCHECK` is used by plain Docker and Compose; Kubernetes ignores it and uses its own liveness/readiness probes."
       ]
     },
     pl: {
@@ -3067,6 +5006,13 @@ const FLASHCARDS = [
         "Uruchamianie jako nie-root: `USER node`",
         "`NODE_ENV=production`; forma exec `CMD [\"node\", \"dist/main.js\"]`, żeby SIGTERM trafiał do Node",
         "Brak sekretów w obrazie; `HEALTHCHECK` lub sondy orkiestratora"
+      ],
+      more: [
+        "\"Produkcyjny\" Dockerfile optymalizuje cztery rzeczy: **mały obraz** (szybszy pull, mniejsza powierzchnia ataku), **powtarzalność** (te same wejścia, ten sam wynik), **bezpieczeństwo** (minimalne uprawnienia, zero sekretów) i **poprawne zachowanie w runtime** (czyste zamykanie, raportowanie zdrowia).",
+        "Podstawą są **buildy wieloetapowe** (multi-stage). Pierwszy etap ma wszystko, co potrzebne do zbudowania - zależności dev, kompilator TypeScriptu `tsc`, bundlery. Etap końcowy startuje z czystej bazy i kopiuje tylko skompilowany katalog `dist` oraz zależności produkcyjne. Narzędzia buildowe nigdy nie trafiają na produkcję, więc obraz bywa kilka razy mniejszy.",
+        "```dockerfile\nFROM node:22-alpine AS build\nWORKDIR /app\nCOPY package*.json ./\nRUN npm ci\nCOPY . .\nRUN npm run build && npm prune --omit=dev\nFROM node:22-alpine\nWORKDIR /app\nCOPY --from=build /app/node_modules ./node_modules\nCOPY --from=build /app/dist ./dist\nUSER node\nCMD [\"node\", \"dist/main.js\"]\n```",
+        "Szczegóły, które robią różnicę (w etapie runtime dodaj też `ENV NODE_ENV=production` - wiele bibliotek, np. Express, wyłącza wtedy tryb debug):",
+        "- **Mały, przypięty obraz bazowy**: `node:22-alpine` przypina major Node; dla pełnej powtarzalności przypnij wersję minor albo digest (`@sha256:...`). Alpine używa musl libc, co czasem psuje moduły natywne - `-slim` (Debian) to bezpieczniejszy wybór; obrazy **distroless** nie mają w ogóle shella ani menedżera pakietów.\n- `npm ci` instaluje dokładnie to, co jest w lockfile'u, i kończy się błędem, gdy `package.json` i lockfile się rozjeżdżają; `--omit=dev` pomija zależności dev. `.dockerignore` trzyma `node_modules`, `.git` i `.env` poza kontekstem builda - mniej danych, szybciej i bez wycieku lokalnych sekretów.\n- **Nie-root**: oficjalne obrazy Node mają użytkownika `node`. Jeśli atakujący uzyska wykonanie kodu, nie jest rootem w kontenerze.\n- **Forma exec** `CMD [\"node\", ...]` uruchamia Node bezpośrednio jako PID 1. Forma shell (`CMD node dist/main.js`) owija go w `/bin/sh -c`, który nie przekazuje SIGTERM - orkiestrator czeka do końca grace period i zabija aplikację SIGKILL-em w trakcie obsługi requestów. Unikaj też `CMD npm start`. Uwaga: Node jako PID 1 ignoruje SIGTERM, jeśli nie zarejestrujesz handlera - zaimplementuj graceful shutdown albo użyj inita, np. `tini` (`docker run --init`).\n- **Brak sekretów w obrazie**: wszystko w `ENV`, `ARG` czy skopiowanym pliku przeczyta każdy, kto może pobrać obraz, i zostaje w historii warstw nawet po usunięciu. Sekrety wstrzykujemy w runtime; tokeny potrzebne przy buildzie (prywatny rejestr npm) przez `RUN --mount=type=secret` z BuildKita.\n- **Zdrowie**: `HEALTHCHECK` wykorzystuje zwykły Docker i Compose; Kubernetes go ignoruje i używa własnych sond liveness/readiness."
       ]
     }
   },
@@ -3080,6 +5026,15 @@ const FLASHCARDS = [
         "Networks, volumes, env files, `depends_on` with health checks",
         "Also handy for integration tests in CI",
         "Not a production orchestrator – that is ECS/Kubernetes"
+      ],
+      more: [
+        "**Docker Compose** lets you describe a whole multi-container environment declaratively in one file, `compose.yaml` (the older name `docker-compose.yml` still works), and manage it with one command. Instead of a README with ten `docker run` commands and flags, you declare **services** (containers), the **networks** they share, **volumes** for persistent data and their configuration, then run `docker compose up`. It is built into the Docker CLI as `docker compose` (the old standalone `docker-compose` binary is retired).",
+        "The typical backend use case is a local stack: your API plus Postgres, Redis and **LocalStack** - an emulator of AWS services such as S3, SQS and DynamoDB - so developers never touch a shared cloud account to run the app.",
+        "```yaml\nservices:\n  api:\n    build: .\n    ports: [\"3000:3000\"]\n    depends_on:\n      db: { condition: service_healthy }\n  db:\n    image: postgres:17\n    environment: { POSTGRES_PASSWORD: dev }\n    healthcheck: { test: [\"CMD\", \"pg_isready\", \"-U\", \"postgres\"], interval: 2s }\n    volumes: [pgdata:/var/lib/postgresql/data]\nvolumes: { pgdata: {} }\n```",
+        "Key concepts in that file:",
+        "- **Networks**: Compose creates a default network where services find each other by service name - the API connects to `db:5432`, not `localhost`.\n- **Volumes**: a named volume (`pgdata`) keeps database data across `down`/`up`; `docker compose down -v` wipes it for a clean slate.\n- **Env files**: `env_file: .env` or variable interpolation keep configuration out of the YAML.\n- `depends_on` alone only controls **start order** - it does not wait until Postgres accepts connections. With `condition: service_healthy` Compose waits for the dependency's health check to pass, which removes the classic \"API crashes on boot because the DB is not ready\" race.",
+        "In **CI**, the same file provides real dependencies for integration tests: `docker compose up -d --wait` starts everything and blocks until healthy, then the test suite runs against real Postgres instead of mocks.",
+        "Why it is **not a production orchestrator**: Compose manages containers on a single host. It cannot spread replicas across machines, reschedule them when a node dies, do zero-downtime rolling deploys, autoscale, or integrate with cloud load balancers and secret stores. That is the job of ECS or Kubernetes. Compose is for developer environments and CI (and occasionally tiny single-server deployments)."
       ]
     },
     pl: {
@@ -3090,6 +5045,15 @@ const FLASHCARDS = [
         "Sieci, wolumeny, pliki env, `depends_on` z health checkami",
         "Przydatny też do testów integracyjnych w CI",
         "Nie jest produkcyjnym orkiestratorem – od tego ECS/Kubernetes"
+      ],
+      more: [
+        "**Docker Compose** pozwala opisać całe środowisko wielokontenerowe deklaratywnie w jednym pliku `compose.yaml` (stara nazwa `docker-compose.yml` nadal działa) i zarządzać nim jedną komendą. Zamiast README z dziesięcioma komendami `docker run` i flagami deklarujesz **serwisy** (kontenery), **sieci**, którymi się łączą, **wolumeny** na trwałe dane i konfigurację, a potem uruchamiasz `docker compose up`. Compose jest wbudowany w CLI Dockera jako `docker compose` (stary osobny binarny `docker-compose` jest wycofany).",
+        "Typowy przypadek w backendzie to lokalny stack: Twoje API plus Postgres, Redis i **LocalStack** - emulator usług AWS, takich jak S3, SQS czy DynamoDB - dzięki czemu developerzy nie potrzebują współdzielonego konta w chmurze, żeby uruchomić aplikację.",
+        "```yaml\nservices:\n  api:\n    build: .\n    ports: [\"3000:3000\"]\n    depends_on:\n      db: { condition: service_healthy }\n  db:\n    image: postgres:17\n    environment: { POSTGRES_PASSWORD: dev }\n    healthcheck: { test: [\"CMD\", \"pg_isready\", \"-U\", \"postgres\"], interval: 2s }\n    volumes: [pgdata:/var/lib/postgresql/data]\nvolumes: { pgdata: {} }\n```",
+        "Najważniejsze pojęcia w tym pliku:",
+        "- **Sieci**: Compose tworzy domyślną sieć, w której serwisy widzą się po nazwie - API łączy się z `db:5432`, a nie z `localhost`.\n- **Wolumeny**: nazwany wolumen (`pgdata`) zachowuje dane bazy między `down`/`up`; `docker compose down -v` czyści go do zera.\n- **Pliki env**: `env_file: .env` albo interpolacja zmiennych trzymają konfigurację poza YAML-em.\n- Samo `depends_on` steruje tylko **kolejnością startu** - nie czeka, aż Postgres zacznie przyjmować połączenia. Z `condition: service_healthy` Compose czeka, aż health check zależności przejdzie, co eliminuje klasyczny wyścig \"API pada przy starcie, bo baza jeszcze nie wstała\".",
+        "W **CI** ten sam plik dostarcza prawdziwe zależności do testów integracyjnych: `docker compose up -d --wait` uruchamia wszystko i czeka, aż serwisy będą zdrowe, a potem testy lecą na prawdziwym Postgresie zamiast na mockach.",
+        "Dlaczego to **nie jest produkcyjny orkiestrator**: Compose zarządza kontenerami na jednym hoście. Nie rozłoży replik na wiele maszyn, nie przeniesie ich po awarii węzła, nie zrobi rolling deployu bez przestoju, autoskalowania ani integracji z load balancerami i magazynami sekretów w chmurze. To zadanie ECS albo Kubernetesa. Compose służy do środowisk developerskich i CI (czasem do malutkich wdrożeń na jednym serwerze)."
       ]
     }
   },
@@ -3104,6 +5068,11 @@ const FLASHCARDS = [
         "Ingress: HTTP routing from outside (host/path → service), TLS",
         "ConfigMap / Secret: configuration injected as env vars or files",
         "Namespace: isolation; HPA: autoscaling; Job/CronJob: batch work"
+      ],
+      more: [
+        "**Kubernetes** (K8s) is a container orchestrator: you describe the **desired state** of your system in YAML manifests (\"run 3 copies of this image, reachable at this name\"), submit them to the API server, and controllers continuously compare desired and actual state and fix any difference - a **reconciliation loop**. If a node dies, its pods are recreated elsewhere without anyone intervening. The main objects you work with as an application developer:",
+        "- **Pod**: the smallest deployable unit - one or more containers scheduled together on one node, sharing a network namespace (same IP, talk via `localhost`) and optionally volumes. Usually one app container, sometimes plus sidecars (proxy, log shipper). Pods are disposable: they get a new IP whenever they are recreated.\n- **Deployment**: you rarely create pods directly. A Deployment declares the pod template and replica count; it manages a **ReplicaSet**, which keeps exactly N pods running. Changing the image creates a new ReplicaSet and performs a **rolling update** (new pods up, old pods down, governed by `maxSurge`/`maxUnavailable`); `kubectl rollout undo` rolls back to the previous ReplicaSet.\n- **Service**: since pod IPs change, a Service gives a stable virtual IP and DNS name (`orders.default.svc`) and load-balances to all healthy pods matching a **label selector**. Types: `ClusterIP` (internal only, the default), `NodePort` (a port opened on every node), `LoadBalancer` (provisions a cloud load balancer).\n- **Ingress**: HTTP(S) routing from outside the cluster - `api.example.com/orders` goes to the orders Service - plus TLS termination. It needs an ingress controller to actually do anything. Its newer, more expressive successor is the **Gateway API**, which is where new setups are heading (the community ingress-nginx controller has been retired).\n- **ConfigMap / Secret**: configuration decoupled from the image, injected as environment variables or mounted files. Secrets are only base64-encoded by default, not encrypted - enable encryption at rest and often sync them from Vault or AWS Secrets Manager (External Secrets Operator).\n- **Namespace**: a logical partition of the cluster (per team or environment) for names, RBAC permissions and resource quotas. **HPA** (HorizontalPodAutoscaler) changes a Deployment's replica count based on metrics. **Job** runs pods to completion (a migration); **CronJob** runs Jobs on a schedule.",
+        "Other objects worth recognising: **StatefulSet** (stable identity and storage per pod, for databases) and **DaemonSet** (one pod per node, for agents such as log collectors). A good interview answer shows the chain: a request hits Ingress, which routes to a Service, which load-balances to pods created by a Deployment's ReplicaSet, configured via ConfigMaps and Secrets."
       ]
     },
     pl: {
@@ -3115,6 +5084,11 @@ const FLASHCARDS = [
         "Ingress: routing HTTP z zewnątrz (host/ścieżka → service), TLS",
         "ConfigMap / Secret: konfiguracja wstrzykiwana jako zmienne lub pliki",
         "Namespace: izolacja; HPA: autoskalowanie; Job/CronJob: zadania wsadowe"
+      ],
+      more: [
+        "**Kubernetes** (K8s) to orkiestrator kontenerów: opisujesz **stan docelowy** systemu w manifestach YAML (\"uruchom 3 kopie tego obrazu dostępne pod tą nazwą\"), wysyłasz je do API servera, a kontrolery bez przerwy porównują stan docelowy z faktycznym i naprawiają różnice - to **pętla rekoncyliacji** (reconciliation loop). Gdy węzeł padnie, jego pody powstają gdzie indziej bez niczyjej interwencji. Główne obiekty, z którymi pracuje developer aplikacji:",
+        "- **Pod**: najmniejsza jednostka wdrożenia - jeden lub więcej kontenerów uruchamianych razem na jednym węźle, ze wspólną przestrzenią sieciową (to samo IP, komunikacja przez `localhost`) i opcjonalnie wolumenami. Zwykle jeden kontener aplikacji, czasem plus sidecary (proxy, wysyłka logów). Pody są jednorazowe: przy każdym odtworzeniu dostają nowe IP.\n- **Deployment**: rzadko tworzymy pody ręcznie. Deployment deklaruje szablon poda i liczbę replik; zarządza **ReplicaSetem**, który pilnuje, żeby działało dokładnie N podów. Zmiana obrazu tworzy nowy ReplicaSet i wykonuje **rolling update** (nowe pody w górę, stare w dół, wg `maxSurge`/`maxUnavailable`); `kubectl rollout undo` wraca do poprzedniego ReplicaSetu.\n- **Service**: skoro IP podów się zmieniają, Service daje stały wirtualny IP i nazwę DNS (`orders.default.svc`) oraz rozkłada ruch na wszystkie zdrowe pody pasujące do **selektora etykiet** (label selector). Typy: `ClusterIP` (tylko wewnątrz klastra, domyślny), `NodePort` (port otwarty na każdym węźle), `LoadBalancer` (tworzy load balancer w chmurze).\n- **Ingress**: routing HTTP(S) spoza klastra - `api.example.com/orders` trafia do Service'u orders - plus terminacja TLS. Do działania potrzebuje ingress controllera. Nowszym i bardziej ekspresyjnym następcą jest **Gateway API** i w tę stronę idą nowe wdrożenia (społecznościowy ingress-nginx został wycofany).\n- **ConfigMap / Secret**: konfiguracja oddzielona od obrazu, wstrzykiwana jako zmienne środowiskowe albo montowane pliki. Secrety domyślnie są tylko zakodowane w base64, a nie zaszyfrowane - trzeba włączyć szyfrowanie at rest i często synchronizować je z Vaulta lub AWS Secrets Manager (External Secrets Operator).\n- **Namespace**: logiczny podział klastra (per zespół lub środowisko) na potrzeby nazw, uprawnień RBAC i quot zasobów. **HPA** (HorizontalPodAutoscaler) zmienia liczbę replik Deploymentu na podstawie metryk. **Job** uruchamia pody do zakończenia (np. migracja); **CronJob** uruchamia Joby wg harmonogramu.",
+        "Warto kojarzyć też: **StatefulSet** (stała tożsamość i dysk per pod, dla baz danych) i **DaemonSet** (jeden pod na każdym węźle, dla agentów typu kolektor logów). Dobra odpowiedź na rozmowie pokazuje cały łańcuch: request trafia do Ingressu, ten kieruje go do Service'u, Service rozkłada ruch na pody stworzone przez ReplicaSet Deploymentu, skonfigurowane przez ConfigMapy i Secrety."
       ]
     }
   },
@@ -3128,6 +5102,14 @@ const FLASHCARDS = [
         "Startup: slow boot – delays the other probes until it passes",
         "Liveness must not check dependencies (DB down ≠ restart all pods → cascading failure)",
         "Readiness may check critical deps; fail it during graceful shutdown"
+      ],
+      more: [
+        "A **probe** is a periodic health check that the **kubelet** (the Kubernetes agent on each node) runs against a container - an HTTP GET, a TCP connect, a gRPC health call or a command inside the container. Each probe type answers a different question and triggers a different action, and mixing them up is a well-known way to take down production.",
+        "- **Liveness** - \"is this process broken beyond repair?\" (deadlocked, stuck event loop, corrupted state). After `failureThreshold` consecutive failures the kubelet **restarts the container**.\n- **Readiness** - \"should this pod receive traffic right now?\" On failure the pod is removed from the Service's endpoints so the load balancer stops sending it requests; it is **not restarted** and rejoins once the probe passes again.\n- **Startup** - \"has the app finished booting?\" While it has not yet succeeded, liveness and readiness are not run. This protects slow starters (loading large caches, running migrations) from being killed by liveness before they are up.",
+        "```yaml\nstartupProbe:\n  httpGet: { path: /healthz, port: 3000 }\n  periodSeconds: 5\n  failureThreshold: 30   # up to 150 s to boot\nlivenessProbe:\n  httpGet: { path: /healthz, port: 3000 }\n  periodSeconds: 10\nreadinessProbe:\n  httpGet: { path: /ready, port: 3000 }\n  periodSeconds: 5\n```",
+        "The nuance interviewers look for: **liveness must not check dependencies**. Imagine `/healthz` queries the database and the DB has a 30-second blip. Every pod fails liveness at the same moment, Kubernetes restarts all of them, they all reconnect at once (a thundering herd), boot slowly, and a brief DB hiccup becomes a full outage - a **cascading failure**. Restarting your pod cannot fix the database anyway. Liveness should only answer \"is my own process responsive\", e.g. an endpoint that returns 200 if the event loop can serve it.",
+        "**Readiness may check critical dependencies** that this pod truly cannot work without, but be careful: if every pod depends on the same DB, all of them go unready together and the Service has zero endpoints. Often it is better to stay ready and return fast 503s from the affected routes.",
+        "Readiness also matters in **graceful shutdown**. When a pod is terminated, Kubernetes sends SIGTERM and removes it from endpoints at roughly the same time, but endpoint updates propagate asynchronously, so for a few seconds traffic can still arrive. The usual pattern: on SIGTERM, start failing readiness, keep serving in-flight and late requests for a short delay (or use a `preStop` sleep), then close the server and DB connections and exit before `terminationGracePeriodSeconds` (30 s by default) expires."
       ]
     },
     pl: {
@@ -3138,6 +5120,14 @@ const FLASHCARDS = [
         "Startup: wolny start – wstrzymuje pozostałe sondy do sukcesu",
         "Liveness nie powinna sprawdzać zależności (DB padła ≠ restart wszystkich podów → kaskadowa awaria)",
         "Readiness może sprawdzać krytyczne zależności; przy graceful shutdown zwraca błąd"
+      ],
+      more: [
+        "**Sonda** (probe) to okresowy health check, który **kubelet** (agent Kubernetesa na każdym węźle) wykonuje na kontenerze - HTTP GET, połączenie TCP, wywołanie gRPC health albo komenda w kontenerze. Każdy typ sondy odpowiada na inne pytanie i wywołuje inną akcję, a pomylenie ich to znany sposób na położenie produkcji.",
+        "- **Liveness** - \"czy ten proces jest zepsuty bez szans na samonaprawę?\" (deadlock, zablokowany event loop, uszkodzony stan). Po `failureThreshold` kolejnych porażkach kubelet **restartuje kontener**.\n- **Readiness** - \"czy ten pod powinien teraz dostawać ruch?\" Przy błędzie pod jest usuwany z endpointów Service'u, więc load balancer przestaje wysyłać mu requesty; **nie jest restartowany** i wraca, gdy sonda znów przejdzie.\n- **Startup** - \"czy aplikacja skończyła się uruchamiać?\" Dopóki nie przejdzie, liveness i readiness nie są wykonywane. Chroni to wolno startujące aplikacje (ładowanie dużego cache, migracje) przed zabiciem przez liveness, zanim w ogóle wstaną.",
+        "```yaml\nstartupProbe:\n  httpGet: { path: /healthz, port: 3000 }\n  periodSeconds: 5\n  failureThreshold: 30   # do 150 s na start\nlivenessProbe:\n  httpGet: { path: /healthz, port: 3000 }\n  periodSeconds: 10\nreadinessProbe:\n  httpGet: { path: /ready, port: 3000 }\n  periodSeconds: 5\n```",
+        "Niuans, o który pyta rekruter: **liveness nie może sprawdzać zależności**. Wyobraź sobie, że `/healthz` odpytuje bazę, a baza ma 30-sekundową czkawkę. Wszystkie pody jednocześnie oblewają liveness, Kubernetes restartuje wszystkie, wszystkie naraz łączą się ponownie (thundering herd), wolno startują i krótka przerwa w bazie zamienia się w pełną awarię - **kaskadową awarię**. Restart poda i tak nie naprawi bazy. Liveness powinna odpowiadać tylko na pytanie \"czy mój własny proces odpowiada\", np. endpoint zwracający 200, jeśli event loop w ogóle go obsłuży.",
+        "**Readiness może sprawdzać krytyczne zależności**, bez których ten pod naprawdę nie działa, ale ostrożnie: jeśli wszystkie pody zależą od tej samej bazy, wszystkie jednocześnie przestaną być gotowe i Service zostanie z zerem endpointów. Często lepiej pozostać gotowym i szybko zwracać 503 z dotkniętych endpointów.",
+        "Readiness ma też znaczenie przy **graceful shutdown**. Przy zamykaniu poda Kubernetes wysyła SIGTERM i mniej więcej w tym samym czasie usuwa go z endpointów, ale aktualizacja endpointów rozchodzi się asynchronicznie, więc przez kilka sekund ruch może jeszcze przychodzić. Typowy wzorzec: po SIGTERM zacznij oblewać readiness, przez krótką chwilę obsługuj trwające i spóźnione requesty (albo użyj `preStop` ze sleepem), potem zamknij serwer i połączenia z bazą i zakończ proces przed upływem `terminationGracePeriodSeconds` (domyślnie 30 s)."
       ]
     }
   },
@@ -3151,6 +5141,15 @@ const FLASHCARDS = [
         "Node.js: set `--max-old-space-size` below the memory limit",
         "HPA: scales replicas on CPU/memory or custom metrics (RPS, queue depth via KEDA)",
         "Cluster Autoscaler / Karpenter adds nodes when pods cannot be scheduled"
+      ],
+      more: [
+        "Every container in Kubernetes can declare how much CPU and memory it needs. CPU is measured in cores or millicores (`500m` = half a core), memory in bytes (`512Mi`). There are two numbers, and they do very different jobs. **Requests** are what the container is guaranteed. The **scheduler** - the component that decides which node a pod runs on - only places a pod on a node whose unreserved capacity covers the pod's requests. Requests also set the CPU weight: when a node is busy, CPU time is shared in proportion to requests.",
+        "**Limits** are the ceiling, and the two resources behave differently when it is hit:",
+        "- **Memory** is incompressible: exceed the limit and the kernel kills the process - the pod shows `OOMKilled` (exit code 137) and restarts.\n- **CPU** is compressible: exceeding the limit just gets the container **throttled** - it is paused for the rest of each scheduling period. For a latency-sensitive Node service this shows up as mysterious p99 latency spikes, so many teams set CPU requests but omit CPU limits, while always setting a memory limit.",
+        "Requests and limits together also give the pod a **QoS class** (`Guaranteed` when requests equal limits, `Burstable`, `BestEffort` with neither), which decides eviction order when a node runs out of memory.",
+        "**The Node.js trap**: V8 manages its own heap size and garbage-collects based on that, not on the container limit. If the heap is allowed to grow past the limit, the pod is OOMKilled instead of V8 collecting garbage harder. Set `--max-old-space-size` (in MB) to roughly 70-80% of the memory limit, leaving headroom for buffers, native memory and thread stacks that live outside the heap. For example, with a `1Gi` limit use `NODE_OPTIONS=--max-old-space-size=768`.",
+        "**Autoscaling** happens at two levels:",
+        "- **HPA** (HorizontalPodAutoscaler) adjusts the number of pod replicas: roughly `desired = ceil(current * currentMetric / target)`. CPU utilisation is measured as a percentage of the **request**, so HPA on CPU does not work without requests. CPU is a poor signal for I/O-bound Node services, so teams scale on custom metrics - requests per second, or queue depth via **KEDA**, an event-driven autoscaler that reads SQS, Kafka or Redis and can even scale to zero.\n- When new replicas do not fit anywhere, pods stay `Pending`. The **Cluster Autoscaler** reacts by growing a node group; **Karpenter** provisions a right-sized node directly and consolidates underused nodes to save cost. Node scaling takes minutes, pod scaling seconds - keep some headroom for spikes."
       ]
     },
     pl: {
@@ -3161,6 +5160,15 @@ const FLASHCARDS = [
         "Node.js: `--max-old-space-size` poniżej limitu pamięci",
         "HPA: skaluje repliki wg CPU/pamięci lub metryk własnych (RPS, długość kolejki przez KEDA)",
         "Cluster Autoscaler / Karpenter dodaje węzły, gdy pody nie mieszczą się"
+      ],
+      more: [
+        "Każdy kontener w Kubernetesie może zadeklarować, ile CPU i pamięci potrzebuje. CPU mierzy się w rdzeniach lub milirdzeniach (`500m` = pół rdzenia), pamięć w bajtach (`512Mi`). Są dwie liczby i pełnią zupełnie różne role. **Requests** to ilość gwarantowana. **Scheduler** - komponent, który decyduje, na którym węźle uruchomić poda - umieszcza poda tylko na węźle, którego niezarezerwowana pojemność pokrywa jego requests. Requests wyznaczają też wagę CPU: gdy węzeł jest obciążony, czas procesora dzieli się proporcjonalnie do requests.",
+        "**Limits** to sufit, a oba zasoby zachowują się inaczej po jego przekroczeniu:",
+        "- **Pamięci** nie da się \"ścisnąć\": przekroczenie limitu kończy się zabiciem procesu przez jądro - pod pokazuje `OOMKilled` (kod wyjścia 137) i jest restartowany.\n- **CPU** da się ścisnąć: przekroczenie limitu oznacza **throttling** - kontener jest wstrzymywany do końca każdego okresu planowania. W usłudze Node wrażliwej na opóźnienia wygląda to jak tajemnicze skoki p99, dlatego wiele zespołów ustawia requests CPU, ale pomija limit CPU, za to zawsze ustawia limit pamięci.",
+        "Requests i limits razem nadają podowi **klasę QoS** (`Guaranteed`, gdy requests równają się limits, `Burstable`, `BestEffort` bez żadnych), która decyduje o kolejności eksmisji, gdy na węźle kończy się pamięć.",
+        "**Pułapka Node.js**: V8 zarządza własnym rozmiarem sterty i sprząta pamięć (GC) na tej podstawie, a nie na podstawie limitu kontenera. Jeśli sterta może urosnąć ponad limit, pod dostaje OOMKilled, zamiast żeby V8 mocniej sprzątał. Ustaw `--max-old-space-size` (w MB) na ok. 70-80% limitu pamięci, zostawiając zapas na bufory, pamięć natywną i stosy wątków poza stertą. Np. przy limicie `1Gi`: `NODE_OPTIONS=--max-old-space-size=768`.",
+        "**Autoskalowanie** działa na dwóch poziomach:",
+        "- **HPA** (HorizontalPodAutoscaler) zmienia liczbę replik podów: w przybliżeniu `desired = ceil(current * currentMetric / target)`. Wykorzystanie CPU liczone jest jako procent **requests**, więc HPA po CPU nie działa bez ustawionych requests. CPU to słaby sygnał dla usług Node ograniczonych przez I/O, dlatego skaluje się po metrykach własnych - RPS albo długości kolejki przez **KEDA**, autoskaler sterowany zdarzeniami, który czyta SQS, Kafkę czy Redisa i potrafi nawet zeskalować do zera.\n- Gdy nowe repliki nigdzie się nie mieszczą, pody zostają w stanie `Pending`. **Cluster Autoscaler** reaguje, powiększając grupę węzłów; **Karpenter** od razu tworzy węzeł dopasowanego rozmiaru i konsoliduje słabo wykorzystane węzły, żeby oszczędzać. Skalowanie węzłów trwa minuty, podów - sekundy, więc warto trzymać zapas na skoki ruchu."
       ]
     }
   },
@@ -3175,6 +5183,15 @@ const FLASHCARDS = [
         "`helm upgrade --install app ./chart -f values-prod.yaml`; `helm rollback app 3`",
         "`helm template` / `helm diff` to review rendered manifests before deploying",
         "Often driven by GitOps (Argo CD / Flux)"
+      ],
+      more: [
+        "Deploying one service to Kubernetes means several YAML manifests - Deployment, Service, Ingress, ConfigMap, HPA - and they differ only slightly between staging and production (replica count, image tag, hostnames, resources). Copy-pasting them per environment quickly drifts. **Helm** is the package manager for Kubernetes that solves this with templating and release management.",
+        "A **chart** is a directory: `Chart.yaml` (name, version, dependencies), `values.yaml` (default configuration) and `templates/` - manifests written as Go templates that read from `.Values`:",
+        "```yaml\n# templates/deployment.yaml (fragment)\nspec:\n  replicas: {{ .Values.replicaCount }}\n  template:\n    spec:\n      containers:\n        - name: app\n          image: \"{{ .Values.image.repository }}:{{ .Values.image.tag }}\"\n          resources:\n            {{- toYaml .Values.resources | nindent 12 }}\n```",
+        "Per-environment configuration is layered on top of the defaults: `helm upgrade --install app ./chart -f values-prod.yaml --set image.tag=1.4.2`. Precedence is: chart `values.yaml`, then each `-f` file in order (later wins), then `--set`. Typically the environment file holds stable settings and CI passes the freshly built image tag via `--set`.",
+        "A **release** is one installed instance of a chart in a cluster, with a name (`app`) and a **revision history**: every `helm upgrade` creates a new revision, stored as a Secret in the release's namespace (since Helm 3 there is no server-side component). `helm upgrade --install` is idempotent - it installs if the release does not exist, upgrades if it does - which is exactly what a CI pipeline wants. `helm history app` lists revisions and `helm rollback app 3` redeploys revision 3's manifests. Adding `--wait` makes the command fail if the new pods do not become ready.",
+        "Reviewing before deploying: `helm template` renders the chart to plain YAML locally, so you can lint it or inspect it in a PR; the **helm-diff** plugin (`helm diff upgrade ...`) shows exactly what would change in the live cluster. Templates are easy to break with whitespace, so rendering in CI catches errors early.",
+        "In mature setups nobody runs `helm upgrade` by hand. With **GitOps**, the desired state (chart version plus values per environment) lives in a Git repository, and a controller in the cluster - **Argo CD** or **Flux** - continuously syncs the cluster to match. Deploying becomes a merged pull request, and rollback becomes a revert. A subtle point: Argo CD renders the chart itself and applies plain manifests, so `helm list` will not show those releases, whereas Flux's helm-controller creates real Helm releases."
       ]
     },
     pl: {
@@ -3186,6 +5203,15 @@ const FLASHCARDS = [
         "`helm upgrade --install app ./chart -f values-prod.yaml`; `helm rollback app 3`",
         "`helm template` / `helm diff` do przejrzenia wyrenderowanych manifestów przed wdrożeniem",
         "Często sterowany przez GitOps (Argo CD / Flux)"
+      ],
+      more: [
+        "Wdrożenie jednej usługi na Kubernetesa to kilka manifestów YAML - Deployment, Service, Ingress, ConfigMap, HPA - które między stagingiem a produkcją różnią się tylko szczegółami (liczba replik, tag obrazu, hosty, zasoby). Kopiowanie ich per środowisko szybko prowadzi do rozjazdów. **Helm** to menedżer pakietów dla Kubernetesa, który rozwiązuje to szablonami i zarządzaniem wydaniami.",
+        "**Chart** to katalog: `Chart.yaml` (nazwa, wersja, zależności), `values.yaml` (domyślna konfiguracja) i `templates/` - manifesty pisane jako szablony Go, które czytają z `.Values`:",
+        "```yaml\n# templates/deployment.yaml (fragment)\nspec:\n  replicas: {{ .Values.replicaCount }}\n  template:\n    spec:\n      containers:\n        - name: app\n          image: \"{{ .Values.image.repository }}:{{ .Values.image.tag }}\"\n          resources:\n            {{- toYaml .Values.resources | nindent 12 }}\n```",
+        "Konfigurację per środowisko nakłada się na domyślną: `helm upgrade --install app ./chart -f values-prod.yaml --set image.tag=1.4.2`. Kolejność ważności: `values.yaml` z chartu, potem kolejne pliki `-f` (późniejszy wygrywa), na końcu `--set`. Zwykle plik środowiska trzyma stałe ustawienia, a CI przekazuje świeżo zbudowany tag obrazu przez `--set`.",
+        "**Release** to jedna zainstalowana instancja chartu w klastrze, z nazwą (`app`) i **historią rewizji**: każdy `helm upgrade` tworzy nową rewizję, zapisywaną jako Secret w namespace wydania (od Helma 3 nie ma komponentu po stronie serwera). `helm upgrade --install` jest idempotentny - instaluje, jeśli release nie istnieje, aktualizuje, jeśli istnieje - czyli dokładnie to, czego chce pipeline CI. `helm history app` pokazuje rewizje, a `helm rollback app 3` wdraża ponownie manifesty z rewizji 3. Flaga `--wait` sprawia, że komenda kończy się błędem, jeśli nowe pody nie staną się gotowe.",
+        "Przegląd przed wdrożeniem: `helm template` renderuje chart lokalnie do zwykłego YAML-a, więc można go zlintować albo obejrzeć w PR; plugin **helm-diff** (`helm diff upgrade ...`) pokazuje dokładnie, co zmieni się w działającym klastrze. Szablony łatwo zepsuć białymi znakami, więc renderowanie w CI szybko wyłapuje błędy.",
+        "W dojrzałych zespołach nikt nie odpala `helm upgrade` ręcznie. W podejściu **GitOps** stan docelowy (wersja chartu plus values per środowisko) żyje w repozytorium Git, a kontroler w klastrze - **Argo CD** albo **Flux** - stale synchronizuje z nim klaster. Wdrożenie to zmergowany pull request, a rollback to revert. Subtelność: Argo CD sam renderuje chart i aplikuje zwykłe manifesty, więc `helm list` nie pokaże tych wydań, natomiast helm-controller Fluxa tworzy prawdziwe release'y Helma."
       ]
     }
   },
@@ -3202,6 +5228,15 @@ const FLASHCARDS = [
         "Build Docker image tagged with commit SHA → push to registry",
         "Deploy to staging → smoke/e2e tests → prod (manual approval or automatic)",
         "Post-deploy health checks, automatic rollback on failure"
+      ],
+      more: [
+        "**CI (continuous integration)** means every push is automatically built and tested, so problems are caught minutes after they are introduced rather than at release time. **CD** means either **continuous delivery** (every green build is deployable, with a human pressing the button for production) or **continuous deployment** (it goes to production automatically). A **pipeline** is the ordered set of stages; it should **fail fast**, putting cheap and quick checks first so developers get feedback quickly.",
+        "**Install and static checks**: `npm ci` installs exactly what the lockfile specifies (unlike `npm install`, it never updates the lockfile and fails if it's out of sync), with the npm cache persisted between runs for speed. Then **lint** (ESLint) and **type-check** with `tsc --noEmit`, which runs the TypeScript compiler only for type errors without producing output. These take seconds and catch a large share of mistakes.",
+        "**Tests**: **unit tests** for logic in isolation (fast, many), then **integration tests** against real dependencies, e.g. Postgres and Redis started as containers (service containers in GitHub Actions or Testcontainers). Collect **coverage** as a signal, not a target to game.",
+        "**Security**: dependency scanning (`npm audit`, Snyk, Dependabot), **secret scanning** (gitleaks, GitHub push protection) to catch committed keys, and after building the image an **image scan** (Trivy, Grype) for vulnerable OS packages in the base image.",
+        "**Build once, deploy many**: build the Docker image once and tag it with the **commit SHA** (not just `latest`), then push it to a registry (ECR, GHCR). Every environment deploys that same immutable image, and any running container can be traced back to the exact commit.",
+        "```yaml\njobs:\n  ci:\n    steps:\n      - run: npm ci\n      - run: npm run lint && npx tsc --noEmit\n      - run: npm test -- --coverage\n      - run: docker build -t $REGISTRY/api:$GITHUB_SHA .\n      - run: trivy image --exit-code 1 --severity HIGH,CRITICAL $REGISTRY/api:$GITHUB_SHA\n      - run: docker push $REGISTRY/api:$GITHUB_SHA\n```",
+        "**Deploy**: to **staging** first, run **smoke tests** (a handful of quick checks that key endpoints respond) or a short **e2e** suite, then promote to **production**, either automatically or behind a manual approval gate. After deploy, **health checks** and key metrics (error rate, latency) are watched; if they degrade, the pipeline or platform performs an **automatic rollback** to the previous image. Kubernetes rolling updates with readiness probes, or tools like Argo Rollouts, provide this."
       ]
     },
     pl: {
@@ -3213,6 +5248,15 @@ const FLASHCARDS = [
         "Budowa obrazu Docker otagowanego SHA commita → push do rejestru",
         "Wdrożenie na staging → smoke/e2e → produkcja (ręczna akceptacja lub automatycznie)",
         "Health checki po wdrożeniu, automatyczny rollback przy błędzie"
+      ],
+      more: [
+        "**CI (continuous integration)** oznacza, że każdy push jest automatycznie budowany i testowany, więc problemy wychodzą kilka minut po ich wprowadzeniu, a nie w dniu wydania. **CD** to albo **continuous delivery** (każdy zielony build nadaje się do wdrożenia, a na produkcję przycisk naciska człowiek), albo **continuous deployment** (trafia na produkcję automatycznie). **Pipeline** to uporządkowany zestaw etapów; powinien **zawodzić szybko (fail fast)**, czyli tanie i szybkie sprawdzenia na początku, żeby developer szybko dostał informację zwrotną.",
+        "**Instalacja i analiza statyczna**: `npm ci` instaluje dokładnie to, co jest w lockfile (w przeciwieństwie do `npm install` nigdy go nie aktualizuje i kończy się błędem przy niezgodności), a cache npm jest zachowywany między uruchomieniami dla szybkości. Następnie **lint** (ESLint) i **sprawdzanie typów** przez `tsc --noEmit`, które uruchamia kompilator TypeScript tylko w poszukiwaniu błędów typów, bez generowania plików. To trwa sekundy i łapie sporą część pomyłek.",
+        "**Testy**: **jednostkowe** dla logiki w izolacji (szybkie, dużo), potem **integracyjne** z prawdziwymi zależnościami, np. Postgres i Redis uruchomione jako kontenery (service containers w GitHub Actions albo Testcontainers). **Pokrycie (coverage)** zbieraj jako sygnał, a nie cel do „nabijania”.",
+        "**Bezpieczeństwo**: skanowanie zależności (`npm audit`, Snyk, Dependabot), **skanowanie sekretów** (gitleaks, push protection w GitHubie), żeby wyłapać zacommitowane klucze, a po zbudowaniu obrazu **skan obrazu** (Trivy, Grype) pod kątem podatnych pakietów systemowych w obrazie bazowym.",
+        "**Buduj raz, wdrażaj wielokrotnie**: obraz Dockera buduje się raz i taguje **SHA commita** (nie tylko `latest`), a potem wypycha do rejestru (ECR, GHCR). Każde środowisko wdraża ten sam niezmienny obraz, a każdy działający kontener można powiązać z dokładnym commitem.",
+        "```yaml\njobs:\n  ci:\n    steps:\n      - run: npm ci\n      - run: npm run lint && npx tsc --noEmit\n      - run: npm test -- --coverage\n      - run: docker build -t $REGISTRY/api:$GITHUB_SHA .\n      - run: trivy image --exit-code 1 --severity HIGH,CRITICAL $REGISTRY/api:$GITHUB_SHA\n      - run: docker push $REGISTRY/api:$GITHUB_SHA\n```",
+        "**Wdrożenie**: najpierw na **staging**, tam **smoke testy** (kilka szybkich sprawdzeń, czy kluczowe endpointy odpowiadają) albo krótki zestaw **e2e**, potem promocja na **produkcję** – automatycznie lub po ręcznej akceptacji. Po wdrożeniu obserwuje się **health checki** i kluczowe metryki (odsetek błędów, opóźnienia); jeśli się pogarszają, pipeline lub platforma wykonuje **automatyczny rollback** do poprzedniego obrazu. Zapewniają to np. rolling update w Kubernetesie z readiness probe albo narzędzia typu Argo Rollouts."
       ]
     }
   },
@@ -3226,6 +5270,14 @@ const FLASHCARDS = [
         "Canary: small % of traffic to new version, watch metrics, increase gradually",
         "Feature flags: decouple deploy from release; kill switch; gradual rollout per user",
         "All require backward-compatible DB changes and APIs"
+      ],
+      more: [
+        "A deployment strategy decides **how traffic moves from the old version to the new one**. The goal is zero downtime and a small **blast radius** (how many users a bad release can hurt), balanced against cost and complexity.",
+        "**Rolling update**: instances are replaced a few at a time. With 10 pods, Kubernetes (its default strategy) starts a new pod, waits until its readiness probe passes, terminates an old one, and repeats; `maxSurge` and `maxUnavailable` control the pace. It needs no extra infrastructure, so it is cheap. The trade-off: for several minutes **both versions serve traffic simultaneously**, and rolling back means rolling forward again through all instances.",
+        "**Blue/green**: you run two complete environments. **Blue** serves production; you deploy the new version to **green**, test it privately, then switch all traffic at once by repointing the load balancer or DNS. Rollback is **instant**: switch back to blue, which is still running. The cost is **double the resources** during the switch, and every user hits the new version simultaneously, so a subtle bug affects everyone.",
+        "**Canary**: named after canaries in coal mines. Route a small slice of traffic (1–5%) to the new version and compare its **metrics** (error rate, p99 latency, business KPIs) with the stable version. If healthy, increase stepwise (5 → 25 → 50 → 100%); if not, route everything back. It limits the blast radius best, but needs traffic-splitting infrastructure (service mesh, ALB weighted target groups, Argo Rollouts, Flagger) and good observability to make the decision, ideally automatically.",
+        "**Feature flags** work at a different level: new code is deployed but hidden behind a runtime switch (LaunchDarkly, Unleash, a DB table). This **decouples deploy from release**: code ships whenever, and the business turns the feature on when ready, for internal users first, then 10% of customers, then everyone. A flag doubles as a **kill switch** to disable a misbehaving feature in seconds without a redeploy. Remove old flags, or they become technical debt.",
+        "The catch common to all strategies: at some point **old and new code run at the same time against the same database and clients**. So database changes must be **backward-compatible**, using the **expand/contract** pattern: first add the new column (nullable) and write to both, deploy code that reads the new one, backfill, and only in a later release drop the old column. APIs likewise add fields rather than renaming or removing them, and message formats must be readable by both versions."
       ]
     },
     pl: {
@@ -3236,6 +5288,14 @@ const FLASHCARDS = [
         "Canary: mały % ruchu do nowej wersji, obserwacja metryk, stopniowe zwiększanie",
         "Feature flagi: oddzielenie wdrożenia od wydania; kill switch; stopniowe włączanie per użytkownik",
         "Wszystkie wymagają zgodnych wstecz zmian w DB i API"
+      ],
+      more: [
+        "Strategia wdrożenia decyduje, **jak ruch przechodzi ze starej wersji na nową**. Cel to zero przestojów i mały **blast radius** (zasięg rażenia – ilu użytkowników może skrzywdzić złe wydanie), w równowadze z kosztem i złożonością.",
+        "**Rolling update**: instancje są wymieniane po kilka naraz. Przy 10 podach Kubernetes (to jego domyślna strategia) uruchamia nowy pod, czeka na pozytywną readiness probe, wyłącza stary i powtarza; tempo regulują `maxSurge` i `maxUnavailable`. Nie wymaga dodatkowej infrastruktury, więc jest tani. Koszt: przez kilka minut **obie wersje obsługują ruch jednocześnie**, a rollback oznacza ponowne przejście przez wszystkie instancje.",
+        "**Blue/green**: działają dwa kompletne środowiska. **Blue** obsługuje produkcję; nową wersję wdrażasz na **green**, testujesz ją po cichu, a potem przełączasz cały ruch naraz, zmieniając cel load balancera lub DNS. Rollback jest **natychmiastowy**: przełączasz z powrotem na blue, które wciąż działa. Kosztem są **podwójne zasoby** na czas przełączenia, a wszyscy użytkownicy trafiają na nową wersję jednocześnie, więc subtelny błąd dotyka każdego.",
+        "**Canary**: nazwa od kanarków w kopalniach. Mały wycinek ruchu (1–5%) kierujesz na nową wersję i porównujesz jej **metryki** (odsetek błędów, opóźnienie p99, KPI biznesowe) ze stabilną. Jeśli wszystko w porządku, zwiększasz stopniowo (5 → 25 → 50 → 100%); jeśli nie – cały ruch wraca na starą. Najlepiej ogranicza zasięg rażenia, ale wymaga infrastruktury do dzielenia ruchu (service mesh, ważone target groupy w ALB, Argo Rollouts, Flagger) i dobrej obserwowalności, żeby podjąć decyzję – najlepiej automatycznie.",
+        "**Feature flagi** działają na innym poziomie: nowy kod jest wdrożony, ale ukryty za przełącznikiem w czasie działania (LaunchDarkly, Unleash, tabela w bazie). To **oddziela wdrożenie od wydania**: kod trafia na produkcję kiedykolwiek, a biznes włącza funkcję, gdy jest gotowa – najpierw dla użytkowników wewnętrznych, potem dla 10% klientów, potem dla wszystkich. Flaga służy też jako **kill switch**, który w kilka sekund wyłącza wadliwą funkcję bez ponownego deployu. Stare flagi trzeba usuwać, inaczej stają się długiem technicznym.",
+        "Haczyk wspólny dla wszystkich strategii: w pewnym momencie **stary i nowy kod działają jednocześnie na tej samej bazie i z tymi samymi klientami**. Dlatego zmiany w bazie muszą być **zgodne wstecz** – wzorzec **expand/contract**: najpierw dodaj nową kolumnę (nullable) i zapisuj do obu, wdróż kod czytający nową, uzupełnij dane (backfill), a starą kolumnę usuń dopiero w kolejnym wydaniu. Podobnie w API dodaje się pola zamiast je zmieniać czy usuwać, a formaty wiadomości muszą być czytelne dla obu wersji."
       ]
     }
   },
@@ -3248,6 +5308,13 @@ const FLASHCARDS = [
         "Enables continuous delivery, fewer merge conflicts",
         "GitFlow: long-lived develop/release/hotfix branches – suits versioned releases (mobile apps)",
         "Either way: small PRs, required review + green CI, protected main"
+      ],
+      more: [
+        "A **branching strategy** is the team's agreement on how code flows from a developer's machine into production through git branches. The two classic models sit at opposite ends: many long-lived branches (GitFlow) vs one main line everyone integrates into constantly (trunk-based).",
+        "**Trunk-based development**: there is one main branch (the \"trunk\", usually `main`) that is always releasable. Developers work on **short-lived branches** lasting hours to a day or two, open small PRs, and merge to `main` at least daily. Work that isn't finished yet still gets merged, but hidden behind a **feature flag** (or built behind an unused code path, \"branch by abstraction\"), so incomplete features never reach users.",
+        "Why teams prefer it: the longer a branch lives, the further it drifts from `main`, and merging becomes painful (\"merge hell\"). Integrating daily keeps conflicts tiny and surfaces integration bugs immediately. Because `main` is always green and deployable, it enables **continuous delivery**: every merge can go to production. The DORA research on high-performing teams consistently associates trunk-based development with better delivery performance. The prerequisites are real: fast, reliable CI, good test coverage and feature-flag discipline.",
+        "**GitFlow** (Vincent Driessen, 2010) uses several long-lived branches: `main` holds released versions only, `develop` is the integration branch, `feature/*` branches come off `develop`, `release/*` branches stabilise a version (only fixes allowed) before merging to `main` with a tag, and `hotfix/*` branches patch production from `main`. It fits products with **explicit, versioned releases** where several versions may need support at once: mobile apps going through store review, desktop software, on-prem products, libraries. For a continuously deployed web service it mostly adds ceremony and merge overhead; even its author has said so.",
+        "What matters regardless of model: **small PRs** (easier to review thoroughly, less risky to merge), **protected `main`** (no direct pushes, no force-push), **required review** and a **green CI** status check before merge. Many teams also require linear history via squash or rebase merges and use merge queues so `main` is never broken by two individually green PRs that conflict semantically."
       ]
     },
     pl: {
@@ -3257,6 +5324,13 @@ const FLASHCARDS = [
         "Umożliwia continuous delivery, mniej konfliktów",
         "GitFlow: długo żyjące gałęzie develop/release/hotfix – pasuje do wersjonowanych wydań (aplikacje mobilne)",
         "W obu: małe PR, wymagane review + zielone CI, chroniony main"
+      ],
+      more: [
+        "**Strategia gałęzi (branching strategy)** to umowa zespołu, jak kod przechodzi z maszyny developera na produkcję przez gałęzie gita. Dwa klasyczne modele leżą na przeciwnych biegunach: wiele długo żyjących gałęzi (GitFlow) kontra jedna główna linia, do której wszyscy stale integrują zmiany (trunk-based).",
+        "**Trunk-based development**: jest jedna główna gałąź („trunk”, zwykle `main`), która zawsze nadaje się do wydania. Developerzy pracują na **krótko żyjących gałęziach** trwających od kilku godzin do dnia czy dwóch, otwierają małe PR-y i mergują do `main` co najmniej codziennie. Niedokończona praca też trafia do `main`, ale ukryta za **feature flagą** (albo budowana za nieużywaną ścieżką kodu, „branch by abstraction”), więc niegotowe funkcje nie docierają do użytkowników.",
+        "Dlaczego zespoły to wybierają: im dłużej żyje gałąź, tym bardziej odjeżdża od `main`, a merge staje się bolesny („merge hell”). Codzienna integracja sprawia, że konflikty są małe, a błędy integracji wychodzą od razu. Skoro `main` jest zawsze zielony i gotowy do wdrożenia, umożliwia to **continuous delivery**: każdy merge może trafić na produkcję. Badania DORA nad zespołami o wysokiej wydajności konsekwentnie łączą trunk-based development z lepszymi wynikami dostarczania. Wymagania wstępne są realne: szybkie, niezawodne CI, dobre pokrycie testami i dyscyplina w używaniu feature flag.",
+        "**GitFlow** (Vincent Driessen, 2010) używa kilku długo żyjących gałęzi: `main` zawiera tylko wydane wersje, `develop` to gałąź integracyjna, gałęzie `feature/*` odchodzą od `develop`, gałęzie `release/*` stabilizują wersję (dozwolone tylko poprawki) przed merge do `main` z tagiem, a `hotfix/*` łatają produkcję, wychodząc z `main`. Pasuje do produktów z **jawnymi, wersjonowanymi wydaniami**, gdzie trzeba wspierać kilka wersji naraz: aplikacje mobilne przechodzące review w sklepach, oprogramowanie desktopowe, produkty on-prem, biblioteki. Dla usługi webowej wdrażanej w sposób ciągły dodaje głównie ceremonię i narzut przy merge'ach – przyznał to nawet sam autor.",
+        "Co jest ważne niezależnie od modelu: **małe PR-y** (łatwiej je dokładnie przejrzeć i bezpieczniej zmergować), **chroniony `main`** (bez bezpośrednich pushy i force-pusha), **wymagane review** i **zielone CI** jako warunek merge. Wiele zespołów wymaga też liniowej historii przez squash lub rebase i używa merge queue, żeby `main` nie zepsuły dwa osobno zielone PR-y, które kolidują ze sobą semantycznie."
       ]
     }
   },
@@ -3273,6 +5347,13 @@ const FLASHCARDS = [
         "Test behaviour, not implementation details",
         "Deterministic: no real time/network; isolated data per test",
         "Backend services often favour a 'testing trophy' – heavier on integration"
+      ],
+      more: [
+        "Automated tests differ in **scope** - how much of the system one test exercises - and every step up in scope trades speed and precision for confidence. The **testing pyramid** (Mike Cohn) is the classic picture: a wide base of unit tests, fewer integration tests, and a thin tip of end-to-end tests.",
+        "- **Unit tests** exercise one function or class in isolation, in memory, in milliseconds. They are ideal for pure logic with many edge cases: price calculation, validation rules, state machines. When one fails, it points at the exact bug. Their weakness: they cannot tell you whether the pieces work together.\n- **Integration tests** exercise several real components together - typically your HTTP API through the router, validation and service layer down to a real Postgres or message queue running in a container. This is where most backend bugs actually live: a wrong SQL query, a missing migration, a transaction that does not roll back, a serialization mismatch. With Testcontainers or Docker Compose they run in seconds, not minutes.\n- **End-to-end (E2E) tests** drive the whole deployed system like a user would - a real browser via Playwright or Cypress clicking through the UI to the backend. They give the highest confidence but are slow, costly to maintain and the most prone to flakiness, so keep them for a handful of critical journeys: sign-up, login, checkout.",
+        "For backend services, many teams prefer the **testing trophy** shape (Kent C. Dodds): static analysis at the bottom (TypeScript, ESLint), some unit tests, a **thick layer of integration tests**, and a few E2E. The reasoning: in a typical CRUD-heavy API there is not much isolated logic, and mocking the database in unit tests mostly tests your mocks.",
+        "Two principles apply at every level. **Test behaviour, not implementation**: assert on outputs and observable effects (HTTP response, row in the DB, event published), not on which private method was called. Then refactoring does not break tests, and a failing test means a real bug. **Be deterministic**: no dependence on the real clock, the real network or leftover data. Use fake timers or an injected clock, stub third-party HTTP, and give each test its own data (unique IDs, a transaction rolled back, or a truncated table), so tests can run in any order and in parallel.",
+        "A good interview answer names the trade-off explicitly: choose the lowest level that gives real confidence for that particular risk."
       ]
     },
     pl: {
@@ -3284,6 +5365,13 @@ const FLASHCARDS = [
         "Testuj zachowanie, nie szczegóły implementacji",
         "Deterministycznie: bez prawdziwego czasu/sieci; izolowane dane per test",
         "Usługi backendowe często wg 'testing trophy' – więcej testów integracyjnych"
+      ],
+      more: [
+        "Testy automatyczne różnią się **zakresem** - tym, jaką część systemu obejmuje jeden test - a każdy krok w górę to wymiana szybkości i precyzji na pewność. Klasyczny obraz to **piramida testów** (Mike Cohn): szeroka podstawa testów jednostkowych, mniej testów integracyjnych i cienki czubek testów end-to-end.",
+        "- **Testy jednostkowe** sprawdzają jedną funkcję lub klasę w izolacji, w pamięci, w milisekundy. Idealne do czystej logiki z wieloma przypadkami brzegowymi: liczenie cen, reguły walidacji, maszyny stanów. Gdy padają, wskazują dokładne miejsce błędu. Słabość: nie powiedzą, czy elementy działają razem.\n- **Testy integracyjne** sprawdzają kilka prawdziwych komponentów naraz - zwykle HTTP API przez router, walidację i warstwę serwisów aż do prawdziwego Postgresa albo kolejki uruchomionej w kontenerze. Tu żyje większość błędów backendu: złe zapytanie SQL, brakująca migracja, transakcja, która się nie wycofuje, niezgodność serializacji. Z Testcontainers lub Docker Compose trwają sekundy, nie minuty.\n- **Testy end-to-end (E2E)** sterują całym wdrożonym systemem jak użytkownik - prawdziwa przeglądarka przez Playwright lub Cypress klika po UI aż do backendu. Dają największą pewność, ale są wolne, drogie w utrzymaniu i najbardziej podatne na niestabilność (flakiness), więc zostawiamy je dla kilku kluczowych ścieżek: rejestracja, logowanie, zakup.",
+        "W usługach backendowych wiele zespołów woli kształt **testing trophy** (Kent C. Dodds): na dole analiza statyczna (TypeScript, ESLint), trochę testów jednostkowych, **gruba warstwa testów integracyjnych** i kilka E2E. Uzasadnienie: w typowym API opartym na CRUD-zie nie ma dużo izolowanej logiki, a mockowanie bazy w testach jednostkowych głównie testuje same mocki.",
+        "Dwie zasady obowiązują na każdym poziomie. **Testuj zachowanie, nie implementację**: asercje na wyjściach i obserwowalnych efektach (odpowiedź HTTP, wiersz w bazie, opublikowane zdarzenie), a nie na tym, która prywatna metoda została wywołana. Wtedy refaktor nie psuje testów, a czerwony test oznacza prawdziwy błąd. **Deterministyczność**: brak zależności od prawdziwego zegara, prawdziwej sieci czy danych po poprzednich testach. Fałszywe timery albo wstrzykiwany zegar, stuby zewnętrznego HTTP i osobne dane dla każdego testu (unikalne ID, wycofywana transakcja albo truncate tabeli), żeby testy mogły lecieć w dowolnej kolejności i równolegle.",
+        "Dobra odpowiedź na rozmowie wprost nazywa kompromis: wybierz najniższy poziom, który daje realną pewność dla danego ryzyka."
       ]
     }
   },
@@ -3297,6 +5385,15 @@ const FLASHCARDS = [
         "Mock only external 3rd-party HTTP (`nock`, MSW) – not your own DB",
         "Cover: happy path, validation (422), auth (401/403), not found, conflicts",
         "Fake timers / injected clock for time-dependent logic"
+      ],
+      more: [
+        "The most valuable tests for a Node.js REST API are **HTTP-level integration tests**: send a real HTTP request into your app and assert on the status code, body and side effects in a real database. They exercise routing, middleware, validation, auth, the service layer and SQL together - exactly where bugs hide - while staying fast enough to run on every commit.",
+        "Step one is structural: **separate building the app from starting the server**. `app.ts` creates and exports the Express (or Koa) app with all middleware; `server.ts` imports it and calls `listen()`. Tests import the app directly and hand it to **supertest**, which binds it to an ephemeral port per test - no fixed port, no running server, no conflicts between parallel test files. Fastify has the same idea built in as `app.inject()`; in NestJS you create a testing module and pass `app.getHttpServer()` to supertest.",
+        "```ts\nimport request from 'supertest';\nimport { app } from '../src/app';\n\nit('rejects an invalid order with 422', async () => {\n  const res = await request(app)\n    .post('/orders')\n    .set('Authorization', `Bearer ${token}`)\n    .send({ quantity: -1 });\n  expect(res.status).toBe(422);\n  expect(res.body.errors[0].field).toBe('quantity');\n});\n```",
+        "**Use a real database.** **Testcontainers** starts a throwaway Postgres container from test code (on a random port); alternatively Docker Compose starts one before the suite. Run migrations once in global setup, then isolate tests from each other either by truncating tables between tests or by wrapping each test in a transaction that is rolled back (fast, but tricky if the code under test opens its own transactions or uses several pool connections). Mocking your own DB layer would hide the very bugs these tests exist to catch.",
+        "**Mock only what you do not control**: third-party HTTP APIs such as payment providers or email services. `nock` intercepts Node's outgoing HTTP; **MSW** (Mock Service Worker) defines request handlers that work in Node and the browser. Make sure your interceptor supports native `fetch`, which newer versions of both do.",
+        "What to cover per endpoint:",
+        "- Happy path, including the side effect (row saved, event published).\n- Validation errors - `422` (or `400`, whatever your API convention is) with a useful error body.\n- Authentication `401` (no or invalid token) versus authorisation `403` (valid user, not allowed) - including user A trying to read user B's resource.\n- `404` for missing resources and `409` for conflicts such as duplicate emails or version mismatches.\n- Time-dependent logic (token expiry, \"orders older than 30 days\") with **fake timers** (`vi.useFakeTimers()`, `vi.setSystemTime()`) or an injected clock, so results do not depend on when the test runs."
       ]
     },
     pl: {
@@ -3307,6 +5404,15 @@ const FLASHCARDS = [
         "Mockuj tylko zewnętrzne HTTP (`nock`, MSW) – nie własną bazę",
         "Pokrycie: happy path, walidacja (422), auth (401/403), brak zasobu, konflikty",
         "Fałszywe timery / wstrzykiwany zegar dla logiki zależnej od czasu"
+      ],
+      more: [
+        "Najcenniejsze testy REST API w Node.js to **testy integracyjne na poziomie HTTP**: wysyłasz prawdziwy request do aplikacji i sprawdzasz status, body i efekty uboczne w prawdziwej bazie. Obejmują routing, middleware, walidację, autoryzację, warstwę serwisów i SQL naraz - dokładnie tam, gdzie kryją się błędy - a przy tym są na tyle szybkie, że lecą przy każdym commicie.",
+        "Krok pierwszy jest strukturalny: **oddziel budowanie aplikacji od startu serwera**. `app.ts` tworzy i eksportuje aplikację Express (lub Koa) z całym middleware; `server.ts` ją importuje i woła `listen()`. Testy importują aplikację bezpośrednio i przekazują ją do **supertest**, który podpina ją na losowym porcie dla każdego testu - bez stałego portu, bez działającego serwera, bez konfliktów między równoległymi plikami testów. Fastify ma to wbudowane jako `app.inject()`; w NestJS tworzy się moduł testowy i przekazuje `app.getHttpServer()` do supertesta.",
+        "```ts\nimport request from 'supertest';\nimport { app } from '../src/app';\n\nit('rejects an invalid order with 422', async () => {\n  const res = await request(app)\n    .post('/orders')\n    .set('Authorization', `Bearer ${token}`)\n    .send({ quantity: -1 });\n  expect(res.status).toBe(422);\n  expect(res.body.errors[0].field).toBe('quantity');\n});\n```",
+        "**Używaj prawdziwej bazy.** **Testcontainers** uruchamia jednorazowy kontener Postgresa z poziomu kodu testów (na losowym porcie); alternatywnie Docker Compose stawia go przed całym zestawem. Migracje odpal raz w global setup, a testy izoluj od siebie przez truncate tabel między testami albo przez opakowanie każdego testu w transakcję wycofywaną na końcu (szybkie, ale kłopotliwe, gdy testowany kod sam otwiera transakcje albo używa kilku połączeń z puli). Mockowanie własnej warstwy bazy ukryłoby dokładnie te błędy, dla których te testy istnieją.",
+        "**Mockuj tylko to, czego nie kontrolujesz**: zewnętrzne API HTTP, np. operatora płatności czy usługę e-mail. `nock` przechwytuje wychodzące HTTP w Node; **MSW** (Mock Service Worker) definiuje handlery requestów działające w Node i w przeglądarce. Upewnij się, że interceptor obsługuje natywny `fetch` - nowsze wersje obu narzędzi to robią.",
+        "Co pokryć dla każdego endpointu:",
+        "- Happy path razem z efektem ubocznym (zapisany wiersz, opublikowane zdarzenie).\n- Błędy walidacji - `422` (albo `400`, zależnie od konwencji API) z sensownym body błędu.\n- Uwierzytelnienie `401` (brak lub zły token) kontra autoryzacja `403` (poprawny użytkownik, brak uprawnień) - w tym próba odczytu zasobu użytkownika B przez użytkownika A.\n- `404` dla nieistniejących zasobów i `409` dla konfliktów, np. zdublowany e-mail albo niezgodna wersja.\n- Logika zależna od czasu (wygasanie tokenów, \"zamówienia starsze niż 30 dni\") z **fałszywymi timerami** (`vi.useFakeTimers()`, `vi.setSystemTime()`) albo wstrzykiwanym zegarem, żeby wynik nie zależał od tego, kiedy test uruchomiono."
       ]
     }
   },
@@ -3320,6 +5426,15 @@ const FLASHCARDS = [
         "Types: stub (canned answer), spy (records calls), mock (expectations), fake (working in-memory impl)",
         "Over-mocking → tests pass while production breaks; brittle on refactors",
         "Dependency injection makes swapping easy"
+      ],
+      more: [
+        "A **test double** is any object that stands in for a real dependency during a test - the term comes from stunt doubles. \"Mock\" is used loosely for all of them, but the precise vocabulary (from Gerard Meszaros) is worth knowing because interviewers use it:",
+        "- **Stub**: returns canned answers - \"`getRate()` returns 4.2\". Controls the inputs to the unit under test.\n- **Spy**: records how it was called so you can assert afterwards - \"`send` was called once with this address\". `vi.fn()` / `jest.fn()` are spies that can also be given stub behaviour.\n- **Mock** (strict sense): pre-programmed with expectations and fails the test if they are not met.\n- **Fake**: a real, working but simplified implementation - an in-memory repository backed by a `Map`, an in-memory queue. Often the most robust choice, because it behaves like the real thing across many tests.",
+        "**When to mock**: at the boundaries that make tests slow, flaky, costly or impossible to control - payment gateways, email and SMS providers, third-party APIs, and sources of non-determinism such as the current time and random numbers. You do not want a CI run to charge a card or depend on someone else's uptime.",
+        "**When not to mock**: the unit under test itself (then you are testing nothing), simple value objects and pure functions (just use the real ones), and your own database in integration tests - a real Postgres in a container catches SQL errors, constraint violations and migration problems that a mocked repository never will.",
+        "The danger of **over-mocking**: when every collaborator is mocked, the test only verifies that the code calls its mocks in a particular order. Production can break - the real API changed its response format, the SQL is wrong - while every test stays green. Such tests are also **brittle**: a harmless refactor that renames an internal method breaks dozens of them. A useful rule is \"don't mock what you don't own\": wrap a third-party SDK in your own small adapter, mock the adapter in unit tests, and cover the adapter itself with an integration or contract test.",
+        "**Dependency injection** makes all of this easy: if a class receives its collaborators through the constructor instead of importing them, a test can pass in doubles without module-mocking tricks.",
+        "```ts\nclass TrialService {\n  constructor(private clock: { now(): Date }, private mailer: Mailer) {}\n  // ...expireTrials() uses this.clock.now() and this.mailer.send()\n}\n\nconst mailer = { send: vi.fn() };                          // spy\nconst clock = { now: () => new Date('2026-01-31T00:00Z') }; // stub\nawait new TrialService(clock, mailer).expireTrials();\nexpect(mailer.send).toHaveBeenCalledWith(\n  expect.objectContaining({ template: 'trial-expired' }));\n```"
       ]
     },
     pl: {
@@ -3330,6 +5445,15 @@ const FLASHCARDS = [
         "Rodzaje: stub (gotowa odpowiedź), spy (zapisuje wywołania), mock (oczekiwania), fake (działająca implementacja w pamięci)",
         "Nadmiar mocków → testy przechodzą, a produkcja się psuje; kruchość przy refaktorze",
         "Wstrzykiwanie zależności ułatwia podmianę"
+      ],
+      more: [
+        "**Dubler testowy** (test double) to dowolny obiekt, który w teście zastępuje prawdziwą zależność - nazwa pochodzi od kaskaderów-dublerów. Potocznie wszystko nazywa się \"mockiem\", ale warto znać precyzyjne słownictwo (Gerard Meszaros), bo rekruterzy go używają:",
+        "- **Stub**: zwraca gotowe odpowiedzi - \"`getRate()` zwraca 4.2\". Steruje danymi wejściowymi testowanej jednostki.\n- **Spy**: zapisuje, jak został wywołany, żeby potem zrobić asercję - \"`send` wywołano raz z tym adresem\". `vi.fn()` / `jest.fn()` to spy, któremu można też nadać zachowanie stuba.\n- **Mock** (w ścisłym sensie): zaprogramowany z góry oczekiwaniami; oblewa test, jeśli nie zostały spełnione.\n- **Fake**: prawdziwa, działająca, ale uproszczona implementacja - repozytorium w pamięci oparte na `Map`, kolejka w pamięci. Często najbardziej odporny wybór, bo w wielu testach zachowuje się jak oryginał.",
+        "**Kiedy mockować**: na granicach, które sprawiają, że testy są wolne, niestabilne, kosztowne albo niemożliwe do kontrolowania - bramki płatności, dostawcy e-maili i SMS-ów, zewnętrzne API oraz źródła niedeterminizmu, jak bieżący czas i liczby losowe. Nie chcesz, żeby przebieg CI obciążył kartę albo zależał od cudzej dostępności.",
+        "**Kiedy nie mockować**: samej testowanej jednostki (wtedy nic nie testujesz), prostych obiektów wartości i czystych funkcji (po prostu użyj prawdziwych) oraz własnej bazy w testach integracyjnych - prawdziwy Postgres w kontenerze wyłapie błędy SQL, naruszenia constraintów i problemy z migracjami, których zmockowane repozytorium nigdy nie pokaże.",
+        "Ryzyko **nadmiaru mocków**: gdy każdy współpracownik jest zmockowany, test sprawdza już tylko, czy kod woła swoje mocki w określonej kolejności. Produkcja może się sypać - prawdziwe API zmieniło format odpowiedzi, SQL jest błędny - a wszystkie testy są zielone. Takie testy są też **kruche**: niewinny refaktor zmieniający nazwę wewnętrznej metody psuje ich dziesiątki. Przydatna zasada: \"nie mockuj tego, czego nie jesteś właścicielem\" - opakuj SDK zewnętrznej firmy we własny mały adapter, mockuj adapter w testach jednostkowych, a sam adapter pokryj testem integracyjnym lub kontraktowym.",
+        "**Wstrzykiwanie zależności** (dependency injection) bardzo to ułatwia: jeśli klasa dostaje współpracowników przez konstruktor, zamiast ich importować, test może przekazać dublery bez sztuczek z mockowaniem modułów.",
+        "```ts\nclass TrialService {\n  constructor(private clock: { now(): Date }, private mailer: Mailer) {}\n  // ...expireTrials() używa this.clock.now() i this.mailer.send()\n}\n\nconst mailer = { send: vi.fn() };                          // spy\nconst clock = { now: () => new Date('2026-01-31T00:00Z') }; // stub\nawait new TrialService(clock, mailer).expireTrials();\nexpect(mailer.send).toHaveBeenCalledWith(\n  expect.objectContaining({ template: 'trial-expired' }));\n```"
       ]
     }
   },
@@ -3343,6 +5467,15 @@ const FLASHCARDS = [
         "Schema-based: validate responses against OpenAPI / GraphQL schema",
         "Catches breaking changes before deploy",
         "Very useful during a migration: new Node service must satisfy the old service's contract"
+      ],
+      more: [
+        "In a system of services, every API call has a **provider** (the service exposing the endpoint) and one or more **consumers** (services or frontends calling it). The **contract** is what they implicitly agree on: which endpoints exist, which request shape is accepted, which fields come back with which types. Unit tests on each side cannot catch a mismatch, because each side tests against its own assumptions. Full end-to-end tests can, but they need every service deployed together, are slow and flaky, and scale badly with the number of services. **Contract testing** checks just the agreement, independently on each side, in each service's own CI pipeline.",
+        "**Consumer-driven contract testing**, with **Pact** as the standard tool, works like this:",
+        "- The consumer writes tests against a Pact mock server, declaring \"when I send this request, I expect a response like this\". Running them produces a **pact file** - a JSON contract.\n- The pact is published to a **Pact Broker** (or PactFlow).\n- The provider's CI fetches the pacts of all its consumers and replays each request against the real provider, checking the responses match. **Provider states** (\"given order 42 exists\") tell it which test data to set up.\n- Before deploying either side, `can-i-deploy` asks the broker whether this version is compatible with what is running in the target environment.",
+        "```ts\nimport { PactV3, MatchersV3 } from '@pact-foundation/pact';\nconst pact = new PactV3({ consumer: 'web', provider: 'orders-api' });\npact.given('order 42 exists')\n  .uponReceiving('a request for order 42')\n  .withRequest({ method: 'GET', path: '/orders/42' })\n  .willRespondWith({ status: 200, body: MatchersV3.like({ id: 42, status: 'PAID' }) });\nawait pact.executeTest(async (mock) => {\n  const order = await getOrder(mock.url, 42);\n  expect(order.status).toBe('PAID');\n});\n```",
+        "Because the contract contains only what consumers actually use, the provider can freely change or remove fields nobody reads, and gets an exact list of consumers affected by any change it cannot make.",
+        "**Schema-based** contract testing is the lighter alternative: the provider publishes an **OpenAPI** document or a **GraphQL schema**, responses are validated against it in tests (or fuzzed with a tool such as Schemathesis), and schema diffs in CI flag breaking changes - removing a field, making an optional parameter required. It is easier to adopt but checks against the declared schema, not against how consumers really use it.",
+        "Either way, the goal is to catch **breaking changes before deploy**. This is especially valuable during a **migration**, for example replacing a legacy service with a new Node.js one: the old service's behaviour, captured as contracts, becomes an executable specification the new service must satisfy before traffic is switched over."
       ]
     },
     pl: {
@@ -3353,6 +5486,15 @@ const FLASHCARDS = [
         "Oparte o schemat: walidacja odpowiedzi względem OpenAPI / schematu GraphQL",
         "Wyłapują zmiany psujące przed wdrożeniem",
         "Bardzo przydatne przy migracji: nowa usługa Node musi spełnić kontrakt starej"
+      ],
+      more: [
+        "W systemie złożonym z usług każde wywołanie API ma **dostawcę** (provider - usługa wystawiająca endpoint) i jednego lub więcej **konsumentów** (consumer - usługi lub frontendy, które go wołają). **Kontrakt** to to, na co się niejawnie umawiają: jakie endpointy istnieją, jaki kształt requestu jest akceptowany, jakie pola i typy wracają. Testy jednostkowe po obu stronach nie wyłapią rozjazdu, bo każda strona testuje swoje własne założenia. Pełne testy end-to-end wyłapią, ale wymagają wdrożenia wszystkich usług razem, są wolne, niestabilne i źle się skalują wraz z liczbą usług. **Testy kontraktowe** sprawdzają samą umowę, niezależnie po każdej stronie, w pipeline CI każdej usługi.",
+        "**Testy kontraktowe sterowane przez konsumenta** (consumer-driven), ze standardowym narzędziem **Pact**, działają tak:",
+        "- Konsument pisze testy przeciwko mock serwerowi Pacta, deklarując \"gdy wyślę taki request, oczekuję takiej odpowiedzi\". Ich uruchomienie tworzy **plik pact** - kontrakt w JSON.\n- Pact jest publikowany do **Pact Brokera** (lub PactFlow).\n- CI dostawcy pobiera pacty wszystkich swoich konsumentów i odtwarza każdy request na prawdziwym dostawcy, sprawdzając zgodność odpowiedzi. **Provider states** (\"given order 42 exists\") mówią, jakie dane testowe przygotować.\n- Przed wdrożeniem dowolnej strony `can-i-deploy` pyta brokera, czy ta wersja jest zgodna z tym, co działa w docelowym środowisku.",
+        "```ts\nimport { PactV3, MatchersV3 } from '@pact-foundation/pact';\nconst pact = new PactV3({ consumer: 'web', provider: 'orders-api' });\npact.given('order 42 exists')\n  .uponReceiving('a request for order 42')\n  .withRequest({ method: 'GET', path: '/orders/42' })\n  .willRespondWith({ status: 200, body: MatchersV3.like({ id: 42, status: 'PAID' }) });\nawait pact.executeTest(async (mock) => {\n  const order = await getOrder(mock.url, 42);\n  expect(order.status).toBe('PAID');\n});\n```",
+        "Ponieważ kontrakt zawiera tylko to, czego konsumenci faktycznie używają, dostawca może swobodnie zmieniać lub usuwać pola, których nikt nie czyta, a przy zmianie, której zrobić nie może, dostaje dokładną listę dotkniętych konsumentów.",
+        "Lżejszą alternatywą są testy **oparte o schemat**: dostawca publikuje dokument **OpenAPI** albo **schemat GraphQL**, odpowiedzi są w testach walidowane względem niego (albo fuzzowane narzędziem typu Schemathesis), a diff schematu w CI oznacza zmiany psujące - usunięcie pola, zmianę opcjonalnego parametru na wymagany. Łatwiej to wdrożyć, ale weryfikuje się zgodność z zadeklarowanym schematem, a nie z tym, jak konsumenci naprawdę z API korzystają.",
+        "Tak czy inaczej, celem jest wyłapanie **zmian psujących przed wdrożeniem**. Szczególnie przydaje się to przy **migracji**, np. zastępowaniu starej usługi nową w Node.js: zachowanie starej usługi zapisane jako kontrakty staje się wykonywalną specyfikacją, którą nowa usługa musi spełnić, zanim przełączy się na nią ruch."
       ]
     }
   },
@@ -3365,6 +5507,13 @@ const FLASHCARDS = [
         "Vitest: Vite-powered, native ESM + TS, very fast watch mode; natural for Vite/Vue projects",
         "Jest: mature, huge ecosystem, default in many Node/React Native setups; ESM/TS need config (ts-jest/babel/swc)",
         "Used both: Jest at Gestamp/OPEGIEKA, Vitest at OPEGIEKA"
+      ],
+      more: [
+        "**Jest** and **Vitest** are both JavaScript test runners: they find test files, run them (in parallel workers), provide the `describe` / `it` / `expect` API, mocking, snapshots, coverage and a watch mode. For everyday test code they are almost interchangeable - Vitest deliberately copied Jest's API, so `jest.fn()` becomes `vi.fn()`, `jest.mock()` becomes `vi.mock()`, and most tests migrate with a search-and-replace.",
+        "The real difference is **how they load and transform your code**:",
+        "- **Jest** (Meta-originated, now under the OpenJS Foundation, v30 in 2025) was designed in the CommonJS era. It runs every test file in its own module registry and transforms source files through a transformer - `babel-jest`, `ts-jest` or `@swc/jest` - to handle TypeScript, JSX or ESM syntax. Native ES modules are still behind an experimental flag (`--experimental-vm-modules`), which is why ESM-only dependencies often need extra `transformIgnorePatterns` configuration. In return you get a very mature tool: huge ecosystem, rich docs, and it is the default in React Native and many older Node and React codebases.\n- **Vitest** is built on **Vite**: it reuses Vite's transform pipeline and plugins, so ESM and TypeScript work with zero config, and a Vite project's aliases and plugins apply to tests automatically. Its watch mode uses Vite's module graph to rerun only tests affected by a change, which feels near-instant. It is the natural choice for Vite-based frontends (Vue, Svelte, modern React) and is increasingly popular for new Node backends. It also offers a **browser mode** that runs component tests in a real browser via Playwright.",
+        "Small practical differences to know: Vitest does not inject globals by default (import `describe`, `it`, `expect` from `vitest`, or set `globals: true`); both hoist `mock()` calls to the top of the file; Vitest's `vi.mock` works on ES modules and supports async factories; fake timers differ slightly in defaults.",
+        "How to choose: for an existing Jest codebase that works, migration is rarely urgent. For a new TypeScript/ESM project, or anything already using Vite, Vitest usually means less configuration and faster feedback. It is also worth knowing that Node.js now has a built-in runner, `node:test`, for small libraries that want zero dependencies."
       ]
     },
     pl: {
@@ -3374,6 +5523,13 @@ const FLASHCARDS = [
         "Vitest: oparty na Vite, natywny ESM + TS, bardzo szybki watch; naturalny dla projektów Vite/Vue",
         "Jest: dojrzały, ogromny ekosystem, domyślny w wielu projektach Node/React Native; ESM/TS wymagają konfiguracji (ts-jest/babel/swc)",
         "Używałem obu: Jest w Gestamp/OPEGIEKA, Vitest w OPEGIEKA"
+      ],
+      more: [
+        "**Jest** i **Vitest** to test runnery JavaScriptu: znajdują pliki testów, uruchamiają je (w równoległych workerach), dostarczają API `describe` / `it` / `expect`, mockowanie, snapshoty, pokrycie kodu i tryb watch. W codziennym kodzie testów są niemal wymienne - Vitest celowo skopiował API Jesta, więc `jest.fn()` zamienia się w `vi.fn()`, `jest.mock()` w `vi.mock()`, a większość testów migruje się zwykłym znajdź-i-zamień.",
+        "Prawdziwa różnica tkwi w tym, **jak ładują i transformują kod**:",
+        "- **Jest** (stworzony w Meta, dziś pod OpenJS Foundation, wersja 30 z 2025 r.) powstał w erze CommonJS. Każdy plik testów uruchamia we własnym rejestrze modułów, a pliki źródłowe przepuszcza przez transformer - `babel-jest`, `ts-jest` albo `@swc/jest` - żeby obsłużyć TypeScript, JSX czy składnię ESM. Natywne moduły ES wciąż są za eksperymentalną flagą (`--experimental-vm-modules`), dlatego zależności tylko-ESM często wymagają dodatkowej konfiguracji `transformIgnorePatterns`. W zamian dostajesz bardzo dojrzałe narzędzie: ogromny ekosystem, bogata dokumentacja, domyślny wybór w React Native i wielu starszych projektach Node i React.\n- **Vitest** jest zbudowany na **Vite**: korzysta z pipeline'u transformacji i pluginów Vite, więc ESM i TypeScript działają bez konfiguracji, a aliasy i pluginy projektu Vite automatycznie działają w testach. Tryb watch używa grafu modułów Vite, żeby ponownie uruchamiać tylko testy dotknięte zmianą - działa to niemal natychmiast. To naturalny wybór dla frontendów na Vite (Vue, Svelte, nowoczesny React) i coraz częściej dla nowych backendów w Node. Ma też **browser mode**, który uruchamia testy komponentów w prawdziwej przeglądarce przez Playwright.",
+        "Drobne różnice praktyczne: Vitest domyślnie nie wstrzykuje globali (importujesz `describe`, `it`, `expect` z `vitest` albo ustawiasz `globals: true`); oba hoistują wywołania `mock()` na górę pliku; `vi.mock` w Vitest działa na modułach ES i wspiera asynchroniczne fabryki; fałszywe timery mają nieco inne ustawienia domyślne.",
+        "Jak wybrać: w istniejącym projekcie na Jeście, który działa, migracja rzadko jest pilna. W nowym projekcie TypeScript/ESM albo w czymkolwiek, co już używa Vite, Vitest zwykle oznacza mniej konfiguracji i szybszy feedback. Warto też wiedzieć, że Node.js ma dziś wbudowany runner `node:test` - dobry dla małych bibliotek, które chcą zero zależności."
       ]
     }
   },
@@ -3387,6 +5543,14 @@ const FLASHCARDS = [
         "`userEvent` for interactions; `findBy*` / `waitFor` for async",
         "Mock network with MSW, not component internals",
         "Vue equivalent: Vue Test Utils / Testing Library for Vue"
+      ],
+      more: [
+        "The dominant approach to testing React components is **React Testing Library** (RTL). Its guiding principle: the more your tests resemble the way the software is used, the more confidence they give. So you **render** a component into a simulated DOM (jsdom or happy-dom inside Jest or Vitest), **interact** with it the way a user would - typing, clicking - and **assert on what the user can see**: text, enabled or disabled buttons, error messages. You do not reach into component state, props of children or hook internals. The payoff is the same as \"test behaviour, not implementation\" on the backend: you can refactor a class component into hooks, or swap a state library, without rewriting tests.",
+        "**Queries** are how you find elements, and their priority is part of the philosophy. Prefer `getByRole` (buttons, headings, textboxes by their accessible name), then `getByLabelText` for form fields, then `getByText`. `getByTestId` is the last resort. CSS classes and DOM structure are never used - they are implementation details. A nice side effect: if you cannot find your button by role and name, a screen-reader user cannot either, so the tests nudge you towards accessible markup. Variants: `getBy*` throws if nothing matches, `queryBy*` returns `null` (for asserting absence), and `findBy*` returns a promise that retries until the element appears (for async UI).",
+        "```jsx\ntest('saves the profile', async () => {\n  const user = userEvent.setup();\n  render(<ProfileForm />);\n  await user.type(screen.getByLabelText('Name'), 'Ada');\n  await user.click(screen.getByRole('button', { name: 'Save' }));\n  expect(await screen.findByText('Profile saved')).toBeInTheDocument();\n});\n```",
+        "**`userEvent`** simulates full interactions - a click fires pointer, mouse, focus and click events in the right order, typing fires key events per character - unlike the low-level `fireEvent`, which dispatches a single event. For anything asynchronous (a fetch, a debounce) use `findBy*` or `waitFor(() => expect(...))` instead of sleeps. `toBeInTheDocument` comes from **jest-dom**, which adds DOM-aware matchers.",
+        "For network calls, **mock the network, not the component**: **MSW** (Mock Service Worker) intercepts `fetch` at the network level with handlers such as \"`GET /api/profile` returns this JSON\". Your component, data-fetching library and error handling all run for real; you can also return a 500 to test the error state.",
+        "The same ideas carry to **Vue**: **Vue Test Utils** is the official low-level mounting library, and **Testing Library for Vue** wraps it with the same user-centric queries. For components that depend on real browser APIs, Vitest browser mode or Playwright component testing run the test in an actual browser."
       ]
     },
     pl: {
@@ -3397,6 +5561,14 @@ const FLASHCARDS = [
         "`userEvent` do interakcji; `findBy*` / `waitFor` dla asynchroniczności",
         "Mock sieci przez MSW, nie wnętrza komponentu",
         "Odpowiednik w Vue: Vue Test Utils / Testing Library for Vue"
+      ],
+      more: [
+        "Dominujące podejście do testowania komponentów React to **React Testing Library** (RTL). Jej główna zasada: im bardziej testy przypominają sposób, w jaki oprogramowanie jest używane, tym większą dają pewność. Dlatego **renderujesz** komponent w symulowanym DOM (jsdom lub happy-dom w Jeście albo Vitest), **wchodzisz z nim w interakcję** jak użytkownik - pisanie, klikanie - i robisz **asercje na tym, co użytkownik widzi**: tekst, aktywne lub nieaktywne przyciski, komunikaty błędów. Nie sięgasz do stanu komponentu, propsów dzieci ani wnętrza hooków. Zysk jest ten sam co przy \"testuj zachowanie, nie implementację\" na backendzie: możesz przepisać komponent klasowy na hooki albo wymienić bibliotekę stanu bez przepisywania testów.",
+        "**Zapytania** (queries) służą do znajdowania elementów, a ich priorytet to część filozofii. Najpierw `getByRole` (przyciski, nagłówki, pola tekstowe po dostępnej nazwie), potem `getByLabelText` dla pól formularza, potem `getByText`. `getByTestId` to ostateczność. Klas CSS i struktury DOM nie używa się nigdy - to szczegóły implementacji. Miły efekt uboczny: jeśli nie da się znaleźć przycisku po roli i nazwie, użytkownik czytnika ekranu też go nie znajdzie, więc testy popychają w stronę dostępnego markupu. Warianty: `getBy*` rzuca błąd, gdy nic nie pasuje, `queryBy*` zwraca `null` (do sprawdzania braku elementu), a `findBy*` zwraca promise, który ponawia próby, aż element się pojawi (dla asynchronicznego UI).",
+        "```jsx\ntest('saves the profile', async () => {\n  const user = userEvent.setup();\n  render(<ProfileForm />);\n  await user.type(screen.getByLabelText('Name'), 'Ada');\n  await user.click(screen.getByRole('button', { name: 'Save' }));\n  expect(await screen.findByText('Profile saved')).toBeInTheDocument();\n});\n```",
+        "**`userEvent`** symuluje pełne interakcje - kliknięcie wywołuje zdarzenia pointer, mouse, focus i click we właściwej kolejności, pisanie generuje zdarzenia klawiszy dla każdego znaku - w przeciwieństwie do niskopoziomowego `fireEvent`, który wysyła jedno zdarzenie. Dla wszystkiego, co asynchroniczne (fetch, debounce), używaj `findBy*` albo `waitFor(() => expect(...))` zamiast sleepów. `toBeInTheDocument` pochodzi z **jest-dom**, który dodaje matchery rozumiejące DOM.",
+        "Przy wywołaniach sieciowych **mockuj sieć, nie komponent**: **MSW** (Mock Service Worker) przechwytuje `fetch` na poziomie sieci za pomocą handlerów w stylu \"`GET /api/profile` zwraca taki JSON\". Komponent, biblioteka do pobierania danych i obsługa błędów działają naprawdę; możesz też zwrócić 500, żeby przetestować stan błędu.",
+        "Te same idee działają w **Vue**: **Vue Test Utils** to oficjalna niskopoziomowa biblioteka do montowania komponentów, a **Testing Library for Vue** opakowuje ją tymi samymi zapytaniami zorientowanymi na użytkownika. Dla komponentów zależnych od prawdziwych API przeglądarki Vitest browser mode albo Playwright component testing uruchamiają test w prawdziwej przeglądarce."
       ]
     }
   },
@@ -3410,6 +5582,15 @@ const FLASHCARDS = [
         "Replace sleeps with waiting for a condition; fake timers",
         "Isolate data per test; clean up resources",
         "Quarantine temporarily with a ticket – blind retries only hide the bug"
+      ],
+      more: [
+        "A **flaky test** passes and fails on the same code without any change. It is more harmful than it looks: once the team learns that a red build \"is probably just flaky\", people start re-running pipelines and ignoring failures, and real regressions slip through. Flakiness almost always points to a real non-determinism - in the test, and sometimes in the product itself (a genuine race condition).",
+        "**Step 1: reproduce it.** A test that fails 1 time in 50 cannot be debugged by staring at it. Run it in a loop until it fails (`for i in $(seq 100); do npx vitest run orders.test.ts || break; done`, or Playwright's `--repeat-each=50`), run the suite in **random order** (Vitest `--sequence.shuffle`, Jest `--randomize`) to expose order dependence, and simulate CI conditions - more parallel workers, throttled CPU, a different time zone - since CI machines are slower and busier than laptops.",
+        "**Step 2: find the cause.** The usual suspects:",
+        "- **Timing**: arbitrary sleeps (`await sleep(500)`) that are long enough on a laptop but not on a loaded CI runner; missing `await` on a promise.\n- **Shared state**: a module-level cache, a global mock not restored, database rows left over by a previous test.\n- **Order dependence**: test B only passes if test A ran first and created some data.\n- **Real network**: calling a real third-party API or a shared staging environment.\n- **Dates and time zones**: tests that break at midnight, at month end, during DST changes, or when CI runs in UTC and the developer in Europe/Warsaw.",
+        "**Step 3: fix the root cause.** Replace sleeps with waiting for the actual condition, with a timeout; use fake timers and a fixed system time (`vi.setSystemTime`); set `TZ=UTC` in the test environment; seed random generators. Give each test its own data (unique IDs, truncate or roll back) and clean up resources - servers, DB connections, timers - in `afterEach`. Enable `restoreMocks` so spies never leak between tests.",
+        "```ts\n// Flaky: assumes the job finishes within 500 ms\nawait sleep(500);\nexpect(await getStatus(jobId)).toBe('done');\n\n// Stable: retry the assertion until it passes or times out\nawait vi.waitFor(async () => {\n  expect(await getStatus(jobId)).toBe('done');\n}, { timeout: 5000 });\n```",
+        "If it cannot be fixed immediately, **quarantine** it: skip or move it to a non-blocking job, with a ticket, an owner and a deadline, so the main pipeline stays trustworthy. What you should not do is add blind automatic retries and move on - that turns the signal off without removing the bug, and the flaky test may be the only thing telling you about a race condition in production code."
       ]
     },
     pl: {
@@ -3420,6 +5601,15 @@ const FLASHCARDS = [
         "Sleepy zamienić na czekanie na warunek; fałszywe timery",
         "Izolowane dane per test; sprzątanie zasobów",
         "Tymczasowa kwarantanna z ticketem – ślepe ponowienia tylko ukrywają błąd"
+      ],
+      more: [
+        "**Niestabilny test** (flaky test) przechodzi i oblewa na tym samym kodzie, bez żadnej zmiany. Jest groźniejszy, niż wygląda: gdy zespół nauczy się, że czerwony build \"to pewnie znowu flaky\", ludzie zaczynają puszczać pipeline'y ponownie i ignorować błędy, a prawdziwe regresje przechodzą niezauważone. Niestabilność prawie zawsze oznacza realny niedeterminizm - w teście, a czasem w samym produkcie (prawdziwy race condition).",
+        "**Krok 1: odtwórz problem.** Testu, który pada raz na 50 uruchomień, nie da się zdebugować, patrząc na kod. Uruchamiaj go w pętli, aż padnie (`for i in $(seq 100); do npx vitest run orders.test.ts || break; done` albo `--repeat-each=50` w Playwright), puszczaj zestaw w **losowej kolejności** (Vitest `--sequence.shuffle`, Jest `--randomize`), żeby ujawnić zależność od kolejności, i symuluj warunki CI - więcej równoległych workerów, przyciętą moc CPU, inną strefę czasową - bo maszyny CI są wolniejsze i bardziej obciążone niż laptopy.",
+        "**Krok 2: znajdź przyczynę.** Typowi podejrzani:",
+        "- **Timing**: sztywne sleepy (`await sleep(500)`), które wystarczają na laptopie, ale nie na obciążonym runnerze CI; brakujący `await` przy promise.\n- **Współdzielony stan**: cache na poziomie modułu, nieprzywrócony globalny mock, wiersze w bazie po poprzednim teście.\n- **Zależność od kolejności**: test B przechodzi tylko, jeśli wcześniej wykonał się test A i utworzył dane.\n- **Prawdziwa sieć**: wywołania prawdziwego zewnętrznego API albo współdzielonego stagingu.\n- **Daty i strefy czasowe**: testy, które psują się o północy, na koniec miesiąca, przy zmianie czasu albo gdy CI działa w UTC, a developer w Europe/Warsaw.",
+        "**Krok 3: napraw przyczynę.** Zamień sleepy na czekanie na faktyczny warunek z timeoutem; użyj fałszywych timerów i ustalonego czasu systemowego (`vi.setSystemTime`); ustaw `TZ=UTC` w środowisku testów; seeduj generatory losowe. Daj każdemu testowi własne dane (unikalne ID, truncate albo rollback) i sprzątaj zasoby - serwery, połączenia z bazą, timery - w `afterEach`. Włącz `restoreMocks`, żeby spy nigdy nie przeciekały między testami.",
+        "```ts\n// Niestabilne: zakłada, że zadanie skończy się w 500 ms\nawait sleep(500);\nexpect(await getStatus(jobId)).toBe('done');\n\n// Stabilne: ponawiaj asercję, aż przejdzie albo minie timeout\nawait vi.waitFor(async () => {\n  expect(await getStatus(jobId)).toBe('done');\n}, { timeout: 5000 });\n```",
+        "Jeśli nie da się tego naprawić od razu, **daj test na kwarantannę**: pomiń go albo przenieś do nieblokującego joba, z ticketem, właścicielem i terminem, żeby główny pipeline pozostał wiarygodny. Czego nie robić: dodać ślepych automatycznych ponowień i zapomnieć - to wyłącza sygnał, nie usuwając błędu, a niestabilny test może być jedyną rzeczą, która mówi Ci o race condition w kodzie produkcyjnym."
       ]
     }
   },
@@ -3433,6 +5623,15 @@ const FLASHCARDS = [
         "Realistic scenarios and data; production-like env; ramp-up, soak and spike tests",
         "Watch the whole system: app CPU/memory/event-loop lag, DB, cache hit ratio, queues",
         "Find the first bottleneck, fix, repeat"
+      ],
+      more: [
+        "**Load testing** means generating artificial traffic against your system to learn how it behaves under a given load - before real users find out for you. Before a big launch, the questions are: can we handle the expected peak, where is the breaking point, and what fails first?",
+        "**Start with measurable goals**, otherwise you cannot tell whether a test passed. Typical ones: target throughput in **RPS** (requests per second) at peak plus a safety margin; latency **percentiles** such as **p95/p99** (the time within which 95% or 99% of requests complete - averages hide the slow tail that users actually feel); and an error-rate **SLO** (service level objective), e.g. under 0.1% 5xx responses.",
+        "**Tools**: **k6** (scripts in JavaScript/TypeScript, great for CI), Artillery (YAML plus JS, Node-based), Gatling (JVM, Scala/Java/Kotlin), Locust (Python). Pick one your team can script and version alongside the code. Thresholds turn goals into a pass/fail result:",
+        "```js\nimport http from 'k6/http';\nimport { check } from 'k6';\nexport const options = {\n  stages: [{ duration: '5m', target: 500 }, { duration: '20m', target: 500 }],\n  thresholds: { http_req_duration: ['p(95)<300', 'p(99)<800'], http_req_failed: ['rate<0.001'] },\n};\nexport default function () {\n  const res = http.get(`${__ENV.BASE_URL}/products/${Math.ceil(Math.random() * 10000)}`);\n  check(res, { 'status 200': (r) => r.status === 200 });\n}\n```",
+        "**Make it realistic**: model real user flows and their mix (80% browsing, 15% search, 5% checkout), use varied data so you do not just hit one cached row, include auth, and test a **production-like environment** - same instance sizes, same database volume, same config. Mock or sandbox third parties so you do not load-test your payment provider. Run the load generator from separate machines so it does not become the bottleneck itself. Test shapes: **ramp-up** (increase gradually to see where degradation starts), **soak** (steady load for hours - reveals memory leaks and connection pool exhaustion), **spike** (sudden jump - tests autoscaling and queues), and **stress** (beyond the target to find the breaking point).",
+        "**Observe the whole system while it runs**, not just the generator's numbers: app CPU and memory, Node **event-loop lag** (how long callbacks wait - the key saturation signal for single-threaded Node), GC pauses, DB CPU, slow queries and connection counts, **cache hit ratio**, queue depth, and downstream latency.",
+        "Then iterate: find the **first bottleneck** (often a missing index, too small a DB pool, a synchronous CPU-heavy operation, or a chatty N+1 call pattern), fix it, rerun. Fixing one bottleneck reveals the next, so repeat until you meet the goals with headroom."
       ]
     },
     pl: {
@@ -3443,6 +5642,15 @@ const FLASHCARDS = [
         "Realistyczne scenariusze i dane; środowisko podobne do produkcji; testy ramp-up, soak i spike",
         "Obserwacja całego systemu: CPU/pamięć/event-loop lag aplikacji, DB, cache hit ratio, kolejki",
         "Znajdź pierwsze wąskie gardło, napraw, powtórz"
+      ],
+      more: [
+        "**Test obciążeniowy** (load test) to generowanie sztucznego ruchu na system, żeby sprawdzić, jak zachowuje się pod danym obciążeniem - zanim zrobią to za Ciebie prawdziwi użytkownicy. Przed dużym startem pytania brzmią: czy wytrzymamy oczekiwany szczyt, gdzie jest punkt załamania i co padnie pierwsze?",
+        "**Zacznij od mierzalnych celów**, inaczej nie wiesz, czy test przeszedł. Typowe: docelowa przepustowość w **RPS** (requesty na sekundę) w szczycie plus margines; **percentyle** opóźnień, np. **p95/p99** (czas, w którym kończy się 95% lub 99% requestów - średnia ukrywa wolny ogon, który użytkownicy naprawdę odczuwają); oraz **SLO** (service level objective) dla błędów, np. poniżej 0,1% odpowiedzi 5xx.",
+        "**Narzędzia**: **k6** (skrypty w JavaScripcie/TypeScripcie, świetne w CI), Artillery (YAML plus JS, na Node), Gatling (JVM, Scala/Java/Kotlin), Locust (Python). Wybierz takie, w którym zespół umie pisać scenariusze i trzymać je w repo obok kodu. Progi (thresholds) zamieniają cele w wynik zaliczony/niezaliczony:",
+        "```js\nimport http from 'k6/http';\nimport { check } from 'k6';\nexport const options = {\n  stages: [{ duration: '5m', target: 500 }, { duration: '20m', target: 500 }],\n  thresholds: { http_req_duration: ['p(95)<300', 'p(99)<800'], http_req_failed: ['rate<0.001'] },\n};\nexport default function () {\n  const res = http.get(`${__ENV.BASE_URL}/products/${Math.ceil(Math.random() * 10000)}`);\n  check(res, { 'status 200': (r) => r.status === 200 });\n}\n```",
+        "**Zadbaj o realizm**: odwzoruj prawdziwe ścieżki użytkowników i ich proporcje (80% przeglądania, 15% wyszukiwania, 5% zakupów), używaj zróżnicowanych danych, żeby nie trafiać ciągle w jeden zcache'owany wiersz, uwzględnij autoryzację i testuj na **środowisku podobnym do produkcji** - te same rozmiary instancji, ten sam wolumen danych w bazie, ta sama konfiguracja. Zewnętrzne usługi zamockuj lub użyj sandboxa, żeby nie robić testu obciążeniowego operatorowi płatności. Generator ruchu uruchamiaj z osobnych maszyn, żeby sam nie stał się wąskim gardłem. Rodzaje testów: **ramp-up** (stopniowe zwiększanie, żeby zobaczyć, gdzie zaczyna się degradacja), **soak** (stały ruch przez godziny - ujawnia wycieki pamięci i wyczerpanie puli połączeń), **spike** (nagły skok - sprawdza autoskalowanie i kolejki) i **stress** (ponad cel, żeby znaleźć punkt załamania).",
+        "**Obserwuj cały system w trakcie testu**, a nie tylko liczby z generatora: CPU i pamięć aplikacji, **event-loop lag** w Node (jak długo callbacki czekają - kluczowy sygnał nasycenia dla jednowątkowego Node), pauzy GC, CPU bazy, wolne zapytania i liczbę połączeń, **cache hit ratio**, długość kolejek i opóźnienia usług zależnych.",
+        "Potem iteruj: znajdź **pierwsze wąskie gardło** (często brakujący indeks, za mała pula połączeń do bazy, synchroniczna operacja obciążająca CPU albo wzorzec N+1 wywołań), napraw, uruchom ponownie. Naprawa jednego wąskiego gardła odsłania następne, więc powtarzaj, aż osiągniesz cele z zapasem."
       ]
     }
   },
@@ -3457,6 +5665,11 @@ const FLASHCARDS = [
         "Resilience: timeouts, retries, graceful shutdown, health checks",
         "Security: authZ, secrets management, dependency scanning",
         "Safe delivery: repeatable deploys, rollback, feature flags, docs/runbooks"
+      ],
+      more: [
+        "\"Production-grade\" is not a single feature - it is the difference between code that works on a demo and a service that a team can run, change and debug at 3 a.m. for years. A useful framing is: **can we ship it safely, can we see what it is doing, does it survive failures, and is it secure?**",
+        "- **Tested critical paths, CI blocks regressions**: not 100% coverage, but automated tests on the flows that make money or would hurt if broken, run on every pull request. A failing test must block the merge - otherwise tests are just decoration.\n- **Clear contracts and input validation**: the API is documented (OpenAPI or a GraphQL schema), versioned and changed without breaking consumers. Every external input - request bodies, query params, messages from queues - is validated at the boundary (Zod, class-validator, JSON Schema) and rejected with a clear error, instead of blowing up deep inside the code or corrupting data.\n- **Observability**: the ability to answer \"what is happening and why\" without deploying new code. **Structured logs** (JSON with correlation IDs, no secrets), **metrics** (rate, errors, duration; saturation such as event-loop lag), **distributed traces** following a request across services (OpenTelemetry), and **alerts** on user-visible symptoms tied to SLOs, not on every CPU blip.\n- **Resilience**: dependencies will fail, so every outbound call has a **timeout**; retries use exponential backoff with jitter and only for idempotent operations; circuit breakers stop hammering a dead service. **Graceful shutdown** (stop accepting traffic, finish in-flight requests, close connections on SIGTERM) and **health checks** let the orchestrator deploy and restart without dropping requests.\n- **Security**: authentication plus proper **authorisation** on every resource (not just \"is logged in\" - checking object ownership), secrets in a secrets manager rather than code or images, least-privilege IAM, and **dependency scanning** (npm audit, Dependabot, Snyk).\n- **Safe delivery**: repeatable automated deploys from CI (same artefact everywhere), a tested **rollback** path, backwards-compatible DB migrations, and **feature flags** to decouple deploying code from releasing it to users. Plus **documentation and runbooks**, so the on-call engineer who did not write the service knows how to diagnose and mitigate the common failures.",
+        "What interviewers want to hear is the mindset behind the list: production-readiness is designed in from the start and is proportional to risk - an internal admin tool needs less than a payment API - and it is owned by the team that builds the service (\"you build it, you run it\")."
       ]
     },
     pl: {
@@ -3468,6 +5681,11 @@ const FLASHCARDS = [
         "Odporność: timeouty, ponowienia, graceful shutdown, health checki",
         "Bezpieczeństwo: autoryzacja, zarządzanie sekretami, skanowanie zależności",
         "Bezpieczne dostarczanie: powtarzalne wdrożenia, rollback, feature flagi, dokumentacja/runbooki"
+      ],
+      more: [
+        "\"Gotowe na produkcję\" to nie jedna funkcja - to różnica między kodem, który działa na demo, a usługą, którą zespół potrafi przez lata uruchamiać, zmieniać i debugować o 3 w nocy. Przydatne pytania porządkujące: **czy możemy to bezpiecznie wdrożyć, czy widzimy, co się dzieje, czy przetrwa awarie i czy jest bezpieczne?**",
+        "- **Przetestowane kluczowe ścieżki, CI blokuje regresje**: nie 100% pokrycia, tylko automatyczne testy przepływów, które zarabiają pieniądze albo bolałyby po awarii, uruchamiane przy każdym pull requeście. Czerwony test musi blokować merge - inaczej testy są tylko dekoracją.\n- **Jasne kontrakty i walidacja wejścia**: API jest udokumentowane (OpenAPI lub schemat GraphQL), wersjonowane i zmieniane bez psucia konsumentów. Każde wejście z zewnątrz - body requestów, parametry zapytań, wiadomości z kolejek - jest walidowane na granicy (Zod, class-validator, JSON Schema) i odrzucane z czytelnym błędem, zamiast wybuchać głęboko w kodzie albo psuć dane.\n- **Obserwowalność** (observability): możliwość odpowiedzi na pytanie \"co się dzieje i dlaczego\" bez wdrażania nowego kodu. **Logi strukturalne** (JSON z ID korelacji, bez sekretów), **metryki** (liczba requestów, błędy, czas odpowiedzi; nasycenie, np. event-loop lag), **rozproszone trace'y** śledzące request między usługami (OpenTelemetry) i **alerty** na objawy widoczne dla użytkownika, powiązane z SLO, a nie na każdy skok CPU.\n- **Odporność** (resilience): zależności będą padać, więc każde wywołanie wychodzące ma **timeout**; ponowienia używają wykładniczego backoffu z jitterem i tylko dla operacji idempotentnych; circuit breakery przestają zasypywać martwą usługę. **Graceful shutdown** (przestań przyjmować ruch, dokończ trwające requesty, zamknij połączenia po SIGTERM) i **health checki** pozwalają orkiestratorowi wdrażać i restartować bez gubienia requestów.\n- **Bezpieczeństwo**: uwierzytelnienie plus porządna **autoryzacja** dla każdego zasobu (nie tylko \"jest zalogowany\" - sprawdzenie, czy obiekt należy do użytkownika), sekrety w menedżerze sekretów zamiast w kodzie czy obrazach, IAM na zasadzie minimalnych uprawnień i **skanowanie zależności** (npm audit, Dependabot, Snyk).\n- **Bezpieczne dostarczanie**: powtarzalne, zautomatyzowane wdrożenia z CI (ten sam artefakt wszędzie), przetestowana ścieżka **rollbacku**, migracje bazy zgodne wstecz i **feature flagi**, które oddzielają wdrożenie kodu od udostępnienia funkcji użytkownikom. Do tego **dokumentacja i runbooki**, żeby dyżurny, który nie pisał tej usługi, wiedział, jak zdiagnozować i załagodzić typowe awarie.",
+        "Rekruter chce usłyszeć sposób myślenia stojący za tą listą: gotowość produkcyjną projektuje się od początku, jest proporcjonalna do ryzyka - wewnętrzne narzędzie administracyjne potrzebuje mniej niż API płatności - i należy do zespołu, który usługę buduje (\"you build it, you run it\")."
       ]
     }
   },
@@ -3483,6 +5701,15 @@ const FLASHCARDS = [
         "Dependencies: DB latency, cache hit ratio, queue depth/age, 3rd-party errors",
         "Business KPIs: sign-ups, playback starts, orders",
         "Alert on user-facing symptoms (SLO burn), not on every CPU spike"
+      ],
+      more: [
+        "**Observability** means being able to answer \"what is the system doing, and why?\" from the outside, using the telemetry it emits. On a busy production API you cannot attach a debugger, so you choose a small set of signals that tell you whether users are fine and, if not, where to look. Two well-known frameworks make this systematic.",
+        "The **four golden signals** (from Google's SRE book) describe a service as a whole. **Latency** is how long requests take, measured as percentiles rather than averages: **p50** is the median, **p99** is the time that 99% of requests beat. An average hides the slow tail; at 10,000 RPS a bad p99 means 100 unhappy users every second. **Traffic** is demand, usually requests per second (RPS). **Errors** is the share of failed requests, typically HTTP 5xx (4xx are mostly client mistakes, although a sudden 401 spike can reveal a bug). **Saturation** is how \"full\" the service is: CPU, memory, DB connection pool usage and, in Node, **event-loop lag** (how late timers fire because the single JS thread is busy). Saturation warns you before latency explodes.",
+        "**RED** (Rate, Errors, Duration) applies the same idea per endpoint, so you can see that `POST /checkout` got slow while everything else is fine. Its sibling **USE** (Utilization, Saturation, Errors) is applied to resources such as CPUs, disks and pools.",
+        "Most incidents actually start in **dependencies**, so monitor them explicitly:",
+        "- DB query latency and time spent waiting for a pool connection\n- cache hit ratio: a drop means more load lands on the database\n- queue depth and the age of the oldest message: growing age means consumers are falling behind\n- error rate and latency of third-party APIs (payments, DRM, email)",
+        "**Business KPIs** (sign-ups, playback starts, orders per minute) catch failures that technical metrics miss: every request returns 200, but a bug makes the play button do nothing. A sudden drop in playback starts is a real outage even if dashboards look green.",
+        "The nuance interviewers probe is alerting: **alert on symptoms, not causes**. A 90% CPU spike that users don't feel should not wake anyone at 3 a.m.; it belongs on a dashboard. Page on user-facing symptoms, ideally **SLO burn rate** (how quickly you are using up your allowed error budget). Noisy alerts cause alert fatigue, and then the real alert gets ignored."
       ]
     },
     pl: {
@@ -3493,6 +5720,15 @@ const FLASHCARDS = [
         "Zależności: opóźnienia DB, cache hit ratio, długość/wiek kolejki, błędy zewnętrznych usług",
         "KPI biznesowe: rejestracje, starty odtwarzania, zamówienia",
         "Alerty na objawy odczuwalne przez użytkownika (spalanie SLO), nie na każdy skok CPU"
+      ],
+      more: [
+        "**Obserwowalność (observability)** to zdolność odpowiedzenia z zewnątrz na pytanie „co robi system i dlaczego?” na podstawie telemetrii, którą emituje. Do produkcyjnego API pod dużym ruchem nie podepniesz debuggera, więc wybierasz niewielki zestaw sygnałów, które mówią, czy użytkownicy mają się dobrze, a jeśli nie – gdzie szukać. Dwa znane modele porządkują ten wybór.",
+        "**Cztery złote sygnały** (z książki Google SRE) opisują usługę jako całość. **Opóźnienie (latency)** mierzy się percentylami, nie średnią: **p50** to mediana, **p99** to czas, w którym mieści się 99% żądań. Średnia ukrywa wolny „ogon”; przy 10 000 RPS słaby p99 oznacza 100 niezadowolonych użytkowników co sekundę. **Ruch (traffic)** to zapotrzebowanie, zwykle żądania na sekundę (RPS). **Błędy** to odsetek nieudanych żądań, zwykle HTTP 5xx (4xx to przeważnie błędy klienta, choć nagły skok 401 może zdradzić bug). **Nasycenie (saturation)** mówi, jak bardzo usługa jest „pełna”: CPU, pamięć, wykorzystanie puli połączeń do DB, a w Node **event-loop lag**, czyli o ile spóźniają się timery, bo jedyny wątek JS jest zajęty. Nasycenie ostrzega, zanim opóźnienia eksplodują.",
+        "**RED** (Rate, Errors, Duration) stosuje tę samą ideę per endpoint – widać, że zwolnił `POST /checkout`, a reszta działa normalnie. Pokrewny model **USE** (Utilization, Saturation, Errors) dotyczy zasobów: CPU, dysków, pul.",
+        "Większość incydentów zaczyna się w **zależnościach**, więc monitoruj je wprost:",
+        "- opóźnienia zapytań do DB i czas oczekiwania na połączenie z puli\n- cache hit ratio: spadek oznacza, że większe obciążenie trafia do bazy\n- długość kolejki i wiek najstarszej wiadomości: rosnący wiek znaczy, że konsumenci nie nadążają\n- odsetek błędów i opóźnienia zewnętrznych API (płatności, DRM, e-mail)",
+        "**KPI biznesowe** (rejestracje, starty odtwarzania, zamówienia na minutę) łapią awarie, których metryki techniczne nie widzą: każde żądanie zwraca 200, ale przez bug przycisk „odtwórz” nic nie robi. Nagły spadek startów odtwarzania to prawdziwa awaria, nawet gdy dashboardy są zielone.",
+        "Rekruter zwykle dopytuje o alerty: **alarmuj na objawy, nie na przyczyny**. Skok CPU do 90%, którego użytkownicy nie odczuwają, nie powinien nikogo budzić o 3 w nocy – jego miejsce jest na dashboardzie. Dyżurnego wzywa się przy objawach odczuwalnych przez użytkownika, najlepiej przy **tempie spalania SLO (burn rate)**, czyli tym, jak szybko zużywasz dopuszczalny budżet błędów. Zbyt wiele hałaśliwych alertów prowadzi do zmęczenia alertami (alert fatigue) i wtedy ten prawdziwy zostaje zignorowany."
       ]
     }
   },
@@ -3506,6 +5742,14 @@ const FLASHCARDS = [
         "Traces: one request across services as spans – where time is spent",
         "Correlate via trace ID / request ID in every log line and propagated headers (W3C `traceparent`)",
         "OpenTelemetry: vendor-neutral SDK → export to Datadog, Splunk, X-Ray, Jaeger"
+      ],
+      more: [
+        "Telemetry comes in three main shapes, often called the **three pillars** of observability. Each answers a different question, and they become truly useful when you can jump from one to another during an investigation.",
+        "**Logs** are discrete, timestamped events with context: \"payment failed for order 123, provider returned 402\". They give the richest debugging detail, but they are expensive to store and search at high volume. **Metrics** are numeric time series (a request counter, a latency histogram) aggregated at the source, so their cost barely depends on traffic, which makes them ideal for dashboards and alerts. The trade-off: aggregation loses detail, and high-cardinality labels such as `userId` blow up their cost.",
+        "**Traces** follow a single request through multiple services. A trace is a tree of **spans**; each span is one unit of work (HTTP handler, DB query, outbound call) with a start time, duration and attributes. The trace shows where the time went, e.g. 20 ms in the API and 900 ms waiting on a slow downstream service.",
+        "A typical workflow: a metric alert fires (error rate up), you open a trace of a failing request to find which service and span failed, then read that service's logs for the exact error. This only works if all three signals share an identifier.",
+        "**Correlation**: a **trace ID** is created at the edge and propagated with every outbound call in the W3C `traceparent` header, e.g. `00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01` (version, trace ID, parent span ID, flags). Each service continues the same trace and writes the trace ID into every log line, so you can filter all logs of one request across services. A **request ID** does the same job where full tracing is not set up yet.",
+        "**OpenTelemetry (OTel)** is the CNCF standard for producing all three signals: vendor-neutral APIs and SDKs, auto-instrumentation for popular libraries (HTTP, Express, pg, Redis) and the OTLP wire protocol. You instrument once, send data to an **OTel Collector**, and export to Datadog, Splunk, AWS X-Ray, Jaeger or Grafana. Switching vendors becomes a config change instead of re-instrumenting the code."
       ]
     },
     pl: {
@@ -3516,6 +5760,14 @@ const FLASHCARDS = [
         "Trace'y: jedno żądanie przez wiele usług jako spany – gdzie ucieka czas",
         "Korelacja przez trace ID / request ID w każdej linii logu i propagowane nagłówki (W3C `traceparent`)",
         "OpenTelemetry: niezależne od dostawcy SDK → eksport do Datadog, Splunk, X-Ray, Jaeger"
+      ],
+      more: [
+        "Telemetria występuje w trzech głównych postaciach, nazywanych **trzema filarami** obserwowalności. Każda odpowiada na inne pytanie, a prawdziwa wartość pojawia się wtedy, gdy podczas analizy da się przeskakiwać z jednej na drugą.",
+        "**Logi** to pojedyncze zdarzenia ze znacznikiem czasu i kontekstem: „płatność dla zamówienia 123 nieudana, dostawca zwrócił 402”. Dają najwięcej szczegółów do debugowania, ale przy dużym wolumenie ich przechowywanie i przeszukiwanie jest drogie. **Metryki** to liczbowe szeregi czasowe (licznik żądań, histogram opóźnień) agregowane u źródła, więc ich koszt prawie nie zależy od ruchu – idealne do dashboardów i alertów. Cena: agregacja gubi szczegóły, a etykiety o wysokiej kardynalności, np. `userId`, drastycznie podnoszą koszt.",
+        "**Trace'y** śledzą jedno żądanie przez wiele usług. Trace to drzewo **spanów**; każdy span to jedna jednostka pracy (handler HTTP, zapytanie do DB, wywołanie innej usługi) z czasem startu, czasem trwania i atrybutami. Trace pokazuje, gdzie ucieka czas, np. 20 ms w API i 900 ms czekania na wolną usługę niżej w łańcuchu.",
+        "Typowy przebieg: odpala alert na metryce (wzrost błędów), otwierasz trace nieudanego żądania, żeby znaleźć usługę i span, który zawiódł, a potem czytasz logi tej usługi, żeby zobaczyć dokładny błąd. Działa to tylko wtedy, gdy wszystkie trzy sygnały mają wspólny identyfikator.",
+        "**Korelacja**: **trace ID** powstaje na brzegu systemu i jest przekazywany z każdym wywołaniem w nagłówku W3C `traceparent`, np. `00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01` (wersja, trace ID, ID spanu rodzica, flagi). Każda usługa kontynuuje ten sam trace i dopisuje trace ID do każdej linii logu, więc można odfiltrować wszystkie logi jednego żądania ze wszystkich usług. **Request ID** pełni tę samą rolę tam, gdzie pełnego tracingu jeszcze nie ma.",
+        "**OpenTelemetry (OTel)** to standard CNCF do wytwarzania wszystkich trzech sygnałów: niezależne od dostawcy API i SDK, automatyczna instrumentacja popularnych bibliotek (HTTP, Express, pg, Redis) i protokół OTLP. Instrumentujesz raz, wysyłasz dane do **OTel Collectora** i eksportujesz do Datadog, Splunk, AWS X-Ray, Jaeger czy Grafany. Zmiana dostawcy to wtedy zmiana konfiguracji, a nie ponowna instrumentacja kodu."
       ]
     }
   },
@@ -3529,6 +5781,15 @@ const FLASHCARDS = [
         "Levels used properly: error = needs action, warn, info = business events, debug off in prod",
         "Never log secrets, tokens, PII – redact",
         "Log the error with stack once, at the boundary – not at every layer"
+      ],
+      more: [
+        "In production nobody reads logs line by line: they are shipped to a system (Datadog, Splunk, CloudWatch, Loki) and queried. **Structured logging** means each entry is a machine-readable object, usually one JSON object per line, instead of a free-text sentence. Then you can filter `level=error service=orders` or group by `endpoint` instead of writing fragile regexes.",
+        "In Node the usual choice is **pino**: it is fast because it serialises JSON cheaply and keeps work off the main thread (formatting and shipping can run in a worker via transports). Writing to **stdout** follows the twelve-factor approach: the app does not manage files or rotation; the container runtime or a log agent collects stdout and forwards it.",
+        "```js\nconst logger = pino({\n  base: { service: 'orders', env: process.env.NODE_ENV },\n  redact: ['req.headers.authorization', '*.password'],\n});\n// per request: a child logger stamps the IDs on every line\nconst log = logger.child({ requestId, traceId, userId });\nlog.info({ orderId }, 'order placed');\n```",
+        "**Consistent fields** across all services make cross-service queries possible: `timestamp`, `level`, `service`, `env`, `requestId`/`traceId` (to jump to the trace) and `userId` (to investigate one customer's complaint). If one service writes `trace_id` and another `traceId`, every query has to know both. **Log levels** only help if each one has a clear meaning:",
+        "- **error**: something failed and needs human action or investigation\n- **warn**: unexpected but handled (a retry succeeded, a fallback was used)\n- **info**: meaningful business or lifecycle events: order placed, server started\n- **debug**: detailed internals; off in production because volume costs money and drowns the signal",
+        "**Never log secrets, tokens or PII** (personally identifiable information: emails, addresses, card numbers). Logs are widely accessible and kept for a long time, so a leak there is a security incident and a GDPR problem. Redaction (pino's `redact`) is a safety net, not a substitute for not logging whole request bodies.",
+        "**Log an error once, at the boundary.** If the repository, service and controller each catch, log and rethrow, one failure produces three entries and inflated error counts. Lower layers throw (optionally wrapping the error with context via `cause`); the top-level handler (Express error middleware, job runner) logs it once, with the full stack."
       ]
     },
     pl: {
@@ -3539,6 +5800,15 @@ const FLASHCARDS = [
         "Poziomy stosowane świadomie: error = wymaga działania, warn, info = zdarzenia biznesowe, debug wyłączony na produkcji",
         "Nigdy sekretów, tokenów, danych osobowych – redakcja",
         "Błąd ze stackiem logowany raz, na granicy – nie w każdej warstwie"
+      ],
+      more: [
+        "Na produkcji nikt nie czyta logów linijka po linijce: trafiają do systemu (Datadog, Splunk, CloudWatch, Loki) i są odpytywane. **Logowanie strukturalne** oznacza, że każdy wpis to obiekt czytelny dla maszyny, zwykle jeden obiekt JSON na linię, a nie zdanie w wolnym tekście. Wtedy filtrujesz `level=error service=orders` albo grupujesz po `endpoint`, zamiast pisać kruche regexy.",
+        "W Node standardem jest **pino**: jest szybki, bo tanio serializuje JSON i odciąża główny wątek (formatowanie i wysyłkę można przenieść do workera przez transporty). Pisanie na **stdout** to podejście twelve-factor: aplikacja nie zarządza plikami ani rotacją; środowisko kontenerowe lub agent logów zbiera stdout i przekazuje dalej.",
+        "```js\nconst logger = pino({\n  base: { service: 'orders', env: process.env.NODE_ENV },\n  redact: ['req.headers.authorization', '*.password'],\n});\n// per żądanie: logger potomny dokleja ID do każdej linii\nconst log = logger.child({ requestId, traceId, userId });\nlog.info({ orderId }, 'order placed');\n```",
+        "**Spójne pola** we wszystkich usługach umożliwiają zapytania przekrojowe: `timestamp`, `level`, `service`, `env`, `requestId`/`traceId` (żeby przejść do trace'a) i `userId` (żeby zbadać zgłoszenie konkretnego klienta). Jeśli jedna usługa pisze `trace_id`, a druga `traceId`, każde zapytanie musi znać obie wersje. **Poziomy logów** pomagają tylko wtedy, gdy każdy ma jasne znaczenie:",
+        "- **error**: coś się nie udało i wymaga działania lub analizy człowieka\n- **warn**: coś nieoczekiwanego, ale obsłużonego (retry się udał, użyto fallbacku)\n- **info**: istotne zdarzenia biznesowe i cyklu życia: złożono zamówienie, serwer wystartował\n- **debug**: szczegóły wewnętrzne; wyłączony na produkcji, bo wolumen kosztuje i zagłusza sygnał",
+        "**Nigdy nie loguj sekretów, tokenów ani danych osobowych (PII)** – e-maili, adresów, numerów kart. Do logów ma dostęp wiele osób i są długo przechowywane, więc wyciek w nich to incydent bezpieczeństwa i problem z RODO. Redakcja (`redact` w pino) to siatka bezpieczeństwa, a nie zastępstwo dla zasady „nie loguj całych body żądań”.",
+        "**Błąd loguj raz, na granicy.** Jeśli repozytorium, serwis i kontroler każde z osobna łapie, loguje i rzuca dalej, jedna awaria daje trzy wpisy i zawyżone liczniki błędów. Niższe warstwy rzucają wyjątek (ewentualnie opakowany z kontekstem przez `cause`), a handler najwyższego poziomu (error middleware w Express, runner zadań) loguje go raz, z pełnym stackiem."
       ]
     }
   },
@@ -3553,6 +5823,14 @@ const FLASHCARDS = [
         "Unified tagging: `env`, `service`, `version` → correlate deploys with errors",
         "Log–trace correlation by injecting trace IDs into pino logs",
         "Monitors on latency/error rate; SLO tracking"
+      ],
+      more: [
+        "**Datadog** is a SaaS observability platform: instead of running Prometheus, Jaeger and an ELK stack yourself, you send all telemetry to one vendor and get it correlated in one UI. Main products: **APM** (Application Performance Monitoring: distributed tracing plus per-endpoint latency and error stats), infrastructure **metrics**, **log management**, dashboards, **monitors** (alert rules), **RUM** (Real User Monitoring: telemetry from real users' browsers and apps) and **synthetics** (scripted probes that call your endpoints from outside on a schedule).",
+        "Your app usually does not talk to Datadog directly. A **Datadog Agent** runs next to it: as a sidecar container in an ECS task, as a **DaemonSet** (one agent per node) in Kubernetes, or as a host process. The tracer sends spans to the agent (port 8126), custom metrics go over DogStatsD (8125), and the agent tails container logs. It buffers, adds host/container tags and forwards everything to Datadog.",
+        "In Node, `dd-trace` must load **before any other module**. Auto-instrumentation works by patching libraries (express, pg, ioredis, http) at the moment they are required; if Express is imported first, it is not patched and you get no spans. That is why it is loaded via the command line rather than imported somewhere in the code:",
+        "```bash\nDD_ENV=prod DD_SERVICE=orders-api DD_VERSION=1.4.2 \\\nDD_LOGS_INJECTION=true \\\nnode --require dd-trace/init dist/server.js\n# ESM apps: node --import dd-trace/initialize.mjs ...\n```",
+        "**Unified service tagging** means every signal carries `env`, `service` and `version`. Because `version` is on traces, metrics and logs alike, you can see \"the error rate rose exactly when 1.4.2 rolled out\" and compare versions side by side (Deployment Tracking). Set these once as environment variables, typically from your CI/CD or Kubernetes labels.",
+        "**Log–trace correlation**: with `DD_LOGS_INJECTION=true`, dd-trace adds `dd.trace_id` and `dd.span_id` to pino or winston records, so from a slow trace you click straight to its logs and back. On top of that, **monitors** alert on p99 latency or error rate per service, and Datadog **SLOs** track error budgets and burn rate on those same metrics. A cost nuance worth knowing: custom metrics with high-cardinality tags and indexed log volume are the main drivers of the Datadog bill."
       ]
     },
     pl: {
@@ -3564,6 +5842,14 @@ const FLASHCARDS = [
         "Ujednolicone tagi: `env`, `service`, `version` → korelacja wdrożeń z błędami",
         "Korelacja logów z trace'ami przez wstrzykiwanie trace ID do logów pino",
         "Monitory na opóźnienia/błędy; śledzenie SLO"
+      ],
+      more: [
+        "**Datadog** to platforma obserwowalności w modelu SaaS: zamiast samodzielnie utrzymywać Prometheusa, Jaegera i stos ELK, wysyłasz całą telemetrię do jednego dostawcy i dostajesz ją skorelowaną w jednym UI. Główne produkty: **APM** (Application Performance Monitoring: rozproszony tracing plus statystyki opóźnień i błędów per endpoint), **metryki** infrastruktury, **zarządzanie logami**, dashboardy, **monitory** (reguły alertów), **RUM** (Real User Monitoring: telemetria z przeglądarek i aplikacji prawdziwych użytkowników) i **testy syntetyczne** (skrypty, które z zewnątrz cyklicznie odpytują twoje endpointy).",
+        "Aplikacja zwykle nie łączy się z Datadogiem bezpośrednio. Obok niej działa **Datadog Agent**: jako kontener sidecar w tasku ECS, jako **DaemonSet** (jeden agent na node) w Kubernetesie albo jako proces na hoście. Tracer wysyła spany do agenta (port 8126), własne metryki idą przez DogStatsD (8125), a agent czyta logi kontenerów. Buforuje dane, dokleja tagi hosta/kontenera i przekazuje wszystko do Datadoga.",
+        "W Node `dd-trace` musi się załadować **przed jakimkolwiek innym modułem**. Automatyczna instrumentacja polega na patchowaniu bibliotek (express, pg, ioredis, http) w chwili ich wczytania; jeśli Express zostanie zaimportowany wcześniej, nie zostanie opatchowany i nie będzie spanów. Dlatego ładuje się go z linii poleceń, a nie importuje gdzieś w kodzie:",
+        "```bash\nDD_ENV=prod DD_SERVICE=orders-api DD_VERSION=1.4.2 \\\nDD_LOGS_INJECTION=true \\\nnode --require dd-trace/init dist/server.js\n# aplikacje ESM: node --import dd-trace/initialize.mjs ...\n```",
+        "**Ujednolicone tagowanie usług (unified service tagging)** oznacza, że każdy sygnał ma `env`, `service` i `version`. Skoro `version` jest na trace'ach, metrykach i logach, widać, że „odsetek błędów wzrósł dokładnie w chwili wdrożenia 1.4.2”, i można porównać wersje obok siebie (Deployment Tracking). Ustawia się je raz jako zmienne środowiskowe, zwykle z CI/CD lub etykiet Kubernetesa.",
+        "**Korelacja logów z trace'ami**: przy `DD_LOGS_INJECTION=true` dd-trace dopisuje `dd.trace_id` i `dd.span_id` do rekordów pino lub winstona, więc z wolnego trace'a przechodzisz jednym kliknięciem do jego logów i z powrotem. Do tego **monitory** alarmują na p99 opóźnień lub odsetek błędów per usługa, a **SLO** w Datadogu śledzą budżet błędów i tempo jego spalania na tych samych metrykach. Warto wiedzieć o kosztach: rachunek napędzają głównie własne metryki z tagami o wysokiej kardynalności i wolumen indeksowanych logów."
       ]
     }
   },
@@ -3577,6 +5863,13 @@ const FLASHCARDS = [
         "SPL example: `index=api service=orders status>=500 | stats count by endpoint`",
         "`timechart`, `top`, `rex` (regex field extraction), `eval`, `where`",
         "Saved searches → alerts and dashboards; structured JSON logs make field extraction easy"
+      ],
+      more: [
+        "**Splunk** is a platform that ingests machine data (mostly logs), indexes it and lets you search and aggregate it with its own query language, **SPL** (Search Processing Language). It is common in large enterprises and security teams (it is also a popular SIEM). Splunk, now part of Cisco, additionally sells **Splunk Observability Cloud** (formerly SignalFx) for metrics, APM and RUM, built on OpenTelemetry, which is a separate product from the core log platform.",
+        "Getting data in: a **Universal Forwarder** agent tails log files on hosts and ships them, or applications and collectors send events over HTTPS to the **HTTP Event Collector (HEC)** using a token. In containers, the OTel Collector or a logging driver usually posts to HEC. Every event lands in an **index** (a storage area with its own retention and access control, e.g. `index=api`) and carries a **sourcetype**, a label telling Splunk how to parse it (e.g. `_json`). Splunk mostly extracts fields at search time (\"schema on read\"), so you do not have to define a schema up front.",
+        "SPL is a pipeline. The first part is a search that selects events; each `|` passes the results to the next command, like Unix pipes. So `index=api service=orders status>=500 | stats count by endpoint` means: take 5xx events of the orders service and count them per endpoint. Commands you will use most:",
+        "- `stats count, avg(latency_ms) by endpoint`: aggregation, like SQL GROUP BY\n- `timechart span=5m count by status`: a time series ready for a chart\n- `top limit=10 endpoint`: most frequent values with percentages\n- `rex field=_raw \"user=(?<userId>\\d+)\"`: extract a field from free text with a regex named group\n- `eval latency_s = latency_ms / 1000`: compute a new field\n- `where latency_ms > 1000`: filter by an expression",
+        "Practical nuances: always restrict the `index` and time range first, because searching everything is slow and expensive. **Structured JSON logs** are auto-extracted into fields (`status`, `endpoint`, `traceId`), so you rarely need `rex`; with free-text logs you end up writing a regex in every query. A **saved search** can run on a schedule and trigger an **alert** (e.g. more than 100 errors in 5 minutes) or power a dashboard panel."
       ]
     },
     pl: {
@@ -3587,6 +5880,13 @@ const FLASHCARDS = [
         "Przykład SPL: `index=api service=orders status>=500 | stats count by endpoint`",
         "`timechart`, `top`, `rex` (wyciąganie pól regexem), `eval`, `where`",
         "Zapisane wyszukiwania → alerty i dashboardy; logi w JSON ułatwiają wyciąganie pól"
+      ],
+      more: [
+        "**Splunk** to platforma, która przyjmuje dane maszynowe (głównie logi), indeksuje je i pozwala je przeszukiwać i agregować własnym językiem zapytań **SPL** (Search Processing Language). Jest popularny w dużych firmach i zespołach bezpieczeństwa (to też często używany SIEM). Splunk, dziś należący do Cisco, sprzedaje dodatkowo **Splunk Observability Cloud** (dawniej SignalFx) do metryk, APM i RUM, oparty na OpenTelemetry – to osobny produkt niż główna platforma logów.",
+        "Wprowadzanie danych: agent **Universal Forwarder** czyta pliki logów na hostach i je wysyła, albo aplikacje i kolektory wysyłają zdarzenia przez HTTPS do **HTTP Event Collectora (HEC)** z użyciem tokenu. W kontenerach zwykle OTel Collector lub sterownik logowania wysyła dane do HEC. Każde zdarzenie trafia do **indeksu** (obszaru danych z własną retencją i uprawnieniami, np. `index=api`) i ma **sourcetype**, czyli etykietę mówiącą Splunkowi, jak je parsować (np. `_json`). Pola są wyciągane głównie w czasie wyszukiwania („schema on read”), więc nie trzeba z góry definiować schematu.",
+        "SPL to pipeline. Pierwsza część to wyszukiwanie wybierające zdarzenia, a każdy `|` przekazuje wyniki do kolejnej komendy, jak potoki w Uniksie. Zapytanie `index=api service=orders status>=500 | stats count by endpoint` znaczy: weź zdarzenia 5xx usługi orders i policz je per endpoint. Najczęściej używane komendy:",
+        "- `stats count, avg(latency_ms) by endpoint`: agregacja, jak GROUP BY w SQL\n- `timechart span=5m count by status`: szereg czasowy gotowy do wykresu\n- `top limit=10 endpoint`: najczęstsze wartości z udziałem procentowym\n- `rex field=_raw \"user=(?<userId>\\d+)\"`: wyciągnięcie pola z wolnego tekstu regexem z nazwaną grupą\n- `eval latency_s = latency_ms / 1000`: wyliczenie nowego pola\n- `where latency_ms > 1000`: filtrowanie wyrażeniem",
+        "Praktyczne niuanse: zawsze najpierw zawężaj `index` i zakres czasu, bo przeszukiwanie wszystkiego jest wolne i drogie. **Logi w JSON** są automatycznie rozbijane na pola (`status`, `endpoint`, `traceId`), więc `rex` jest rzadko potrzebny; przy logach tekstowych w każdym zapytaniu piszesz regex. **Zapisane wyszukiwanie (saved search)** może działać według harmonogramu i wyzwalać **alert** (np. ponad 100 błędów w 5 minut) albo zasilać panel dashboardu."
       ]
     }
   },
@@ -3623,6 +5923,14 @@ const FLASHCARDS = [
         "SLA: contract with customers, with penalties – looser than SLO",
         "Error budget = 100% − SLO (99.9% → ~43 min/month); spent → slow down releases, fix reliability",
         "Alert on burn rate, not single errors"
+      ],
+      more: [
+        "These terms turn \"is the service reliable enough?\" into numbers that engineering and product agree on. They come from Google's SRE (Site Reliability Engineering) practice.",
+        "An **SLI** (Service Level Indicator) is a measurement of user experience, usually a ratio of good events to all events: `successful requests / all requests`, or `requests served under 300 ms / all requests`. Good SLIs are measured close to the user (load balancer, client), not derived from CPU usage.",
+        "An **SLO** (Service Level Objective) is the internal target for an SLI over a time window: \"99.9% of requests succeed over a rolling 30 days\". An **SLA** (Service Level Agreement) is a contractual promise to customers with consequences such as service credits or refunds. The SLA is deliberately looser than the SLO (e.g. SLA 99.5%, SLO 99.9%), so you notice and fix problems well before they cost money.",
+        "The **error budget** is the allowed unreliability: 100% − SLO. For 99.9% over 30 days that is 0.1% of 43,200 minutes, about 43 minutes of full downtime, or equivalently 1 failed request in 1,000. The budget is a decision tool: while budget remains, the team ships fast and takes risks; when it is spent, the agreed policy applies: freeze risky releases and prioritise reliability work. It replaces the dev-versus-ops argument with data. 100% is never the target: it is enormously expensive, and users cannot tell the difference from their own flaky Wi-Fi.",
+        "**Burn rate** is how fast you consume the budget relative to plan. Burn rate 1 uses exactly the whole budget by the end of the window; burn rate 14.4 would exhaust a 30-day budget in about two days (2% of it in one hour). Mature alerting uses **multi-window, multi-burn-rate** rules:",
+        "- high burn rate over a short window (e.g. 14.4 over 1 h, confirmed over 5 min): page someone, it is a real outage\n- low burn rate over a long window (e.g. 1–3 over 1–3 days): open a ticket, it is a slow leak\n- a single failed request never pages anyone"
       ]
     },
     pl: {
@@ -3633,6 +5941,14 @@ const FLASHCARDS = [
         "SLA: umowa z klientem, z karami – luźniejsza niż SLO",
         "Budżet błędów = 100% − SLO (99,9% → ~43 min/miesiąc); wyczerpany → mniej wydań, praca nad niezawodnością",
         "Alerty na tempo spalania budżetu, nie pojedyncze błędy"
+      ],
+      more: [
+        "Te pojęcia zamieniają pytanie „czy usługa jest wystarczająco niezawodna?” na liczby, co do których zgadzają się inżynierowie i produkt. Pochodzą z praktyk SRE (Site Reliability Engineering) Google.",
+        "**SLI** (Service Level Indicator) to pomiar doświadczenia użytkownika, zwykle stosunek dobrych zdarzeń do wszystkich: `udane żądania / wszystkie żądania` albo `żądania obsłużone w < 300 ms / wszystkie żądania`. Dobre SLI mierzy się blisko użytkownika (load balancer, klient), a nie wyprowadza z użycia CPU.",
+        "**SLO** (Service Level Objective) to wewnętrzny cel dla SLI w oknie czasowym: „99,9% żądań kończy się sukcesem w ciągu kroczących 30 dni”. **SLA** (Service Level Agreement) to umowna obietnica wobec klientów z konsekwencjami, np. rabatami czy zwrotami. SLA jest celowo luźniejsze niż SLO (np. SLA 99,5%, SLO 99,9%), żeby zauważyć i naprawić problem na długo, zanim zacznie kosztować pieniądze.",
+        "**Budżet błędów (error budget)** to dopuszczalna zawodność: 100% − SLO. Dla 99,9% w 30 dni to 0,1% z 43 200 minut, czyli ok. 43 minuty pełnej niedostępności albo 1 nieudane żądanie na 1000. Budżet to narzędzie decyzyjne: dopóki go starcza, zespół wydaje szybko i może ryzykować; gdy się wyczerpie, wchodzi uzgodniona polityka – wstrzymanie ryzykownych wydań i priorytet dla prac nad niezawodnością. Spór „dev kontra ops” rozstrzygają dane. 100% nigdy nie jest celem: kosztuje ogromnie dużo, a użytkownik i tak nie odróżni tego od kaprysów własnego Wi-Fi.",
+        "**Tempo spalania (burn rate)** mówi, jak szybko zużywasz budżet względem planu. Burn rate 1 zużywa dokładnie cały budżet do końca okna; burn rate 14,4 wyczerpałby 30-dniowy budżet w ok. dwa dni (2% w godzinę). Dojrzałe alertowanie używa reguł **wielu okien i wielu progów spalania (multi-window, multi-burn-rate)**:",
+        "- wysoki burn rate w krótkim oknie (np. 14,4 przez 1 h, potwierdzony w 5 min): wzywamy dyżurnego, to prawdziwa awaria\n- niski burn rate w długim oknie (np. 1–3 przez 1–3 dni): zgłoszenie w backlogu, to powolny wyciek\n- pojedyncze nieudane żądanie nigdy nikogo nie budzi"
       ]
     }
   },
@@ -3646,6 +5962,15 @@ const FLASHCARDS = [
         "Scope: which endpoints/regions/clients; correlate with deploy version, dashboards, traces, Sentry",
         "Verify recovery with metrics",
         "Blameless postmortem: timeline, root cause, action items (test, alert, guardrail)"
+      ],
+      more: [
+        "This question tests incident discipline more than debugging skill. The key idea: when users are affected, **restore service first, understand it later**. The deploy is the prime suspect, and you have a known-good version at hand.",
+        "**Mitigate**: roll back to the previous version, or switch off the **feature flag** guarding the new code, which is even faster because no build or redeploy is needed. Do not try to hot-fix forward under pressure unless rollback is impossible, e.g. after a DB migration that is not backward compatible; that is exactly why migrations should follow expand/contract, so rollback stays safe. Canary or progressive deploys limit the blast radius: the spike hits 5% of traffic, not 100%, and can trigger an automatic rollback.",
+        "**Communicate**: open an incident channel, name an **incident commander** who coordinates and decides (separate from the people debugging), and post status updates at a regular cadence to stakeholders, support and the status page. Clear ownership prevents five people rolling back and redeploying at the same time.",
+        "**Scope and correlate**, to confirm the cause and measure impact:",
+        "- which endpoints, regions, client types (web, mobile, TV app) or customers are affected\n- does the spike start exactly at deploy time? compare by `version` tag in APM\n- traces of failing requests: which span errors, which dependency\n- Sentry: a new issue first seen in this release, with its stack trace\n- other changes in the same window: config, feature flags, a dependency outage, a traffic spike",
+        "**Verify recovery** with the same metrics that showed the problem: error rate and latency back to baseline, not just \"the rollback finished\". Then check for leftover damage: failed jobs to retry, bad data written during the incident, customers to notify.",
+        "**Blameless postmortem**: a written review that assumes people acted reasonably with the information they had and asks why the system allowed the failure. It covers the timeline (when it started, was detected, mitigated, resolved), root cause and contributing factors, user impact, and **action items** with owners and deadlines: a missing test, an alert that should have fired sooner, a guardrail such as automated canary analysis. Blame makes people hide mistakes; blamelessness makes the next incident shorter."
       ]
     },
     pl: {
@@ -3656,6 +5981,15 @@ const FLASHCARDS = [
         "Zakres: które endpointy/regiony/klienci; korelacja z wersją wdrożenia, dashboardami, trace'ami, Sentry",
         "Potwierdzenie powrotu do normy metrykami",
         "Postmortem bez szukania winnych: oś czasu, przyczyna, zadania (test, alert, zabezpieczenie)"
+      ],
+      more: [
+        "To pytanie sprawdza dyscyplinę w obsłudze incydentów bardziej niż umiejętność debugowania. Kluczowa zasada: gdy użytkownicy cierpią, **najpierw przywróć działanie, zrozumiesz później**. Wdrożenie jest głównym podejrzanym, a ostatnia działająca wersja jest pod ręką.",
+        "**Ograniczenie skutków (mitigation)**: rollback do poprzedniej wersji albo wyłączenie **feature flagi**, za którą stoi nowy kod – to jeszcze szybsze, bo nie trzeba budować ani wdrażać. Nie łataj „do przodu” pod presją, chyba że rollback jest niemożliwy, np. po migracji DB niezgodnej wstecz; właśnie dlatego migracje robi się wzorcem expand/contract, żeby rollback był bezpieczny. Wdrożenia canary lub stopniowe ograniczają zasięg (blast radius): skok dotyka 5% ruchu, a nie 100%, i może automatycznie wywołać rollback.",
+        "**Komunikacja**: kanał incydentu, wyznaczony **incident commander**, który koordynuje i podejmuje decyzje (to inna osoba niż ci, którzy debugują), oraz regularne aktualizacje statusu dla interesariuszy, supportu i strony statusowej. Jasny podział ról zapobiega sytuacji, w której pięć osób jednocześnie robi rollback i ponowne wdrożenie.",
+        "**Zakres i korelacja** – żeby potwierdzić przyczynę i ocenić skutki:",
+        "- których endpointów, regionów, typów klientów (web, mobile, aplikacja TV) lub klientów to dotyczy\n- czy skok zaczyna się dokładnie w chwili wdrożenia? porównanie po tagu `version` w APM\n- trace'y nieudanych żądań: który span zwraca błąd, która zależność\n- Sentry: nowy issue, po raz pierwszy widziany w tym wydaniu, ze stack trace\n- inne zmiany w tym samym oknie: konfiguracja, flagi, awaria zależności, skok ruchu",
+        "**Potwierdzenie powrotu do normy** tymi samymi metrykami, które pokazały problem: odsetek błędów i opóźnienia wróciły do poziomu bazowego, a nie tylko „rollback się zakończył”. Potem sprawdź pozostałe szkody: nieudane zadania do ponowienia, błędne dane zapisane w trakcie incydentu, klientów do powiadomienia.",
+        "**Postmortem bez szukania winnych (blameless)**: pisemna analiza, która zakłada, że ludzie działali rozsądnie przy informacjach, jakie mieli, i pyta, dlaczego system dopuścił do awarii. Zawiera oś czasu (początek, wykrycie, ograniczenie skutków, rozwiązanie), przyczynę źródłową i czynniki sprzyjające, wpływ na użytkowników oraz **zadania** z właścicielami i terminami: brakujący test, alert, który powinien odpalić wcześniej, zabezpieczenie typu automatyczna analiza canary. Szukanie winnych uczy ukrywania błędów; kultura blameless skraca kolejny incydent."
       ]
     }
   },
@@ -3670,6 +6004,14 @@ const FLASHCARDS = [
         "Pattern matching everywhere: `{:ok, user} = fetch_user(id)`, function clauses",
         "Convention: return `{:ok, value}` / `{:error, reason}` tuples (≈ Result type)",
         "Tooling: Mix (build), Hex (packages), ExUnit (tests)"
+      ],
+      more: [
+        "**Elixir** is a language created in 2012 by José Valim that runs on the **BEAM**, the virtual machine of Erlang. Erlang was built at Ericsson for telecom switches that must run for years without downtime and handle massive concurrency. Elixir adds a modern syntax, macros and great tooling while reusing Erlang's battle-tested runtime and libraries (OTP).",
+        "It is **functional**: programs are made of functions that transform data, not objects with mutable state. It is **dynamically typed** (types are checked at runtime), although recent versions (1.17+) add gradual, set-theoretic type checking in the compiler that warns about many type errors. All data is **immutable**: \"updating\" a map returns a new map, so no function can change data you passed to it behind your back. That makes the **pipe operator** `|>` natural: it passes the result of the left expression as the first argument of the next call, so a chain of transformations reads top to bottom.",
+        "```elixir\n# pipe: same as String.upcase(String.trim(input))\ninput |> String.trim() |> String.upcase()\n\n# function clauses chosen by pattern matching\ndef greet(%{role: :admin}), do: \"Hi admin\"\ndef greet(%{name: name}), do: \"Hi #{name}\"\n\ncase fetch_user(id) do\n  {:ok, user} -> render(user)\n  {:error, :not_found} -> send_404()\nend\n```",
+        "**Pattern matching**: `=` is not assignment but a match. `{:ok, user} = fetch_user(id)` succeeds only if the right side is a two-element tuple whose first element is the atom `:ok`, and then binds `user`; otherwise it raises a `MatchError`. The same mechanism selects **function clauses**: you define a function several times with different argument patterns and the first matching one runs, which replaces a lot of if/else. **Atoms** such as `:ok` are named constants, similar to string-literal types in TS.",
+        "**Errors as values**: by convention functions return `{:ok, value}` or `{:error, reason}`, and callers handle both with `case` or chain several steps with `with`. It is essentially a `Result` type, like in Rust or a TS discriminated union. Variants ending in `!` (e.g. `File.read!`) raise an exception instead.",
+        "**Tooling**: **Mix** is the build tool (new projects, compile, run tasks, migrations; roughly npm scripts plus tsc), **Hex** is the package registry (≈ npm), **ExUnit** is the built-in test framework (≈ Jest/Vitest). IEx, the interactive shell, and `mix format` complete the picture."
       ]
     },
     pl: {
@@ -3680,6 +6022,14 @@ const FLASHCARDS = [
         "Pattern matching wszędzie: `{:ok, user} = fetch_user(id)`, klauzule funkcji",
         "Konwencja: krotki `{:ok, value}` / `{:error, reason}` (≈ typ Result)",
         "Narzędzia: Mix (build), Hex (pakiety), ExUnit (testy)"
+      ],
+      more: [
+        "**Elixir** to język stworzony w 2012 r. przez José Valima, działający na **BEAM**, maszynie wirtualnej Erlanga. Erlang powstał w Ericssonie dla central telekomunikacyjnych, które muszą działać latami bez przestojów i obsługiwać ogromną współbieżność. Elixir dokłada nowoczesną składnię, makra i dobre narzędzia, korzystając z dojrzałego runtime'u i bibliotek Erlanga (OTP).",
+        "Jest **funkcyjny**: program składa się z funkcji przekształcających dane, a nie z obiektów o zmiennym stanie. Jest **dynamicznie typowany** (typy sprawdzane w czasie działania), choć nowsze wersje (1.17+) dodają w kompilatorze stopniowe sprawdzanie typów oparte na teorii zbiorów, które ostrzega o wielu błędach. Wszystkie dane są **niemutowalne**: „zmiana” mapy zwraca nową mapę, więc żadna funkcja nie zmieni po cichu danych, które jej przekazałeś. Dlatego naturalny jest **operator pipe** `|>`: przekazuje wynik wyrażenia z lewej jako pierwszy argument kolejnego wywołania, więc łańcuch transformacji czyta się z góry na dół.",
+        "```elixir\n# pipe: to samo co String.upcase(String.trim(input))\ninput |> String.trim() |> String.upcase()\n\n# klauzule funkcji wybierane przez pattern matching\ndef greet(%{role: :admin}), do: \"Hi admin\"\ndef greet(%{name: name}), do: \"Hi #{name}\"\n\ncase fetch_user(id) do\n  {:ok, user} -> render(user)\n  {:error, :not_found} -> send_404()\nend\n```",
+        "**Pattern matching (dopasowanie wzorców)**: `=` to nie przypisanie, tylko dopasowanie. `{:ok, user} = fetch_user(id)` udaje się tylko wtedy, gdy po prawej jest dwuelementowa krotka zaczynająca się od atomu `:ok`, i wtedy wiąże `user`; w przeciwnym razie leci `MatchError`. Ten sam mechanizm wybiera **klauzule funkcji**: definiujesz funkcję kilka razy z różnymi wzorcami argumentów i wykonuje się pierwsza pasująca, co zastępuje sporo if/else. **Atomy**, np. `:ok`, to nazwane stałe, podobne do typów literałów stringowych w TS.",
+        "**Błędy jako wartości**: zgodnie z konwencją funkcje zwracają `{:ok, value}` lub `{:error, reason}`, a wywołujący obsługuje oba przypadki przez `case` albo łączy kilka kroków przez `with`. To w praktyce typ `Result`, jak w Rust albo unia dyskryminowana w TS. Warianty z `!` na końcu (np. `File.read!`) zamiast tego rzucają wyjątek.",
+        "**Narzędzia**: **Mix** to narzędzie do budowania (nowe projekty, kompilacja, zadania, migracje; mniej więcej skrypty npm plus tsc), **Hex** to rejestr pakietów (≈ npm), **ExUnit** to wbudowany framework testowy (≈ Jest/Vitest). Całość uzupełniają IEx, czyli interaktywna konsola, i `mix format`."
       ]
     }
   },
@@ -3693,6 +6043,14 @@ const FLASHCARDS = [
         "GenServer: process holding state, handles calls/casts (in-memory state, caches, workers)",
         "Supervisors restart crashed children per strategy (`one_for_one`, …) → 'let it crash'",
         "Contrast with Node: one thread per process, cooperative – blocking code hurts everyone"
+      ],
+      more: [
+        "**BEAM processes** are not OS processes or threads. They are tiny units managed by the VM itself: a new process costs a few kilobytes and a few microseconds, so one node can run millions of them. Each has its own heap and its own garbage collection; processes share no memory and communicate only by sending **messages** to each other's mailboxes. A crash in one process cannot corrupt another one's state.",
+        "The BEAM runs one **scheduler** per CPU core, and scheduling is **preemptive**: each process gets a budget of work units (called reductions, a few thousand per turn) and is then switched out, even in the middle of a tight loop. One CPU-heavy request therefore cannot freeze the others, and latency stays predictable under load. Compare Node: one JS thread per process with **cooperative** scheduling through the event loop. A synchronous `JSON.parse` of a 50 MB payload or a catastrophic regex blocks every other request until it finishes.",
+        "**OTP** (Open Telecom Platform) is the standard framework of patterns, called behaviours, built on top of processes. A **GenServer** is a process that holds state in a receive loop and handles messages: a **call** is synchronous request/response (the caller waits for the reply, with a timeout), a **cast** is fire-and-forget. Typical uses: an in-memory cache, a rate limiter, a connection holder, a background worker. Because a process handles one message at a time, access to its state is serialised without any locks.",
+        "A **Supervisor** is a process whose only job is to start child processes and restart them when they crash, following a strategy:",
+        "- `one_for_one`: restart only the crashed child\n- `one_for_all`: restart all children, for siblings that depend on each other\n- `rest_for_one`: restart the crashed child and every child started after it\n- a restart intensity limit (e.g. max 3 restarts in 5 s) escalates to the parent supervisor if a child keeps crashing",
+        "Supervisors nest into a **supervision tree**, which enables **\"let it crash\"**: instead of defensive code for every unexpected state, you let the process die and its supervisor restarts it in a clean, known state. This is not \"ignore errors\": expected failures are still handled as `{:error, reason}` values; \"let it crash\" is for the unexpected ones, such as a transient bug or corrupted state. The nuance: a restart loses the process's in-memory state, so anything important must live in a database or be rebuildable on start."
       ]
     },
     pl: {
@@ -3703,6 +6061,14 @@ const FLASHCARDS = [
         "GenServer: proces trzymający stan, obsługuje call/cast (stan w pamięci, cache, workery)",
         "Supervisory restartują padnięte procesy wg strategii (`one_for_one`, …) → 'let it crash'",
         "Kontrast z Node: jeden wątek na proces, kooperacyjnie – blokujący kod szkodzi wszystkim"
+      ],
+      more: [
+        "**Procesy BEAM** to nie procesy systemu operacyjnego ani wątki. To maleńkie jednostki zarządzane przez samą maszynę wirtualną: nowy proces kosztuje kilka kilobajtów i kilka mikrosekund, więc jeden node może uruchomić ich miliony. Każdy ma własną stertę i własne odśmiecanie pamięci (GC); procesy nie współdzielą pamięci i komunikują się wyłącznie, wysyłając **wiadomości** do swoich skrzynek (mailbox). Awaria jednego procesu nie może uszkodzić stanu innego.",
+        "BEAM uruchamia jeden **scheduler** na rdzeń CPU, a planowanie jest **wywłaszczające (preemptive)**: każdy proces dostaje budżet jednostek pracy (tzw. redukcji, kilka tysięcy na turę), po czym zostaje przełączony, nawet w środku ciasnej pętli. Jedno obciążające CPU żądanie nie zamrozi więc pozostałych, a opóźnienia pod obciążeniem są przewidywalne. Dla porównania Node: jeden wątek JS na proces i **kooperacyjne** planowanie przez event loop. Synchroniczny `JSON.parse` 50-megabajtowego payloadu albo „katastrofalny” regex blokuje wszystkie inne żądania, dopóki się nie skończy.",
+        "**OTP** (Open Telecom Platform) to standardowy zestaw wzorców, tzw. behaviours, zbudowanych na procesach. **GenServer** to proces trzymający stan w pętli odbioru wiadomości: **call** to synchroniczne żądanie-odpowiedź (wywołujący czeka na odpowiedź, z timeoutem), **cast** to wyślij-i-zapomnij. Typowe zastosowania: cache w pamięci, rate limiter, proces trzymający połączenie, worker w tle. Ponieważ proces obsługuje jedną wiadomość naraz, dostęp do stanu jest serializowany bez żadnych blokad.",
+        "**Supervisor** to proces, którego jedynym zadaniem jest uruchamianie procesów potomnych i restartowanie ich po awarii zgodnie ze strategią:",
+        "- `one_for_one`: restartuje tylko padnięty proces\n- `one_for_all`: restartuje wszystkie dzieci, gdy są od siebie zależne\n- `rest_for_one`: restartuje padnięty proces i wszystkie uruchomione po nim\n- limit intensywności restartów (np. maks. 3 w 5 s) eskaluje problem do supervisora wyżej, jeśli proces ciągle pada",
+        "Supervisory zagnieżdżają się w **drzewo nadzoru (supervision tree)**, co umożliwia filozofię **„let it crash”**: zamiast defensywnego kodu na każdy nieoczekiwany stan pozwalasz procesowi paść, a supervisor uruchamia go od nowa w czystym, znanym stanie. To nie jest „ignorowanie błędów”: oczekiwane porażki nadal obsługuje się jako wartości `{:error, reason}`, a „let it crash” dotyczy nieoczekiwanych, jak przejściowy bug czy uszkodzony stan. Niuans: restart gubi stan procesu w pamięci, więc wszystko, co ważne, musi być w bazie albo dać się odbudować przy starcie."
       ]
     }
   },
@@ -3717,6 +6083,14 @@ const FLASHCARDS = [
         "Ecto: DB layer – schemas, changesets (validation), migrations, queries (≈ ORM + Zod)",
         "Channels / PubSub: real-time over WebSockets; LiveView: server-rendered interactive UI",
         "Absinthe: GraphQL for Elixir"
+      ],
+      more: [
+        "**Phoenix** is the dominant web framework for Elixir. It plays the role Express or NestJS play in Node, but it is more \"batteries included\", closer to Rails: generators, a DB layer, real-time messaging and server-rendered interactive UI all come with the standard setup.",
+        "**Plug** is the foundation: a specification for composable modules that take a connection struct (`conn`, holding the request and the response being built) and return a transformed one. A **pipeline** is a named list of plugs, such as parse the body, fetch the session, check CSRF, authenticate, just like a chain of Express middleware. Differences: `conn` is immutable, so each plug returns a new one, and a plug stops the chain by calling `halt/1` rather than by not calling `next()`.",
+        "The **Router** matches HTTP verb and path, runs the pipeline for that scope (typically `:browser` or `:api`) and dispatches to a **controller** action. Controllers stay thin and call **contexts**: plain modules that group business logic for one domain (`Accounts`, `Billing`) and form that area's public API, much like a service layer in NestJS. Contexts are where the real behaviour you must migrate lives.",
+        "**Ecto** is the data layer, but not a classic ORM: there is no lazy loading and no objects that save themselves. Its parts:",
+        "- **schema**: maps a table to an Elixir struct\n- **changeset**: casts and validates input before a write (required fields, formats, unique constraints); this is the ≈ Zod part\n- **migrations**: versioned schema changes, run with `mix ecto.migrate`\n- **Repo** and the query DSL: explicit, composable queries; associations must be preloaded explicitly, which prevents accidental N+1 queries",
+        "**Real-time**: **Channels** provide bidirectional messaging over WebSockets, organised by topics (`room:42`). **PubSub** broadcasts messages across every node of the cluster, so a user connected to node A receives an event published on node B. **LiveView** renders interactive UI on the server: the browser holds a WebSocket, events go to a server-side process, and Phoenix sends back only minimal HTML diffs, giving rich interactivity with very little JavaScript. **Absinthe** is the GraphQL library (schema, resolvers, subscriptions over Channels), relevant if the service you migrate exposes a GraphQL API."
       ]
     },
     pl: {
@@ -3728,6 +6102,14 @@ const FLASHCARDS = [
         "Ecto: warstwa DB – schematy, changesety (walidacja), migracje, zapytania (≈ ORM + Zod)",
         "Channels / PubSub: real-time przez WebSockety; LiveView: interaktywne UI renderowane na serwerze",
         "Absinthe: GraphQL dla Elixira"
+      ],
+      more: [
+        "**Phoenix** to dominujący framework webowy w Elixirze. Pełni rolę, jaką w Node mają Express czy NestJS, ale ma więcej wbudowanych funkcji (bliżej mu do Rails): generatory, warstwa bazy danych, komunikacja real-time i interaktywne UI renderowane na serwerze są w standardowym zestawie.",
+        "Podstawą jest **Plug**: specyfikacja składanych modułów, które przyjmują strukturę połączenia (`conn`, czyli żądanie i budowana odpowiedź) i zwracają jej przekształconą wersję. **Pipeline** to nazwana lista plugów, np. parsowanie body, pobranie sesji, sprawdzenie CSRF, uwierzytelnienie – dokładnie jak łańcuch middleware w Express. Różnice: `conn` jest niemutowalny, więc każdy plug zwraca nowy, a przerwanie łańcucha to wywołanie `halt/1`, a nie „niewywołanie” `next()`.",
+        "**Router** dopasowuje metodę HTTP i ścieżkę, uruchamia pipeline danego zakresu (zwykle `:browser` lub `:api`) i przekazuje żądanie do akcji **kontrolera**. Kontrolery są cienkie i wołają **konteksty (contexts)**: zwykłe moduły grupujące logikę biznesową jednej domeny (`Accounts`, `Billing`) i stanowiące jej publiczne API – podobnie jak warstwa serwisów w NestJS. To w kontekstach siedzi prawdziwe zachowanie, które trzeba zmigrować.",
+        "**Ecto** to warstwa danych, ale nie klasyczny ORM: nie ma lazy loadingu ani obiektów, które same się zapisują. Elementy:",
+        "- **schema (schemat)**: mapuje tabelę na strukturę Elixira\n- **changeset**: rzutuje i waliduje dane przed zapisem (pola wymagane, formaty, unikalność); to jest część ≈ Zod\n- **migracje**: wersjonowane zmiany schematu, uruchamiane przez `mix ecto.migrate`\n- **Repo** i DSL zapytań: jawne, składane zapytania; asocjacje trzeba jawnie preloadować, co chroni przed przypadkowym N+1",
+        "**Real-time**: **Channels** zapewniają dwukierunkową komunikację przez WebSockety, zorganizowaną w tematy (`room:42`). **PubSub** rozgłasza wiadomości na wszystkie node'y klastra, więc użytkownik podłączony do node'a A dostaje zdarzenie opublikowane na node'zie B. **LiveView** renderuje interaktywne UI na serwerze: przeglądarka trzyma WebSocket, zdarzenia trafiają do procesu po stronie serwera, a Phoenix odsyła tylko minimalne różnice w HTML – bogata interaktywność przy bardzo małej ilości JavaScriptu. **Absinthe** to biblioteka GraphQL (schemat, resolvery, subskrypcje przez Channels), istotna, jeśli migrowana usługa wystawia API GraphQL."
       ]
     }
   },
@@ -3742,6 +6124,15 @@ const FLASHCARDS = [
         "Lightweight concurrent processes → async I/O, queues + workers, worker threads for CPU",
         "Pattern matching / tagged tuples → TS discriminated unions, Result types",
         "Ecto changesets → Zod schemas + ORM/query builder; Oban jobs → BullMQ/SQS"
+      ],
+      more: [
+        "The core difference: in Elixir, many operational concerns live **inside the runtime** (supervision, in-memory state, cluster-wide pub/sub, massive lightweight concurrency). Node deliberately provides less, so during a migration those responsibilities move **out to infrastructure**: the orchestrator, Redis, queues. Finding every such dependency is the hard part, because in Elixir it is often implicit.",
+        "**Supervision → platform restarts.** A Node process has no supervisors inside it. After an uncaught exception its state is undefined and it should log and exit; Kubernetes or ECS restarts the container, liveness/readiness **health checks** detect hung instances, and the load balancer routes around them. Inside the process you handle errors per request and add `uncaughtException`/`unhandledRejection` handlers that log, drain and exit.",
+        "**GenServer state → Redis or DB.** An Elixir app may keep a cache, counters or sessions in a GenServer. Node services run as several stateless replicas that scale up and down, so in-memory state would differ between instances and vanish on restart. Move it to Redis (TTLs, atomic `INCR`) or the database. Watch for GenServers used as a serialisation point (one update at a time): in Node you need atomic updates, locks or a single queue consumer to keep that guarantee.",
+        "**Channels/PubSub → WebSockets plus a broker.** Use `ws` or Socket.IO for connections. A client is attached to one instance, so broadcasting across instances needs Redis pub/sub (e.g. the Socket.IO Redis adapter) or a managed service (API Gateway WebSockets, AppSync, Ably). Plan for reconnects and load balancer stickiness.",
+        "**Concurrency.** Elixir code may fan out to thousands of processes (`Task.async_stream`). In Node, I/O concurrency comes from async code and `Promise.all` (bounded with something like p-limit), long-running work goes to **queues and workers**, and CPU-heavy work goes to **worker threads** so the event loop stays free.",
+        "**Tagged tuples → discriminated unions**, **Ecto changesets → Zod plus an ORM or query builder** (Prisma, Drizzle, Knex), **Oban** (a Postgres-backed job queue) → BullMQ (Redis) or SQS. Check which Oban guarantees you relied on (unique jobs, scheduling, retries with backoff, transactional enqueue in the same DB transaction) and reproduce them explicitly.",
+        "```ts\n// {:ok, user} | {:error, :not_found} expressed in TypeScript\ntype Result<T, E> = { ok: true; value: T } | { ok: false; error: E };\n\nconst r = await fetchUser(id); // Result<User, 'not_found'>\nif (!r.ok) return reply.code(404).send();\nconsole.log(r.value.email); // narrowed to User here\n```"
       ]
     },
     pl: {
@@ -3753,6 +6144,15 @@ const FLASHCARDS = [
         "Lekkie współbieżne procesy → asynchroniczne I/O, kolejki + workery, worker threads dla CPU",
         "Pattern matching / krotki z tagami → unie dyskryminowane w TS, typy Result",
         "Changesety Ecto → schematy Zod + ORM/query builder; zadania Oban → BullMQ/SQS"
+      ],
+      more: [
+        "Zasadnicza różnica: w Elixirze wiele zagadnień operacyjnych żyje **wewnątrz runtime'u** (nadzór procesów, stan w pamięci, pub/sub w całym klastrze, masowa lekka współbieżność). Node celowo daje mniej, więc w trakcie migracji te odpowiedzialności **przechodzą do infrastruktury**: orkiestratora, Redisa, kolejek. Najtrudniejsze jest znalezienie każdej takiej zależności, bo w Elixirze bywa ona niejawna.",
+        "**Supervisory → restarty na poziomie platformy.** Proces Node nie ma w środku supervisorów. Po nieobsłużonym wyjątku jego stan jest nieokreślony, więc powinien zalogować błąd i się zakończyć; Kubernetes lub ECS restartuje kontener, **health checki** (liveness/readiness) wykrywają zawieszone instancje, a load balancer je omija. Wewnątrz procesu obsługujesz błędy per żądanie i dodajesz handlery `uncaughtException`/`unhandledRejection`, które logują, domykają połączenia i kończą proces.",
+        "**Stan GenServera → Redis lub DB.** Aplikacja w Elixirze może trzymać cache, liczniki czy sesje w GenServerze. Usługi Node działają jako kilka bezstanowych replik skalowanych w górę i w dół, więc stan w pamięci różniłby się między instancjami i znikał przy restarcie. Przenieś go do Redisa (TTL, atomowy `INCR`) albo bazy. Uważaj na GenServery pełniące rolę punktu serializacji (jedna zmiana naraz): w Node potrzebujesz atomowych aktualizacji, blokad lub pojedynczego konsumenta kolejki, żeby zachować tę gwarancję.",
+        "**Channels/PubSub → WebSockety plus broker.** Połączenia obsłuż przez `ws` lub Socket.IO. Klient jest podpięty do jednej instancji, więc rozgłaszanie między instancjami wymaga Redis pub/sub (np. adapter Redis dla Socket.IO) albo usługi zarządzanej (API Gateway WebSockets, AppSync, Ably). Zaplanuj ponowne łączenie i sticky sessions na load balancerze.",
+        "**Współbieżność.** Kod w Elixirze potrafi rozdzielić pracę na tysiące procesów (`Task.async_stream`). W Node współbieżność I/O daje kod asynchroniczny i `Promise.all` (z limitem, np. p-limit), długie zadania trafiają do **kolejek i workerów**, a praca obciążająca CPU do **worker threads**, żeby event loop pozostał wolny.",
+        "**Krotki z tagami → unie dyskryminowane**, **changesety Ecto → Zod plus ORM lub query builder** (Prisma, Drizzle, Knex), **Oban** (kolejka zadań oparta na Postgresie) → BullMQ (Redis) lub SQS. Sprawdź, z jakich gwarancji Obana korzystaliście (unikalne zadania, harmonogram, retry z backoffem, dodanie zadania w tej samej transakcji DB) i odtwórz je jawnie.",
+        "```ts\n// {:ok, user} | {:error, :not_found} wyrażone w TypeScripcie\ntype Result<T, E> = { ok: true; value: T } | { ok: false; error: E };\n\nconst r = await fetchUser(id); // Result<User, 'not_found'>\nif (!r.ok) return reply.code(404).send();\nconsole.log(r.value.email); // tutaj typ zawężony do User\n```"
       ]
     }
   },
@@ -3766,6 +6166,14 @@ const FLASHCARDS = [
         "Parity/contract tests written against the old service, reused for the new one",
         "Route traffic gradually (flags / % rollout); keep instant rollback to Elixir",
         "Compare error rates and latency per route; retire old code only when stable"
+      ],
+      more: [
+        "A **big-bang rewrite** (build the whole new system, then switch over on one day) is risky: months without delivering value, the old system keeps changing under you, and the cut-over is one huge bet that is hard to reverse. The alternative is an incremental migration where every step is small, observable and reversible.",
+        "The **strangler fig pattern**, named by Martin Fowler after a vine that slowly grows around a tree until it replaces it: put a routing layer (API gateway, reverse proxy such as NGINX or Envoy, or load balancer rules) in front of the Elixir service. At first it forwards everything to Elixir. Then you implement one endpoint or capability in Node and change the routing rule for just that path. Clients never notice; the Node share grows until Elixir handles nothing and can be switched off.",
+        "**Discovery first**, because the code is only part of the behaviour:",
+        "- API contracts: routes, payloads, status codes, error formats, auth\n- data ownership: which tables the service writes and who else reads them\n- background jobs, cron tasks and queue consumers (easy to forget, since they have no endpoint)\n- integrations: webhooks, third-party APIs, events published to other services\n- non-functional needs: SLAs, latency, throughput, real-time connections",
+        "**Parity tests**: write black-box contract tests against the running Elixir service (HTTP in, HTTP out). They document the real behaviour, quirks included, without needing to read every line of Elixir. Run the same suite against the Node implementation; when both pass, you have evidence of equivalence. Order the work sensibly: start with low-risk, read-only endpoints to prove the pipeline, then move writes.",
+        "**Gradual rollout**: route by feature flag or percentage (1% → 10% → 50% → 100%), or internal users first. Rollback must be instant: a routing change back to Elixir, not a redeploy. Compare error rates and p95/p99 latency per route between the two implementations. Delete the Elixir code for a route only after it has run stably at 100% long enough to cover peak traffic and periodic jobs (e.g. month-end processing)."
       ]
     },
     pl: {
@@ -3776,6 +6184,14 @@ const FLASHCARDS = [
         "Testy zgodności/kontraktowe pisane na starej usłudze, użyte ponownie dla nowej",
         "Stopniowe przełączanie ruchu (flagi / % rollout); natychmiastowy powrót do Elixira",
         "Porównanie błędów i opóźnień per trasa; usuwanie starego kodu dopiero po stabilizacji"
+      ],
+      more: [
+        "**Przepisanie wszystkiego naraz (big-bang rewrite)** – zbudowanie całego nowego systemu i przełączenie w jeden dzień – jest ryzykowne: miesiące bez dostarczania wartości, stary system zmienia się w międzyczasie, a samo przełączenie to jeden ogromny zakład, który trudno odwrócić. Alternatywą jest migracja przyrostowa, w której każdy krok jest mały, obserwowalny i odwracalny.",
+        "**Wzorzec strangler fig** (nazwa od Martina Fowlera, od figowca-dusiciela, który powoli oplata drzewo, aż je zastąpi): przed usługą w Elixirze stawiasz warstwę routingu (API gateway, reverse proxy typu NGINX lub Envoy albo reguły load balancera). Na początku przekazuje ona wszystko do Elixira. Potem implementujesz jeden endpoint lub funkcję w Node i zmieniasz regułę routingu tylko dla tej ścieżki. Klienci niczego nie zauważają; udział Node rośnie, aż Elixir nic nie obsługuje i można go wyłączyć.",
+        "**Najpierw rozpoznanie**, bo kod to tylko część zachowania:",
+        "- kontrakty API: trasy, payloady, kody statusu, format błędów, uwierzytelnianie\n- własność danych: do których tabel usługa pisze i kto jeszcze je czyta\n- zadania w tle, crony i konsumenci kolejek (łatwo o nich zapomnieć, bo nie mają endpointu)\n- integracje: webhooki, zewnętrzne API, zdarzenia publikowane do innych usług\n- wymagania niefunkcjonalne: SLA, opóźnienia, przepustowość, połączenia real-time",
+        "**Testy zgodności (parity)**: piszesz czarnoskrzynkowe testy kontraktowe na działającej usłudze w Elixirze (HTTP na wejściu, HTTP na wyjściu). Dokumentują prawdziwe zachowanie razem z dziwactwami, bez potrzeby czytania każdej linijki Elixira. Ten sam zestaw uruchamiasz na implementacji w Node; gdy oba przechodzą, masz dowód równoważności. Kolejność ma znaczenie: zacznij od mało ryzykownych endpointów tylko do odczytu, żeby sprawdzić cały proces, a potem przenoś zapisy.",
+        "**Stopniowe przełączanie**: routing po feature flagach lub procentowo (1% → 10% → 50% → 100%) albo najpierw dla użytkowników wewnętrznych. Powrót musi być natychmiastowy: zmiana routingu z powrotem na Elixira, a nie ponowne wdrożenie. Porównuj odsetek błędów i opóźnienia p95/p99 per trasa między obiema implementacjami. Kod Elixira dla danej trasy usuwaj dopiero, gdy nowa wersja działa stabilnie na 100% ruchu wystarczająco długo, by objąć szczyty ruchu i zadania okresowe (np. rozliczenia na koniec miesiąca)."
       ]
     }
   },
@@ -3790,6 +6206,15 @@ const FLASHCARDS = [
         "Compare side effects: DB writes, emitted events, emails",
         "Watch edge cases: null handling, date/time zones, number precision, sorting, error messages",
         "Dashboards comparing both versions during rollout"
+      ],
+      more: [
+        "Specs and docs rarely describe everything a service does, and clients depend on actual behaviour, bugs included. **Hyrum's law**: with enough users, every observable behaviour of an API will be depended on by somebody. So parity has to be proven against the real old service, with real traffic wherever possible.",
+        "**Shadow traffic** (traffic mirroring): the proxy sends each production request to Elixir as usual and a copy to Node. The user always gets Elixir's response; Node's response is discarded but compared with the original by a diffing job (Envoy or NGINX mirroring, or tools such as Diffy). You see real-world mismatches with zero user impact. The crucial caveat: mirroring is safe only for **reads**. For writes the shadow must not perform real side effects (use a dry-run mode, a separate database, stubbed integrations), otherwise you would charge a card or send an email twice.",
+        "**Record/replay**: capture a sample of production requests (scrubbed of PII) and replay them against both versions in a test environment, diffing the responses. It is deterministic and repeatable, so it becomes a regression suite. **Contract tests** assert the response shape, status codes and error format; **golden-file tests** store the Elixir service's exact response for a fixed input as a file and require Node to produce the same output.",
+        "**Side effects** matter as much as responses: compare rows written to the DB, events published to queues, emails and webhooks sent. An identical JSON response means little if the Node version forgets to emit `order.created`.",
+        "Edge cases where the two languages quietly differ:",
+        "- null vs missing field vs empty string: `JSON.stringify` drops `undefined` keys, Elixir encodes `nil` as `null`\n- dates and time zones: formats, UTC offsets, microsecond vs millisecond precision\n- numbers: Elixir has arbitrary-precision integers and `Decimal`; a JS `number` loses precision above 2^53, so use strings or BigInt for big IDs and a decimal library for money\n- sorting: ties without a full ORDER BY, string collation, stable order\n- error messages and codes that clients may parse",
+        "Diffs need **normalisation** (ignore timestamps, generated IDs, key order), or noise hides the real mismatches. During the rollout, dashboards show error rate, latency and business metrics per implementation side by side, so any regression is visible immediately."
       ]
     },
     pl: {
@@ -3801,6 +6226,15 @@ const FLASHCARDS = [
         "Porównanie efektów ubocznych: zapisy w DB, emitowane zdarzenia, e-maile",
         "Przypadki brzegowe: null, daty/strefy czasowe, precyzja liczb, sortowanie, komunikaty błędów",
         "Dashboardy porównujące obie wersje w trakcie przełączania"
+      ],
+      more: [
+        "Specyfikacje i dokumentacja rzadko opisują wszystko, co robi usługa, a klienci polegają na faktycznym zachowaniu, łącznie z bugami. **Prawo Hyruma**: przy wystarczającej liczbie użytkowników ktoś zacznie polegać na każdym obserwowalnym zachowaniu API. Zgodność trzeba więc udowodnić względem prawdziwej starej usługi, w miarę możliwości na prawdziwym ruchu.",
+        "**Shadow traffic (lustrzany ruch)**: proxy wysyła każde produkcyjne żądanie jak zwykle do Elixira, a jego kopię do Node. Użytkownik zawsze dostaje odpowiedź Elixira; odpowiedź Node jest odrzucana, ale porównywana z oryginałem przez proces diffujący (mirroring w Envoy lub NGINX albo narzędzia typu Diffy). Widzisz rozbieżności z prawdziwego świata bez żadnego wpływu na użytkowników. Kluczowe zastrzeżenie: mirroring jest bezpieczny tylko dla **odczytów**. Przy zapisach cień nie może wykonywać prawdziwych efektów ubocznych (tryb dry-run, osobna baza, zaślepione integracje), inaczej obciążysz kartę albo wyślesz e-mail dwa razy.",
+        "**Nagranie/odtworzenie (record/replay)**: zbierasz próbkę żądań z produkcji (oczyszczonych z danych osobowych) i odtwarzasz je na obu wersjach w środowisku testowym, porównując odpowiedzi. To deterministyczne i powtarzalne, więc staje się zestawem testów regresji. **Testy kontraktowe** sprawdzają kształt odpowiedzi, kody statusu i format błędów; **golden files** przechowują dokładną odpowiedź usługi w Elixirze dla ustalonego wejścia jako plik i wymagają, by Node zwrócił to samo.",
+        "**Efekty uboczne** są równie ważne jak odpowiedzi: porównaj wiersze zapisane w DB, zdarzenia wysłane do kolejek, wysłane e-maile i webhooki. Identyczny JSON w odpowiedzi niewiele znaczy, jeśli wersja w Node zapomni wyemitować `order.created`.",
+        "Przypadki brzegowe, w których oba języki po cichu się różnią:",
+        "- null vs brak pola vs pusty string: `JSON.stringify` pomija klucze z `undefined`, Elixir koduje `nil` jako `null`\n- daty i strefy czasowe: formaty, przesunięcia względem UTC, precyzja mikro- vs milisekund\n- liczby: Elixir ma liczby całkowite dowolnej precyzji i `Decimal`; `number` w JS traci precyzję powyżej 2^53, więc duże ID trzymaj jako stringi lub BigInt, a kwoty w bibliotece dziesiętnej\n- sortowanie: remisy bez pełnego ORDER BY, collation stringów, stabilność kolejności\n- komunikaty i kody błędów, które klienci mogą parsować",
+        "Diffy wymagają **normalizacji** (pomijania timestampów, generowanych ID, kolejności kluczy), bo inaczej szum zasłoni prawdziwe rozbieżności. W trakcie przełączania dashboardy pokazują obok siebie odsetek błędów, opóźnienia i metryki biznesowe dla każdej implementacji, więc każda regresja jest od razu widoczna."
       ]
     }
   },
@@ -3814,6 +6248,15 @@ const FLASHCARDS = [
         "Later: split into the new service's own DB via CDC/backfill + dual-read verification",
         "Avoid dual writes from app code without an outbox",
         "Keep schema changes backward compatible for both codebases"
+      ],
+      more: [
+        "The database is usually the hardest part of a migration: code can switch per route in seconds, but data has a single source of truth and consistency rules. The safe approach is phased.",
+        "**Phase 1: shared database.** Node connects to the same Postgres as Elixir. It is the fastest way to start moving endpoints, but it couples the two, so set rules. **One owner for schema changes**: migrations stay in one place (e.g. Ecto migrations until cut-over, or a dedicated migrations repo). If both Ecto and Prisma/Knex try to manage the schema, they fight and drift. Node uses the existing schema as it is: introspect it, and never let its ORM auto-migrate.",
+        "**Single writer per table.** At any moment only one service writes a given table, while the other may read it. Two services writing the same rows with different validation, defaults or business rules cause subtle corruption and race conditions. Write ownership moves table by table, together with the endpoints and jobs that write there.",
+        "**Backward-compatible schema changes**, the **expand/contract** pattern: first add the new column or table (expand), make both codebases work with both the old and new shape, migrate the data, and only then drop the old column (contract). Never rename or drop something the other service still reads. This is also what keeps an instant rollback to Elixir possible.",
+        "**Later: a separate database.** To give Node its own DB, copy existing data with a **backfill** and keep it in sync with **CDC** (Change Data Capture: streaming the database's change log, e.g. Postgres logical replication or Debezium into Kafka). Then use **dual-read verification**: read from both stores, compare and log mismatches, and switch reads to the new DB only once they stop appearing.",
+        "Why avoid **dual writes** from application code: `await oldDb.save(); await newDb.save();` is not atomic. If the process crashes or the second write fails, the stores diverge permanently. The **transactional outbox** fixes this: in the same transaction as the business write, insert an event into an `outbox` table; a separate relay publishes it and retries until it succeeds.",
+        "```ts\nawait db.transaction(async (tx) => {\n  await tx.insert(orders).values(order);\n  // same transaction: both rows commit, or neither does\n  await tx.insert(outbox).values({ type: 'order.created', payload: order });\n});\n// a relay polls `outbox` (or CDC reads it) and publishes with retries\n```"
       ]
     },
     pl: {
@@ -3824,6 +6267,15 @@ const FLASHCARDS = [
         "Później: wydzielenie własnej bazy nowej usługi przez CDC/backfill + weryfikację podwójnym odczytem",
         "Unikać podwójnych zapisów z kodu aplikacji bez outboxa",
         "Zmiany schematu zgodne wstecz dla obu kodów"
+      ],
+      more: [
+        "Baza danych to zwykle najtrudniejsza część migracji: kod można przełączyć per trasa w kilka sekund, ale dane mają jedno źródło prawdy i reguły spójności. Bezpieczne podejście jest etapowe.",
+        "**Faza 1: współdzielona baza.** Node łączy się z tym samym Postgresem co Elixir. To najszybszy sposób, żeby zacząć przenosić endpointy, ale wiąże obie usługi, więc potrzebne są zasady. **Jeden właściciel zmian schematu**: migracje zostają w jednym miejscu (np. migracje Ecto do momentu przełączenia albo osobne repo z migracjami). Jeśli schematem próbują zarządzać jednocześnie Ecto i Prisma/Knex, zaczną się gryźć i schemat się rozjedzie. Node korzysta z istniejącego schematu takim, jaki jest: introspekcja tak, automatyczne migracje ORM-a nigdy.",
+        "**Jeden piszący na tabelę.** W danym momencie tylko jedna usługa zapisuje daną tabelę, druga może ją czytać. Dwie usługi zapisujące te same wiersze z różną walidacją, wartościami domyślnymi czy regułami biznesowymi prowadzą do subtelnego psucia danych i wyścigów (race conditions). Własność zapisu przechodzi tabela po tabeli, razem z endpointami i zadaniami, które do niej piszą.",
+        "**Zmiany schematu zgodne wstecz**, czyli wzorzec **expand/contract**: najpierw dodajesz nową kolumnę lub tabelę (expand), oba kody obsługują starą i nową postać, migrujesz dane i dopiero wtedy usuwasz starą kolumnę (contract). Nigdy nie zmieniaj nazwy ani nie usuwaj czegoś, co druga usługa nadal czyta. To też warunek, żeby natychmiastowy powrót do Elixira był możliwy.",
+        "**Później: osobna baza.** Żeby dać Node własną bazę, kopiujesz istniejące dane **backfillem** i utrzymujesz synchronizację przez **CDC** (Change Data Capture: strumieniowanie dziennika zmian bazy, np. replikacja logiczna Postgresa albo Debezium do Kafki). Potem **weryfikacja podwójnym odczytem (dual read)**: czytasz z obu magazynów, porównujesz i logujesz rozbieżności, a odczyty przełączasz na nową bazę dopiero, gdy rozbieżności przestają się pojawiać.",
+        "Dlaczego unikać **podwójnych zapisów (dual writes)** z kodu aplikacji: `await oldDb.save(); await newDb.save();` nie jest atomowe. Jeśli proces padnie albo drugi zapis się nie uda, magazyny rozjeżdżają się na stałe. Rozwiązaniem jest **transactional outbox**: w tej samej transakcji co zapis biznesowy wstawiasz zdarzenie do tabeli `outbox`, a osobny proces (relay) publikuje je i ponawia do skutku.",
+        "```ts\nawait db.transaction(async (tx) => {\n  await tx.insert(orders).values(order);\n  // ta sama transakcja: zatwierdzą się oba wiersze albo żaden\n  await tx.insert(outbox).values({ type: 'order.created', payload: order });\n});\n// relay odpytuje `outbox` (albo czyta go CDC) i publikuje z ponowieniami\n```"
       ]
     }
   },
@@ -3862,6 +6314,13 @@ const FLASHCARDS = [
         "Near real-time (refresh ~1 s) – not immediately consistent",
         "Treat as a derived index: source of truth stays in Postgres/DynamoDB",
         "Must be rebuildable by reindexing from the primary store"
+      ],
+      more: [
+        "**Elasticsearch** is a distributed search and analytics engine built on **Apache Lucene**. You send it JSON **documents**, it indexes them so text and structured fields can be searched in milliseconds across millions of records, and you query it through a REST API. It shines where relational databases struggle: `WHERE name LIKE '%phone%'` can't use a normal B-tree index, has no notion of relevance, and knows nothing about typos or word forms.",
+        "What it's good at:\n- **Full-text search** with **relevance scoring**: results ranked by how well they match (BM25), not just filtered.\n- **Fuzzy matching**: `iphnoe` still finds `iphone` (edit distance).\n- **Autocomplete / search-as-you-type**: edge n-grams, `search_as_you_type` fields, the completion suggester.\n- **Faceted navigation**: the sidebar with \"Brand: Apple (120), Samsung (87)\", computed by **aggregations** in the same request as the search.\n- **Log and metrics analytics**: the ELK stack (Elasticsearch, Logstash, Kibana) aggregating billions of time-stamped events.",
+        "**Near real-time**: a newly indexed document becomes searchable only after a **refresh**, which by default runs every 1 s (on indices that are actively being searched). So \"write, then immediately search\" may not find it – although a get by ID is real-time. You can pass `?refresh=wait_for` on a write, but frequent refreshes hurt indexing throughput. There are also no multi-document ACID transactions and no relational joins.",
+        "Hence the architecture rule: Elasticsearch is a **derived index** – a read-optimised projection of data whose **source of truth** is a transactional database (Postgres, DynamoDB). Writes go to the primary database; changes are then propagated to Elasticsearch (events or CDC). Decisions that must be correct – does this order exist, how much stock is left – read from the primary database, not from search.",
+        "It must be **rebuildable**. Mapping changes, a new analyzer, a lost cluster or a sync bug all end the same way: create a fresh index and reindex everything from the primary store. Plan for it from day one: a reindex job that streams the database into a new index through the `_bulk` API, and an alias so you can switch over without downtime. OpenSearch (the AWS fork) follows the same principles."
       ]
     },
     pl: {
@@ -3872,6 +6331,13 @@ const FLASHCARDS = [
         "Prawie real-time (refresh ~1 s) – nie natychmiast spójny",
         "Traktuj jako indeks pochodny: źródło prawdy zostaje w Postgres/DynamoDB",
         "Musi dać się odbudować przez reindeksację z głównej bazy"
+      ],
+      more: [
+        "**Elasticsearch** to rozproszony silnik wyszukiwania i analityki zbudowany na **Apache Lucene**. Wysyłasz do niego **dokumenty** JSON, a on indeksuje je tak, żeby pola tekstowe i strukturalne dało się przeszukiwać w milisekundach wśród milionów rekordów; zapytania wysyła się przez REST API. Błyszczy tam, gdzie relacyjne bazy mają problem: `WHERE name LIKE '%phone%'` nie skorzysta ze zwykłego indeksu B-tree, nie zna pojęcia trafności i nie radzi sobie z literówkami ani odmianą słów.",
+        "W czym jest dobry:\n- **Wyszukiwanie pełnotekstowe** z **oceną trafności**: wyniki uszeregowane według dopasowania (BM25), a nie tylko przefiltrowane.\n- **Fuzzy matching**: `iphnoe` nadal znajduje `iphone` (odległość edycyjna).\n- **Autouzupełnianie / search-as-you-type**: edge n-gramy, pola `search_as_you_type`, completion suggester.\n- **Nawigacja fasetowa**: panel boczny „Marka: Apple (120), Samsung (87)”, liczony przez **agregacje** w tym samym zapytaniu co wyszukiwanie.\n- **Analityka logów i metryk**: stos ELK (Elasticsearch, Logstash, Kibana) agregujący miliardy zdarzeń z datami.",
+        "**Prawie real-time**: nowo zaindeksowany dokument staje się wyszukiwalny dopiero po **refreshu**, który domyślnie następuje co 1 s (na indeksach, które są aktywnie przeszukiwane). Czyli „zapisz i od razu wyszukaj” może go nie znaleźć – choć pobranie po ID działa w czasie rzeczywistym. Możesz dodać `?refresh=wait_for` do zapisu, ale częste refreshe obniżają przepustowość indeksowania. Nie ma też transakcji ACID obejmujących wiele dokumentów ani relacyjnych joinów.",
+        "Stąd reguła architektoniczna: Elasticsearch to **indeks pochodny** – zoptymalizowana pod odczyt projekcja danych, których **źródłem prawdy** jest baza transakcyjna (Postgres, DynamoDB). Zapisy idą do głównej bazy, a zmiany są potem propagowane do Elasticsearch (zdarzenia lub CDC). Decyzje, które muszą być poprawne – czy to zamówienie istnieje, ile zostało towaru – czytają z głównej bazy, nie z wyszukiwarki.",
+        "Indeks musi dać się **odbudować**. Zmiana mapowania, nowy analyzer, utrata klastra czy błąd synchronizacji kończą się tak samo: nowy indeks i reindeksacja wszystkiego z głównej bazy. Zaplanuj to od pierwszego dnia: job reindeksujący, który strumieniuje bazę do nowego indeksu przez API `_bulk`, oraz alias, żeby przełączyć się bez przestoju. OpenSearch (fork od AWS) działa na tych samych zasadach."
       ]
     }
   },
@@ -3885,6 +6351,14 @@ const FLASHCARDS = [
         "Relevance: BM25 scoring (term frequency, rarity, field length)",
         "`text` fields are analysed (full-text); `keyword` fields exact (filters, sorting, aggregations)",
         "Mapping cannot be changed for existing fields → new index + reindex"
+      ],
+      more: [
+        "The index at the back of a book maps words to page numbers, so you don't scan every page to find \"mitochondria\". An **inverted index** does the same: for every **term** it stores a sorted list of IDs of the documents containing it (a **postings list**), usually with term frequencies and positions. Searching `red shoes` means looking up two lists and merging them – the cost depends on the number of matches, not the total amount of data. It's \"inverted\" because a normal (forward) index maps document → words.",
+        "Example: Doc 1 \"Red running shoes\", Doc 2 \"Blue shoes\". After analysis the index holds `red → [1]`, `run → [1]`, `shoe → [1, 2]`, `blue → [2]`. A query for \"shoe\" reads one list and gets both documents instantly.",
+        "**Analysis** turns text into terms. An **analyzer** = character filters (e.g. strip HTML) → a **tokenizer** (split into words) → token filters: lowercase, **stemming** (reduce to a root: \"running\" → \"run\"), **stop words** (drop \"the\", \"a\"), **synonyms** (\"sneakers\" = \"shoes\"), ASCII folding (\"żółw\" → \"zolw\"). The same analyzer (or a compatible search analyzer) runs on the query string, so `Running Shoes` becomes `run`, `shoe` and matches. Mismatched index/query analysis is the classic \"why doesn't it find anything?\" bug – debug it with the `_analyze` API.",
+        "**Relevance**: every match gets a score, by default **BM25**. Intuition: a term counts more if it appears often in this document (**term frequency**, with diminishing returns), if it's rare across the index (**inverse document frequency** – \"shoes\" in a shoe shop says little, \"gore-tex\" says a lot), and if the field is short (a hit in a 3-word title beats one in a 500-word description). Field boosts such as `title^3` tune it further.",
+        "Field types matter. `text` fields are analysed – for full-text search, but not for sorting or aggregating. `keyword` fields store the exact value as a single term – for filters (`status: \"PAID\"`), sorting, aggregations, IDs, e-mails. Dynamic mapping turns a string into both: `name` (text) plus `name.keyword`. Sorting and aggregations use **doc values**, a column-oriented on-disk structure, not the inverted index.",
+        "The **mapping** (schema) of an existing field can't be changed: data on disk was indexed with the old type and analyzer, and Lucene segments are immutable. You can add new fields, but switching `text` → `keyword` or changing an analyzer means creating a new index with the new mapping, `_reindex`-ing into it and switching an alias."
       ]
     },
     pl: {
@@ -3895,6 +6369,14 @@ const FLASHCARDS = [
         "Trafność: scoring BM25 (częstość terminu, rzadkość, długość pola)",
         "Pola `text` analizowane (pełny tekst); `keyword` dokładne (filtry, sortowanie, agregacje)",
         "Mapowania istniejących pól nie można zmienić → nowy indeks + reindeksacja"
+      ],
+      more: [
+        "Skorowidz na końcu książki mapuje słowa na numery stron, więc nie musisz przeglądać każdej strony, żeby znaleźć „mitochondria”. **Indeks odwrócony (inverted index)** robi to samo: dla każdego **terminu** przechowuje posortowaną listę ID dokumentów, które go zawierają (**postings list**), zwykle z częstością i pozycjami. Wyszukanie `red shoes` to odczyt dwóch list i ich scalenie – koszt zależy od liczby trafień, a nie od łącznej ilości danych. „Odwrócony”, bo zwykły indeks mapuje dokument → słowa.",
+        "Przykład: Dok 1 „Red running shoes”, Dok 2 „Blue shoes”. Po analizie indeks zawiera `red → [1]`, `run → [1]`, `shoe → [1, 2]`, `blue → [2]`. Zapytanie o „shoe” czyta jedną listę i od razu dostaje oba dokumenty.",
+        "**Analiza** zamienia tekst na terminy. **Analyzer** = filtry znaków (np. usunięcie HTML) → **tokenizer** (podział na słowa) → filtry tokenów: małe litery, **stemming** (sprowadzenie do rdzenia: „running” → „run”), **stop words** (pominięcie „the”, „a”), **synonimy** („sneakers” = „shoes”), ASCII folding („żółw” → „zolw”). Ten sam analyzer (lub zgodny analyzer wyszukiwania) działa na tekście zapytania, więc `Running Shoes` staje się `run`, `shoe` i pasuje. Niezgodna analiza przy indeksowaniu i zapytaniu to klasyczny błąd „czemu nic nie znajduje?” – debuguje się go przez API `_analyze`. Dla polskiego warto użyć pluginu z polskim stemmerem (np. Stempel).",
+        "**Trafność**: każde trafienie dostaje ocenę, domyślnie **BM25**. Intuicja: termin waży więcej, gdy występuje często w danym dokumencie (**term frequency**, z malejącym przyrostem), gdy jest rzadki w całym indeksie (**inverse document frequency** – „buty” w sklepie z butami mówią niewiele, „gore-tex” bardzo dużo) i gdy pole jest krótkie (trafienie w 3-wyrazowym tytule wygrywa z trafieniem w 500-wyrazowym opisie). Dalej można to stroić wzmocnieniami pól, np. `title^3`.",
+        "Typ pola ma znaczenie. Pola `text` są analizowane – do wyszukiwania pełnotekstowego, ale nie do sortowania ani agregacji. Pola `keyword` przechowują dokładną wartość jako jeden termin – do filtrów (`status: \"PAID\"`), sortowania, agregacji, identyfikatorów, e-maili. Dynamiczne mapowanie zamienia string w oba naraz: `name` (text) i `name.keyword`. Sortowanie i agregacje korzystają z **doc values** – kolumnowej struktury na dysku, a nie z indeksu odwróconego.",
+        "**Mapowania** (schematu) istniejącego pola nie da się zmienić: dane na dysku zostały zaindeksowane ze starym typem i analyzerem, a segmenty Lucene są niemutowalne. Nowe pola można dodawać, ale zmiana `text` → `keyword` lub zmiana analyzera oznacza utworzenie nowego indeksu z nowym mapowaniem, `_reindex` do niego i przełączenie aliasu."
       ]
     }
   },
@@ -3908,6 +6390,13 @@ const FLASHCARDS = [
         "Filter context (`filter`, `must_not`): yes/no, no scoring, cached – for `term`, `range`, status, dates",
         "Put exact conditions in `filter` for speed",
         "Deep pagination: `search_after` + PIT instead of large `from`/`size`"
+      ],
+      more: [
+        "Elasticsearch queries are written in JSON (the **Query DSL**). The workhorse is the **bool** query, which combines clauses:\n- `must`: has to match and **contributes to the score**.\n- `should`: optional; each match raises the score (if there's no `must`/`filter`, at least one `should` must match – tunable with `minimum_should_match`).\n- `filter`: has to match, but **isn't scored**.\n- `must_not`: must not match; not scored.",
+        "These run in two contexts. **Query context** asks \"how well does this document match?\" and computes a relevance score (BM25) – right for full-text `match`/`multi_match` on `text` fields, where \"wireless headphones\" should rank the best matches first. **Filter context** asks only \"does it match – yes or no?\" – right for exact conditions: `term` on `keyword` fields (status, category, tenant ID), `range` on dates and prices, `exists`, geo filters.",
+        "```json\n{\n  \"query\": { \"bool\": {\n    \"must\":     [{ \"match\": { \"title\": \"wireless headphones\" } }],\n    \"filter\":   [{ \"term\":  { \"status\": \"active\" } },\n                 { \"range\": { \"price\": { \"lte\": 300 } } }],\n    \"must_not\": [{ \"term\":  { \"brand\": \"acme\" } }]\n  }}\n}\n```",
+        "Why filters are faster: skipping scoring saves work, and frequently used filters are cached as bitsets (the node query cache) and reused by later searches. So the rule is: every exact yes/no condition goes into `filter`. A common mistake is putting `term: { status }` into `must` – the result set is the same, but it's slower and an irrelevant clause skews the scores. A pure listing with no text search can be a `bool` with only `filter` clauses (or `constant_score`).",
+        "Pagination: `from`/`size` is fine for the first pages, but for page 1,000 every shard must collect and sort `from + size` hits and the coordinating node merges them all; by default Elasticsearch refuses beyond `index.max_result_window` = 10,000. For deep pagination or exports use **`search_after`**: pass the sort values of the last hit from the previous page, with a unique tiebreaker field in the sort. Pair it with a **point in time (PIT)** – a lightweight snapshot of the index – so documents added or deleted in the meantime don't shift pages. The old `scroll` API is no longer recommended for this."
       ]
     },
     pl: {
@@ -3918,6 +6407,13 @@ const FLASHCARDS = [
         "Filter context (`filter`, `must_not`): tak/nie, bez scoringu, cache'owany – dla `term`, `range`, statusów, dat",
         "Dokładne warunki w `filter` dla szybkości",
         "Głęboka paginacja: `search_after` + PIT zamiast dużego `from`/`size`"
+      ],
+      more: [
+        "Zapytania w Elasticsearch pisze się w JSON (**Query DSL**). Podstawowym narzędziem jest zapytanie **bool**, które łączy klauzule:\n- `must`: musi pasować i **wpływa na ocenę trafności**.\n- `should`: opcjonalne; każde dopasowanie podnosi ocenę (gdy nie ma `must`/`filter`, przynajmniej jedno `should` musi pasować – regulowane przez `minimum_should_match`).\n- `filter`: musi pasować, ale **nie jest oceniane**.\n- `must_not`: nie może pasować; bez oceny.",
+        "Działają w dwóch kontekstach. **Query context** pyta „jak dobrze ten dokument pasuje?” i liczy ocenę trafności (BM25) – właściwy dla pełnotekstowego `match`/`multi_match` na polach `text`, gdzie przy „wireless headphones” najlepsze dopasowania mają być na górze. **Filter context** pyta tylko „pasuje – tak czy nie?” – właściwy dla dokładnych warunków: `term` na polach `keyword` (status, kategoria, ID tenanta), `range` na datach i cenach, `exists`, filtry geo.",
+        "```json\n{\n  \"query\": { \"bool\": {\n    \"must\":     [{ \"match\": { \"title\": \"wireless headphones\" } }],\n    \"filter\":   [{ \"term\":  { \"status\": \"active\" } },\n                 { \"range\": { \"price\": { \"lte\": 300 } } }],\n    \"must_not\": [{ \"term\":  { \"brand\": \"acme\" } }]\n  }}\n}\n```",
+        "Dlaczego filtry są szybsze: pominięcie scoringu oszczędza pracę, a często używane filtry są cache’owane jako bitsety (node query cache) i wykorzystywane ponownie przez kolejne wyszukiwania. Stąd reguła: każdy dokładny warunek tak/nie trafia do `filter`. Częsty błąd to wrzucenie `term: { status }` do `must` – zbiór wyników jest ten sam, ale wolniej, a nieistotna klauzula zaburza ocenę. Zwykła lista bez wyszukiwania tekstowego może być `bool` z samymi klauzulami `filter` (albo `constant_score`).",
+        "Paginacja: `from`/`size` wystarcza na pierwszych stronach, ale dla strony 1000 każdy shard musi zebrać i posortować `from + size` wyników, a węzeł koordynujący scala je wszystkie; domyślnie Elasticsearch odmawia powyżej `index.max_result_window` = 10 000. Do głębokiej paginacji lub eksportów służy **`search_after`**: przekazujesz wartości sortowania ostatniego wyniku z poprzedniej strony, z unikalnym polem rozstrzygającym w sortowaniu. Łączy się to z **point in time (PIT)** – lekką migawką indeksu – żeby dokumenty dodane lub usunięte w międzyczasie nie przesuwały stron. Stare API `scroll` nie jest już do tego zalecane."
       ]
     }
   },
@@ -3931,6 +6427,13 @@ const FLASHCARDS = [
         "Replicas: copies of shards → high availability + more read throughput",
         "Too many small shards waste resources; aim roughly for 10–50 GB per shard",
         "Cluster health: green / yellow (replicas unassigned) / red (primary missing)"
+      ],
+      more: [
+        "An Elasticsearch **cluster** is a group of **nodes** (Elasticsearch processes, usually one per machine or container). One index is often too big or too busy for one node, so it's split into **primary shards**. Each shard is a complete, independent Lucene index holding a subset of the documents. A document lands on a shard by `hash(_routing) % number_of_primary_shards`, where `_routing` defaults to the document ID. A search is sent to all shards in parallel (scatter), each returns its top hits, and the coordinating node merges them (gather).",
+        "Because of that formula, the **number of primary shards is fixed** when the index is created – changing it would send existing documents to different shards. Your options: the `_split` API (multiply the count by a factor; the index must be made read-only first), `_shrink` (reduce to a divisor), or create a new index and `_reindex`. For time-series data such as logs, you sidestep this by rolling over to new indices (by age or size, via ILM or data streams), each with its own shard count.",
+        "A **replica** is a copy of a primary shard, always placed on a different node than its primary. It brings **high availability** – if a node dies, a replica is promoted to primary and no data is lost – and **read throughput**, since searches can be served by any copy. Writes go to the primary first and are then replicated, so replicas cost indexing work and disk. Unlike primaries, `number_of_replicas` can be changed at any time. Example: 3 primaries × 1 replica = 6 shards spread across 3 nodes.",
+        "Sizing: every shard has overhead (heap for metadata, file handles, a search thread per shard). Thousands of tiny shards (\"oversharding\") waste resources and bloat the cluster state; a few huge shards make recovery and rebalancing slow. Elastic's guidance is roughly 10–50 GB per shard (and under ~200 M documents per shard): estimate the data size, then pick the shard count.",
+        "**Cluster health**:\n- **green**: all primary and replica shards are assigned.\n- **yellow**: all primaries are assigned but some replicas aren't – data is fully available, redundancy is reduced. Classic case: a single-node dev cluster with `number_of_replicas: 1` (a replica can't live on the same node as its primary).\n- **red**: at least one primary is unassigned – part of the data is unavailable, searches return partial results and writes to that shard fail. Diagnose with `GET _cluster/allocation/explain`."
       ]
     },
     pl: {
@@ -3941,6 +6444,13 @@ const FLASHCARDS = [
         "Repliki: kopie shardów → wysoka dostępność + większa przepustowość odczytu",
         "Zbyt wiele małych shardów marnuje zasoby; orientacyjnie 10–50 GB na shard",
         "Stan klastra: green / yellow (nieprzypisane repliki) / red (brak shardu głównego)"
+      ],
+      more: [
+        "**Klaster** Elasticsearch to grupa **węzłów (nodes)** – procesów Elasticsearch, zwykle jeden na maszynę lub kontener. Jeden indeks bywa zbyt duży lub zbyt obciążony dla jednego węzła, więc dzieli się go na **shardy główne (primary shards)**. Każdy shard to kompletny, niezależny indeks Lucene z podzbiorem dokumentów. Dokument trafia do sharda według `hash(_routing) % number_of_primary_shards`, gdzie `_routing` to domyślnie ID dokumentu. Wyszukiwanie idzie równolegle do wszystkich shardów (scatter), każdy zwraca swoje najlepsze wyniki, a węzeł koordynujący je scala (gather).",
+        "Przez ten wzór **liczba shardów głównych jest ustalana** przy tworzeniu indeksu – jej zmiana posłałaby istniejące dokumenty do innych shardów. Opcje: API `_split` (pomnożenie liczby przez czynnik; indeks trzeba najpierw ustawić tylko do odczytu), `_shrink` (zmniejszenie do dzielnika) albo nowy indeks i `_reindex`. Przy danych szeregów czasowych, np. logach, omija się ten problem, przechodząc na nowe indeksy (rollover według wieku lub rozmiaru, przez ILM lub data streams), każdy z własną liczbą shardów.",
+        "**Replika** to kopia sharda głównego, zawsze umieszczana na innym węźle niż jej primary. Daje **wysoką dostępność** – gdy węzeł padnie, replika zostaje awansowana na primary i dane nie giną – oraz **przepustowość odczytu**, bo wyszukiwanie może obsłużyć dowolna kopia. Zapisy idą najpierw do primary, a potem są replikowane, więc repliki kosztują pracę przy indeksowaniu i miejsce na dysku. W przeciwieństwie do shardów głównych `number_of_replicas` można zmienić w każdej chwili. Przykład: 3 primary × 1 replika = 6 shardów rozłożonych na 3 węzły.",
+        "Rozmiar: każdy shard ma narzut (pamięć heap na metadane, uchwyty plików, wątek wyszukiwania na shard). Tysiące małych shardów („oversharding”) marnują zasoby i rozdmuchują stan klastra; kilka gigantycznych shardów spowalnia odtwarzanie i rebalansowanie. Zalecenie Elastic to orientacyjnie 10–50 GB na shard (i poniżej ok. 200 mln dokumentów na shard): oszacuj rozmiar danych, potem dobierz liczbę shardów.",
+        "**Stan klastra (cluster health)**:\n- **green**: wszystkie shardy główne i repliki są przypisane.\n- **yellow**: wszystkie primary są przypisane, ale część replik nie – dane są w pełni dostępne, ale nadmiarowość jest mniejsza. Klasyczny przypadek: jednowęzłowy klaster deweloperski z `number_of_replicas: 1` (replika nie może leżeć na tym samym węźle co jej primary).\n- **red**: co najmniej jeden shard główny nie jest przypisany – część danych jest niedostępna, wyszukiwania zwracają częściowe wyniki, a zapisy do tego sharda się nie udają. Diagnoza przez `GET _cluster/allocation/explain`."
       ]
     }
   },
@@ -3955,6 +6465,15 @@ const FLASHCARDS = [
         "Idempotent upserts by document ID; version field to drop stale updates",
         "Zero-downtime reindex: build new index → switch alias → delete old",
         "Periodic reconciliation job for drift"
+      ],
+      more: [
+        "Elasticsearch is a derived copy of the primary database, so every change must reach it reliably. The naive approach – a **dual write**: in the request handler, save to Postgres and then call Elasticsearch – is a trap. If the DB commit succeeds but Elasticsearch is down or times out, the two diverge silently; if you write to Elasticsearch first and the DB transaction rolls back, search shows data that doesn't exist. It also puts Elasticsearch latency and availability on every write request's critical path.",
+        "**Transactional outbox + event-driven indexing**: in the same DB transaction as the business change, insert a row into an `outbox` table (e.g. `{ type: \"ProductUpdated\", productId }`). A relay publishes outbox rows to a queue or stream (Kafka, SQS, RabbitMQ). An **indexer** consumer reads the events, loads the current state (or uses the event payload) and writes to Elasticsearch. Because the event is committed atomically with the data, nothing gets lost, and the queue provides retries and buffering while Elasticsearch is unavailable.",
+        "**CDC (Change Data Capture)**: instead of the application emitting events, a tool reads the database's own change log. **Debezium** tails the Postgres WAL (via logical replication) or the MySQL binlog and streams row changes to Kafka; **DynamoDB Streams** emits item-level changes that, for example, a Lambda can index. Pros: no application code changes, and it catches every write, including manual SQL fixes. Cons: events are table-shaped rather than domain-shaped, so the indexer often has to join and denormalise data into one search document.",
+        "Delivery is at-least-once and can be out of order, so the indexer must be **idempotent**: use the database primary key as the Elasticsearch `_id` and write whole documents (index = create or replace), so replaying an event is harmless. To drop stale updates, use **external versioning** with a monotonically increasing value from the database – Elasticsearch rejects a write whose version isn't higher than the stored one.",
+        "```js\nawait es.index({\n  index: 'products',          // an alias, not a physical index\n  id: String(product.id),\n  version: product.version,   // from the DB, incremented on each update\n  version_type: 'external',   // older version → 409 conflict, safe to ignore\n  document: toSearchDoc(product),\n});\n```",
+        "**Zero-downtime reindex** (mapping change, new analyzer): applications read and write through an **alias**, `products` → `products_v1`. Create `products_v2` with the new mapping, bulk-load it from the primary DB, replay changes that happened during the load (or have the indexer write to both indices), then atomically switch the alias with a single `_aliases` request and delete v1 once you're confident.",
+        "Finally, assume drift will happen anyway – bugs, lost messages, manual fixes in the DB. A periodic **reconciliation job** compares the database and the index (counts, checksums, `updated_at` ranges) and re-indexes mismatched documents. Also monitor consumer lag, so you know how stale search results are."
       ]
     },
     pl: {
@@ -3966,6 +6485,15 @@ const FLASHCARDS = [
         "Idempotentne upserty po ID dokumentu; pole wersji do odrzucania starych aktualizacji",
         "Reindeksacja bez przestoju: nowy indeks → przełączenie aliasu → usunięcie starego",
         "Okresowy job uzgadniający rozbieżności"
+      ],
+      more: [
+        "Elasticsearch jest pochodną kopią głównej bazy, więc każda zmiana musi do niego niezawodnie dotrzeć. Naiwne podejście – **podwójny zapis (dual write)**: w handlerze żądania zapis do Postgresa, a potem wywołanie Elasticsearch – to pułapka. Jeśli commit w bazie się uda, a Elasticsearch leży lub przekroczy timeout, oba źródła po cichu się rozjeżdżają; jeśli najpierw zapiszesz do Elasticsearch, a transakcja w bazie zostanie wycofana, wyszukiwarka pokazuje nieistniejące dane. Do tego opóźnienie i dostępność Elasticsearch trafiają na ścieżkę krytyczną każdego zapisu.",
+        "**Transactional outbox + indeksowanie zdarzeniowe**: w tej samej transakcji co zmiana biznesowa wstawiasz wiersz do tabeli `outbox` (np. `{ type: \"ProductUpdated\", productId }`). Relay publikuje wiersze z outboxa do kolejki lub strumienia (Kafka, SQS, RabbitMQ). Konsument-**indekser** czyta zdarzenia, wczytuje aktualny stan (albo korzysta z payloadu zdarzenia) i zapisuje do Elasticsearch. Ponieważ zdarzenie jest zatwierdzane atomowo razem z danymi, nic nie ginie, a kolejka zapewnia ponowienia i buforowanie, gdy Elasticsearch jest niedostępny.",
+        "**CDC (Change Data Capture)**: zamiast aplikacji emitującej zdarzenia narzędzie czyta własny log zmian bazy. **Debezium** śledzi WAL Postgresa (przez replikację logiczną) lub binlog MySQL i strumieniuje zmiany wierszy do Kafki; **DynamoDB Streams** emituje zmiany na poziomie elementów, które może zaindeksować np. Lambda. Zalety: brak zmian w kodzie aplikacji i wyłapywanie każdego zapisu, także ręcznych poprawek w SQL. Wady: zdarzenia mają kształt tabel, a nie domeny, więc indekser często musi łączyć i denormalizować dane w jeden dokument wyszukiwania.",
+        "Dostarczanie jest typu at-least-once i może przychodzić w złej kolejności, więc indekser musi być **idempotentny**: używaj klucza głównego z bazy jako `_id` w Elasticsearch i zapisuj całe dokumenty (index = utwórz lub zastąp), żeby powtórzenie zdarzenia było nieszkodliwe. Do odrzucania starych aktualizacji służy **wersjonowanie zewnętrzne** z monotonicznie rosnącą wartością z bazy – Elasticsearch odrzuca zapis, którego wersja nie jest wyższa od zapisanej.",
+        "```js\nawait es.index({\n  index: 'products',          // alias, nie fizyczny indeks\n  id: String(product.id),\n  version: product.version,   // z bazy, zwiększana przy każdej zmianie\n  version_type: 'external',   // starsza wersja → konflikt 409, można zignorować\n  document: toSearchDoc(product),\n});\n```",
+        "**Reindeksacja bez przestoju** (zmiana mapowania, nowy analyzer): aplikacje czytają i zapisują przez **alias** `products` → `products_v1`. Tworzysz `products_v2` z nowym mapowaniem, ładujesz go hurtowo z głównej bazy, odtwarzasz zmiany z czasu ładowania (albo indekser w tym czasie pisze do obu indeksów), a potem atomowo przełączasz alias jednym żądaniem `_aliases` i usuwasz v1, gdy masz pewność.",
+        "Na koniec: załóż, że rozbieżności i tak się pojawią – bugi, zgubione wiadomości, ręczne poprawki w bazie. Okresowy **job uzgadniający (reconciliation)** porównuje bazę z indeksem (liczności, sumy kontrolne, zakresy `updated_at`) i reindeksuje niezgodne dokumenty. Monitoruj też lag konsumenta, żeby wiedzieć, jak bardzo nieaktualne są wyniki wyszukiwania."
       ]
     }
   },

@@ -7,11 +7,12 @@ A static page with no build step and no dependencies.
 ## Features
 
 - 185 cards in 22 topics, with answers written as short bullet points
+- **Explain in depth** on most technical cards: a longer explanation that teaches the topic from scratch, for when the bullet points aren't enough
 - Switch between English and Polish (EN / PL)
 - Search across questions and answers in both languages, and filter by topic
 - Mark cards as known, with a progress bar per filtered deck
 - **Hide known cards** to review only what is left
-- Shuffle, plus keyboard shortcuts: `Space` shows the answer, `←` / `→` change card
+- Shuffle, plus keyboard shortcuts: `Space` shows the answer, `E` opens the in-depth explanation, `←` / `→` change card
 - Progress, language and the hide-known setting are stored in the browser's `localStorage`
 
 ## Project structure
@@ -109,5 +110,6 @@ All cards live in `questions.js`:
 ```
 
 - Text in backticks is shown as code.
+- Optional `more: [...]` next to `a` (in both `en` and `pl`) adds the **Explain in depth** section. Each entry is one block: a paragraph (`**bold**`, `*italic*` and `code` work inside), a list (every line starts with `- `), or a code block (starts with ` ```js ` and ends with ` ``` `). Cards without `more` just don't show the button.
 - Add a new topic to `TOPICS` with an English and a Polish label. The topic list in the UI follows the order of `TOPICS`.
 - Changing a card's `id` resets its "known" status.

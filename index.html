@@ -56,16 +56,9 @@
     .subtitle { margin: 0; color: var(--muted); font-size: 14px; }
 
     .overall-count {
-      flex: none;
+      margin: 6px 0 0;
       color: var(--muted);
       font-size: 13px;
-      text-align: right;
-    }
-
-    .header-tools {
-      display: flex;
-      align-items: center;
-      gap: 12px;
     }
 
     .controls {
@@ -192,7 +185,68 @@
 
     .card h2 code { font-size: 0.72em; }
 
-    .answer[hidden] { display: none; }
+    .answer[hidden], .more[hidden] { display: none; }
+
+    .card-body { min-width: 0; }
+
+    .more-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 36px;
+      margin: -18px 0 18px;
+      padding: 6px 0;
+      color: var(--green);
+      background: none;
+      border: 0;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .more-button:hover:not(:disabled) { text-decoration: underline; }
+
+    .more-button::after {
+      content: "";
+      width: 6px;
+      height: 6px;
+      margin-top: -3px;
+      border: solid currentColor;
+      border-width: 0 2px 2px 0;
+      transform: rotate(45deg);
+      transition: transform 150ms ease;
+    }
+
+    .more-button[aria-expanded="true"]::after { margin-top: 3px; transform: rotate(-135deg); }
+
+    .more {
+      margin: 0 0 28px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+      color: #354139;
+      font-size: 15.5px;
+    }
+
+    .more p, .more ul, .more pre { margin: 0 0 14px; }
+    .more > :last-child { margin-bottom: 0; }
+    .more ul { padding-left: 22px; }
+    .more li + li { margin-top: 4px; }
+    .more strong { color: var(--ink); font-weight: 650; }
+
+    .more pre {
+      overflow-x: auto;
+      padding: 12px 14px;
+      background: #eef1ec;
+      border-radius: 4px;
+    }
+
+    .more pre code {
+      padding: 0;
+      background: none;
+      font-size: 13px;
+      line-height: 1.5;
+      overflow-wrap: normal;
+      white-space: pre;
+    }
 
     .card-actions, .navigation {
       display: flex;
@@ -220,6 +274,7 @@
 
     .language-switch {
       display: inline-flex;
+      flex: none;
       padding: 3px;
       background: #e8ebe6;
       border-radius: 5px;
@@ -289,13 +344,11 @@
       <div>
         <h1 id="app-title">Interview flashcards</h1>
         <p class="subtitle" id="app-subtitle">Senior Full-stack Engineer · backend focus</p>
+        <p class="overall-count" id="overall-count" aria-live="polite"></p>
       </div>
-      <div class="header-tools">
-        <div class="language-switch" role="group" aria-label="Language">
-          <button id="language-en" type="button" aria-pressed="true">EN</button>
-          <button id="language-pl" type="button" aria-pressed="false">PL</button>
-        </div>
-        <div class="overall-count" id="overall-count" aria-live="polite"></div>
+      <div class="language-switch" role="group" aria-label="Language">
+        <button id="language-en" type="button" aria-pressed="true">EN</button>
+        <button id="language-pl" type="button" aria-pressed="false">PL</button>
       </div>
     </header>
 
@@ -321,7 +374,7 @@
     </section>
 
     <section id="card-area" aria-live="polite"></section>
-    <p class="keyboard-hint">Space: show answer · Left / right arrows: change card</p>
+    <p class="keyboard-hint">Space: show answer · E: explain in depth · Left / right arrows: change card</p>
   </main>
 
   <script src="questions.js"></script>
@@ -336,7 +389,8 @@
         hideKnown: 'Hide known cards', show: 'Show answer', hide: 'Hide answer',
         marked: 'Known', notMarked: 'Not marked known', mark: 'Mark known',
         previous: 'Previous', next: 'Next', shuffle: 'Shuffle', navigation: 'Card navigation',
-        keyboard: 'Space: show answer · Left / right arrows: change card'
+        more: 'Explain in depth', less: 'Hide explanation',
+        keyboard: 'Space: show answer · E: explain in depth · Left / right arrows: change card'
       },
       pl: {
         title: 'Fiszki rekrutacyjne', subtitle: 'Starszy inżynier full-stack · backend', language: 'Język',
@@ -347,7 +401,8 @@
         hideKnown: 'Ukryj znane fiszki', show: 'Pokaż odpowiedź', hide: 'Ukryj odpowiedź',
         marked: 'Znam', notMarked: 'Do powtórki', mark: 'Znam',
         previous: 'Poprzednia', next: 'Następna', shuffle: 'Losuj', navigation: 'Nawigacja fiszek',
-        keyboard: 'Spacja: pokaż odpowiedź · Strzałki w lewo/prawo: zmień fiszkę'
+        more: 'Wyjaśnij dokładniej', less: 'Ukryj wyjaśnienie',
+        keyboard: 'Spacja: pokaż odpowiedź · E: wyjaśnij dokładniej · Strzałki w lewo/prawo: zmień fiszkę'
       }
     };
 
@@ -379,6 +434,7 @@
     let orderedQuestions = [...FLASHCARDS];
     let currentIndex = 0;
     let answerVisible = false;
+    let moreVisible = false;
 
     const searchInput = document.querySelector('#search');
     const topicFilter = document.querySelector('#topic-filter');
@@ -407,9 +463,45 @@
       return text.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
     }
 
-    // Escapes the text, then turns `backtick` spans into <code>.
+    // Escapes the text and turns `backtick` spans into <code>, **bold** into <strong> and *italic* into <em>.
+    // Code spans are swapped for placeholders first, so asterisks inside code stay literal and bold can wrap code.
     function formatText(text) {
-      return escapeHtml(text).replace(/`([^`]+)`/g, '<code>$1</code>');
+      const codeSpans = [];
+      return escapeHtml(text)
+        .replace(/`([^`]+)`/g, (match, code) => `\u0000${codeSpans.push(code) - 1}\u0000`)
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*([^*\s][^*]*)\*/g, '<em>$1</em>')
+        .replace(/\u0000(\d+)\u0000/g, (match, index) => `<code>${codeSpans[index]}</code>`);
+    }
+
+    // One entry of an in-depth explanation: a ```code block```, a "- " list or a paragraph.
+    function formatBlock(entry) {
+      if (entry.startsWith('```')) {
+        const code = entry.replace(/^```[^\n]*\n/, '').replace(/\n?```$/, '');
+        return `<pre><code>${escapeHtml(code)}</code></pre>`;
+      }
+      // Consecutive "- " lines become one list; other lines become paragraphs.
+      let html = '';
+      let items = [];
+      const flushList = () => {
+        if (items.length) html += `<ul>${items.map((item) => `<li>${formatText(item)}</li>`).join('')}</ul>`;
+        items = [];
+      };
+      for (const line of entry.split('\n')) {
+        if (line.startsWith('- ')) {
+          items.push(line.slice(2));
+        } else if (line.trim()) {
+          flushList();
+          html += `<p>${formatText(line)}</p>`;
+        }
+      }
+      flushList();
+      return html;
+    }
+
+    function hideAnswer() {
+      answerVisible = false;
+      moreVisible = false;
     }
 
     function topicLabel(topicId) {
@@ -484,18 +576,21 @@
       currentIndex = Math.min(currentIndex, filtered.length - 1);
       const card = filtered[currentIndex];
       const isKnown = known.has(card.id);
-      const { q: question, a: points } = card[language];
+      const { q: question, a: points, more } = card[language];
       cardArea.innerHTML = `
         <article class="card">
           <div class="card-meta">
             <span class="topic">${escapeHtml(topicLabel(card.topic))}</span>
             <span>${isKnown ? copy.marked : copy.notMarked}</span>
           </div>
-          <div>
+          <div class="card-body">
             <h2 id="card-question">${formatText(question)}</h2>
             <ul class="answer" id="card-answer" ${answerVisible ? '' : 'hidden'}>
               ${points.map((point) => `<li>${formatText(point)}</li>`).join('')}
             </ul>
+            ${more && answerVisible ? `
+              <button class="more-button" id="more-button" aria-expanded="${moreVisible}" aria-controls="card-more">${moreVisible ? copy.less : copy.more}</button>
+              <div class="more" id="card-more" ${moreVisible ? '' : 'hidden'}>${more.map(formatBlock).join('')}</div>` : ''}
           </div>
           <div class="card-actions">
             <button class="primary" id="reveal-button" aria-expanded="${answerVisible}">${answerVisible ? copy.hide : copy.show}</button>
@@ -511,7 +606,12 @@
         </nav>`;
 
       document.querySelector('#reveal-button').addEventListener('click', () => {
-        answerVisible = !answerVisible;
+        if (answerVisible) hideAnswer();
+        else answerVisible = true;
+        render();
+      });
+      document.querySelector('#more-button')?.addEventListener('click', () => {
+        moreVisible = !moreVisible;
         render();
       });
       document.querySelector('#known-button').addEventListener('click', () => {
@@ -519,7 +619,7 @@
         else known.add(card.id);
         saveKnown();
         // With known cards hidden, the marked card disappears and the next one slides in.
-        if (hideKnown && !isKnown) answerVisible = false;
+        if (hideKnown && !isKnown) hideAnswer();
         render();
       });
       document.querySelector('#previous-button').addEventListener('click', () => move(-1));
@@ -531,7 +631,7 @@
       const count = getFilteredQuestions().length;
       if (!count) return;
       currentIndex = (currentIndex + direction + count) % count;
-      answerVisible = false;
+      hideAnswer();
       render();
     }
 
@@ -541,12 +641,12 @@
         [orderedQuestions[index], orderedQuestions[swapIndex]] = [orderedQuestions[swapIndex], orderedQuestions[index]];
       }
       currentIndex = 0;
-      answerVisible = false;
+      hideAnswer();
       render();
     }
 
-    searchInput.addEventListener('input', () => { currentIndex = 0; answerVisible = false; render(); });
-    topicFilter.addEventListener('change', () => { currentIndex = 0; answerVisible = false; render(); });
+    searchInput.addEventListener('input', () => { currentIndex = 0; hideAnswer(); render(); });
+    topicFilter.addEventListener('change', () => { currentIndex = 0; hideAnswer(); render(); });
     hideKnownInput.checked = hideKnown;
     hideKnownInput.addEventListener('change', () => {
       hideKnown = hideKnownInput.checked;
@@ -556,7 +656,7 @@
         // The toggle still works for this page when storage is unavailable.
       }
       currentIndex = 0;
-      answerVisible = false;
+      hideAnswer();
       render();
     });
     languageEn.addEventListener('click', () => setLanguage('en'));
@@ -578,7 +678,15 @@
       if (event.code === 'Space') {
         event.preventDefault();
         if (getFilteredQuestions().length) {
-          answerVisible = !answerVisible;
+          if (answerVisible) hideAnswer();
+          else answerVisible = true;
+          render();
+        }
+      } else if ((event.key === 'e' || event.key === 'E') && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        const card = getFilteredQuestions()[currentIndex];
+        if (card?.[language].more) {
+          moreVisible = !(answerVisible && moreVisible);
+          answerVisible = true;
           render();
         }
       } else if (event.key === 'ArrowLeft') {
