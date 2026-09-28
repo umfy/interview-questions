@@ -1,0 +1,8 @@
+services:
+  interview-questions:
+    build: .
+    image: interview-questions:latest
+    container_name: interview-questions
+    ports:
+      - "8084:80"
+    restart: unless-stopped
